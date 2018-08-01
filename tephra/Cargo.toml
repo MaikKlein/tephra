@@ -1,0 +1,9 @@
+[package]
+name = "tephra"
+version = "0.1.0"
+authors = ["maik"]
+
+[dependencies]
+
+ash = {path = "../../ash/ash" }
+winit = "0.11"
