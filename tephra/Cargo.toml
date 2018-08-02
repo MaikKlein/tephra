@@ -5,5 +5,10 @@ authors = ["maik"]
 
 [dependencies]
 
-ash = {path = "../../ash/ash" }
+failure = "0.1.2"
+failure_derive = "0.1.2"
+serde = "1.0.70"
+ash = {git = "https://github.com/MaikKlein/ash.git", branch="generator"}
 winit = "0.11"
+enumflags = "0.4.1"
+enumflags_derive = "0.4.1"

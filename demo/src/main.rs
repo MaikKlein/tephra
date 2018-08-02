@@ -1,7 +1,7 @@
-extern crate tephra;
-pub use tephra::{winit};
 #[macro_use]
 extern crate ash;
+extern crate tephra;
+pub use tephra::winit;
 #[cfg(windows)]
 extern crate winapi;
 
@@ -47,8 +47,7 @@ pub fn record_submit_commandbuffer<D: DeviceV1_0, F: FnOnce(&D, vk::CommandBuffe
             .reset_command_buffer(
                 command_buffer,
                 vk::CommandBufferResetFlags::RELEASE_RESOURCES,
-            )
-            .expect("Reset command buffer failed.");
+            ).expect("Reset command buffer failed.");
         let command_buffer_begin_info = vk::CommandBufferBeginInfo {
             s_type: vk::StructureType::COMMAND_BUFFER_BEGIN_INFO,
             p_next: ptr::null(),
@@ -332,8 +331,8 @@ impl ExampleBase {
                         .enumerate()
                         .filter_map(|(index, ref info)| {
                             let supports_graphic_and_surface =
-                                info.queue_flags.subset(vk::QueueFlags::GRAPHICS)
-                                    && surface_loader.get_physical_device_surface_support_khr(
+                                info.queue_flags.subset(vk::QueueFlags::GRAPHICS) && surface_loader
+                                    .get_physical_device_surface_support_khr(
                                         *pdevice,
                                         index as u32,
                                         surface,
@@ -342,10 +341,8 @@ impl ExampleBase {
                                 true => Some((*pdevice, index)),
                                 _ => None,
                             }
-                        })
-                        .nth(0)
-                })
-                .filter_map(|v| v)
+                        }).nth(0)
+                }).filter_map(|v| v)
                 .nth(0)
                 .expect("Couldn't find suitable device.");
             let queue_family_index = queue_family_index as u32;
@@ -391,8 +388,7 @@ impl ExampleBase {
                         color_space: sfmt.color_space,
                     },
                     _ => sfmt.clone(),
-                })
-                .nth(0)
+                }).nth(0)
                 .expect("Unable to find suitable surface format.");
             let surface_capabilities = surface_loader
                 .get_physical_device_surface_capabilities_khr(pdevice, surface)
@@ -499,8 +495,7 @@ impl ExampleBase {
                         image: image,
                     };
                     device.create_image_view(&create_view_info, None).unwrap()
-                })
-                .collect();
+                }).collect();
             let device_memory_properties = instance.get_physical_device_memory_properties(pdevice);
             let depth_image_create_info = vk::ImageCreateInfo {
                 s_type: vk::StructureType::IMAGE_CREATE_INFO,
@@ -525,12 +520,11 @@ impl ExampleBase {
             };
             let depth_image = device.create_image(&depth_image_create_info, None).unwrap();
             let depth_image_memory_req = device.get_image_memory_requirements(depth_image);
-            let depth_image_memory_index =
-                find_memorytype_index(
-                    &depth_image_memory_req,
-                    &device_memory_properties,
-                    vk::MemoryPropertyFlags::DEVICE_LOCAL,
-                ).expect("Unable to find suitable memory index for depth image.");
+            let depth_image_memory_index = find_memorytype_index(
+                &depth_image_memory_req,
+                &device_memory_properties,
+                vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            ).expect("Unable to find suitable memory index for depth image.");
 
             let depth_image_allocate_info = vk::MemoryAllocateInfo {
                 s_type: vk::StructureType::MEMORY_ALLOCATE_INFO,
@@ -681,6 +675,9 @@ use std::io::Read;
 use std::mem;
 use std::mem::align_of;
 use std::path::Path;
+use std::sync::Arc;
+use tephra::backend::vulkan::{Context, InnerContext, Vulkan};
+use tephra::buffer::{BufferUsage, Buffer, BufferApi, HostVisibleBuffer};
 
 #[derive(Clone, Debug, Copy)]
 struct Vertex {
@@ -691,6 +688,17 @@ struct Vertex {
 fn main() {
     unsafe {
         let base = ExampleBase::new(1920, 1080);
+        let inner_context = InnerContext {
+            entry: base.entry.clone(),
+            device: base.device.clone(),
+            instance: base.instance.clone(),
+            physical_device: base.pdevice,
+        };
+
+        let context = Context {
+            inner_context: Arc::new(inner_context),
+        };
+
         let renderpass_attachments = [
             vk::AttachmentDescription {
                 format: base.surface_format.format,
@@ -779,8 +787,7 @@ fn main() {
                 base.device
                     .create_framebuffer(&frame_buffer_create_info, None)
                     .unwrap()
-            })
-            .collect();
+            }).collect();
         let index_buffer_data = [0u32, 1, 2];
         let index_buffer_info = vk::BufferCreateInfo {
             s_type: vk::StructureType::BUFFER_CREATE_INFO,
@@ -794,12 +801,11 @@ fn main() {
         };
         let index_buffer = base.device.create_buffer(&index_buffer_info, None).unwrap();
         let index_buffer_memory_req = base.device.get_buffer_memory_requirements(index_buffer);
-        let index_buffer_memory_index =
-            find_memorytype_index(
-                &index_buffer_memory_req,
-                &base.device_memory_properties,
-                vk::MemoryPropertyFlags::HOST_VISIBLE,
-            ).expect("Unable to find suitable memorytype for the index buffer.");
+        let index_buffer_memory_index = find_memorytype_index(
+            &index_buffer_memory_req,
+            &base.device_memory_properties,
+            vk::MemoryPropertyFlags::HOST_VISIBLE,
+        ).expect("Unable to find suitable memorytype for the index buffer.");
         let index_allocate_info = vk::MemoryAllocateInfo {
             s_type: vk::StructureType::MEMORY_ALLOCATE_INFO,
             p_next: ptr::null(),
@@ -817,8 +823,7 @@ fn main() {
                 0,
                 index_buffer_memory_req.size,
                 vk::MemoryMapFlags::empty(),
-            )
-            .unwrap();
+            ).unwrap();
         let mut index_slice = Align::new(
             index_ptr,
             align_of::<u32>() as u64,
@@ -847,12 +852,11 @@ fn main() {
         let vertex_input_buffer_memory_req = base
             .device
             .get_buffer_memory_requirements(vertex_input_buffer);
-        let vertex_input_buffer_memory_index =
-            find_memorytype_index(
-                &vertex_input_buffer_memory_req,
-                &base.device_memory_properties,
-                vk::MemoryPropertyFlags::HOST_VISIBLE,
-            ).expect("Unable to find suitable memorytype for the vertex buffer.");
+        let vertex_input_buffer_memory_index = find_memorytype_index(
+            &vertex_input_buffer_memory_req,
+            &base.device_memory_properties,
+            vk::MemoryPropertyFlags::HOST_VISIBLE,
+        ).expect("Unable to find suitable memorytype for the vertex buffer.");
 
         let vertex_buffer_allocate_info = vk::MemoryAllocateInfo {
             s_type: vk::StructureType::MEMORY_ALLOCATE_INFO,
@@ -878,6 +882,7 @@ fn main() {
                 color: [1.0, 0.0, 0.0, 1.0],
             },
         ];
+        let vertex_buffer = Buffer::from_slice(&context, BufferUsage::Vertex, &vertices).expect("Failed to create buffer");
         let vert_ptr = base
             .device
             .map_memory(
@@ -885,8 +890,7 @@ fn main() {
                 0,
                 vertex_input_buffer_memory_req.size,
                 vk::MemoryMapFlags::empty(),
-            )
-            .unwrap();
+            ).unwrap();
         let mut vert_align = Align::new(
             vert_ptr,
             align_of::<Vertex>() as u64,
@@ -1136,8 +1140,7 @@ fn main() {
                     std::u64::MAX,
                     base.present_complete_semaphore,
                     vk::Fence::null(),
-                )
-                .unwrap();
+                ).unwrap();
             let clear_values = [
                 vk::ClearValue {
                     color: vk::ClearColorValue {
@@ -1187,7 +1190,7 @@ fn main() {
                     device.cmd_bind_vertex_buffers(
                         draw_command_buffer,
                         0,
-                        &[vertex_input_buffer],
+                        &[vertex_buffer.buffer.buffer],
                         &[0],
                     );
                     device.cmd_bind_index_buffer(
