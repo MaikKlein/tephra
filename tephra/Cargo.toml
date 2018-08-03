@@ -12,3 +12,4 @@ ash = {git = "https://github.com/MaikKlein/ash.git", branch="generator"}
 winit = "0.11"
 enumflags = "0.4.1"
 enumflags_derive = "0.4.1"
+thread-local-object = "0.1.0"

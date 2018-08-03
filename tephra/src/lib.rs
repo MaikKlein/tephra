@@ -1,4 +1,5 @@
 #![feature(rust_2018_preview)]
+extern crate thread_local_object;
 pub extern crate ash;
 extern crate failure;
 extern crate serde;
@@ -11,15 +12,17 @@ extern crate failure_derive;
 
 pub mod backend;
 pub mod buffer;
+pub mod image;
+pub mod context;
 
 pub mod traits {
     use buffer::BufferApi;
     pub trait BackendApi
     where
-        Self: Sized + 'static,
+        Self: Copy+ Clone + Sized + 'static,
     {
         type Buffer;
-        type Context;
+        type Context: Clone;
     }
 
 }

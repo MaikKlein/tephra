@@ -1,3 +1,4 @@
+use context;
 use ash::version::{DeviceV1_0, InstanceV1_0, V1_0};
 use ash::vk;
 use ash::{Device, Entry, Instance};
@@ -8,39 +9,131 @@ use std::marker::PhantomData;
 use std::mem::size_of;
 use std::ops::{Deref, Drop};
 use std::ptr;
+use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;
+use thread_local_object::ThreadLocal;
+#[derive(Copy, Clone)]
 pub struct Vulkan;
 
 impl crate::traits::BackendApi for Vulkan {
     type Buffer = Buffer;
-    type Context = Context;
+    type Context = Arc<Context>;
+}
+
+#[derive(Clone)]
+pub struct ThreadLocalCommandPool {
+    queue_family_index: vk::uint32_t,
+    thread_local_command_pool: Arc<ThreadLocal<CommandPool>>,
+}
+
+impl ThreadLocalCommandPool {
+    pub fn new(queue_family_index: vk::uint32_t) -> Self {
+        ThreadLocalCommandPool {
+            queue_family_index,
+            thread_local_command_pool: Arc::new(ThreadLocal::new()),
+        }
+    }
+
+    fn get_command_buffer(&self, context: &Context) -> CommandBuffer {
+        let has_local_value = self.thread_local_command_pool.get(|value| value.is_some());
+        if !has_local_value {
+            let _ = self
+                .thread_local_command_pool
+                .set(CommandPool::new(context, self.queue_family_index));
+        }
+
+        self.thread_local_command_pool.get_mut(|pool| {
+            pool.expect("Should have local pool").get_command_buffer(context)
+        })
+    }
 }
 
 pub struct CommandPool {
     pool: vk::CommandPool,
+    command_buffers: Vec<vk::CommandBuffer>,
+
+    sender: Sender<vk::CommandBuffer>,
+    receiver: Receiver<vk::CommandBuffer>,
 }
 
-#[derive(Clone)]
-pub struct Context {
-    pub inner_context: Arc<InnerContext>,
-}
+impl CommandPool {
+    fn new(context: &Context, queue_family_index: vk::uint32_t) -> Self {
+        let pool_create_info = vk::CommandPoolCreateInfo {
+            s_type: vk::StructureType::COMMAND_POOL_CREATE_INFO,
+            p_next: ptr::null(),
+            flags: vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER
+                | vk::CommandPoolCreateFlags::TRANSIENT,
+            queue_family_index: queue_family_index,
+        };
+        let pool = unsafe {
+            context
+                .device
+                .create_command_pool(&pool_create_info, None)
+                .unwrap()
+        };
+        let (sender, receiver) = channel();
 
-impl Deref for Context {
-    type Target = InnerContext;
-    fn deref(&self) -> &Self::Target {
-        self.inner_context.deref()
+        CommandPool {
+            pool,
+            command_buffers: Vec::new(),
+            sender,
+            receiver,
+        }
+    }
+
+    fn allocate_command_buffers(&mut self, context: &Context, count: u32) {
+        let alloc_info = vk::CommandBufferAllocateInfo {
+            s_type: vk::StructureType::COMMAND_BUFFER_ALLOCATE_INFO,
+            p_next: ptr::null(),
+            command_pool: self.pool,
+            level: vk::CommandBufferLevel::PRIMARY,
+            command_buffer_count: count,
+        };
+        unsafe {
+            let v: Vec<_> = context
+                .device
+                .allocate_command_buffers(&alloc_info)
+                .unwrap();
+            self.command_buffers.extend(v.into_iter());
+        }
+    }
+    pub fn get_command_buffer(&mut self, context: &Context) -> CommandBuffer {
+        // Add queued command buffers
+        self.command_buffers.extend(self.receiver.iter());
+        let free_command_buffer = self.command_buffers.pop().unwrap_or_else(|| {
+            // If no buffer is available, we need to allocate
+            self.allocate_command_buffers(context, 10);
+            self.command_buffers.pop().expect("CommandBuffer")
+        });
+
+        CommandBuffer {
+            command_buffer: free_command_buffer,
+            sender: self.sender.clone(),
+        }
     }
 }
 
+pub struct CommandBuffer {
+    command_buffer: vk::CommandBuffer,
+    sender: Sender<vk::CommandBuffer>,
+}
+
+impl Drop for CommandBuffer {
+    fn drop(&mut self) {
+        // Reclaim the command buffer by sending it to the correct pool
+        self.sender.send(self.command_buffer);
+    }
+}
 #[derive(Clone)]
-pub struct InnerContext {
+pub struct Context {
     pub entry: Entry<V1_0>,
     pub instance: Instance<V1_0>,
     pub device: Device<V1_0>,
     pub physical_device: vk::PhysicalDevice,
+    pub command_pool: ThreadLocalCommandPool,
     //command_pool: CommandPool,
 }
-impl Drop for InnerContext {
+impl Drop for Context {
     fn drop(&mut self) {
         unsafe {
             self.device.destroy_device(None);
@@ -48,14 +141,14 @@ impl Drop for InnerContext {
         }
     }
 }
-impl Context {
-    pub fn new() -> Context {
-        unimplemented!()
-    }
-}
+// impl Context {
+//     pub fn new() -> context::Context<Vulkan> {
+
+//     }
+// }
 
 pub struct Buffer {
-    pub context: Context,
+    pub context: context::Context<Vulkan>,
     pub buffer: vk::Buffer,
     pub memory: vk::DeviceMemory,
     pub len: usize,
@@ -75,13 +168,16 @@ fn bitflag_to_bufferflags(usage: BitFlags<BufferUsage>) -> vk::BufferUsageFlags 
     if usage.contains(BufferUsage::Vertex) {
         flag |= vk::BufferUsageFlags::VERTEX_BUFFER;
     }
+    if usage.contains(BufferUsage::Index) {
+        flag |= vk::BufferUsageFlags::INDEX_BUFFER;
+    }
     // [TODO] Add all variants
     flag
 }
 
 impl Buffer {}
 
-impl<T> HostVisibleBuffer<T, Vulkan> for buffer::Buffer<T, HostVisible, Vulkan>
+impl<T> HostVisibleBuffer<T, Vulkan> for buffer::ImplBuffer<T, HostVisible, Vulkan>
 where
     T: Copy,
 {
@@ -106,7 +202,7 @@ where
     }
 
     fn from_slice(
-        context: &Context,
+        context: &context::Context<Vulkan>,
         usage: BitFlags<BufferUsage>,
         data: &[T],
     ) -> Result<Self, BufferError> {
@@ -158,7 +254,7 @@ where
                 memory: vertex_input_buffer_memory,
                 len: data.len(),
             };
-            let mut buffer = buffer::Buffer {
+            let mut buffer = buffer::ImplBuffer {
                 buffer: inner_buffer,
                 usage,
                 _m: PhantomData,
