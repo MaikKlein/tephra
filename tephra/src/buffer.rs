@@ -1,6 +1,7 @@
 use errors::{MappingError, BufferError };
 use std::marker::PhantomData;
 use traits::BackendApi;
+use enumflags::BitFlags;
 
 pub enum HostVisible {}
 pub enum DeviceLocal {}
@@ -10,7 +11,7 @@ where
     Self: Sized,
     T: Copy,
 {
-    fn from_slice(context: &Backend::Context, usage: BufferUsage, data: &[T]) -> Result<Self, BufferError>;
+    fn from_slice(context: &Backend::Context, usage: BitFlags<BufferUsage>, data: &[T]) -> Result<Self, BufferError>;
     fn map_memory<R, F>(&mut self, mut f: F) -> Result<R, MappingError>
         where F: Fn(&mut [T]) -> R;
 }
@@ -24,9 +25,8 @@ where
 }
 
 pub struct Buffer<T, Property, Backend: BackendApi> {
-    pub context: Backend::Context,
     pub buffer: Backend::Buffer,
-    pub usage: BufferUsage,
+    pub usage: BitFlags<BufferUsage>,
     pub _m: PhantomData<T>,
     pub _property: PhantomData<Property>,
 }

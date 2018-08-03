@@ -677,7 +677,7 @@ use std::mem::align_of;
 use std::path::Path;
 use std::sync::Arc;
 use tephra::backend::vulkan::{Context, InnerContext, Vulkan};
-use tephra::buffer::{BufferUsage, Buffer, BufferApi, HostVisibleBuffer};
+use tephra::buffer::{Buffer, BufferApi, BufferUsage, HostVisibleBuffer};
 
 #[derive(Clone, Debug, Copy)]
 struct Vertex {
@@ -882,7 +882,8 @@ fn main() {
                 color: [1.0, 0.0, 0.0, 1.0],
             },
         ];
-        let vertex_buffer = Buffer::from_slice(&context, BufferUsage::Vertex, &vertices).expect("Failed to create buffer");
+        let vertex_buffer = Buffer::from_slice(&context, BufferUsage::Vertex.into(), &vertices)
+            .expect("Failed to create buffer");
         let vert_ptr = base
             .device
             .map_memory(
