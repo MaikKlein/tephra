@@ -1,5 +1,7 @@
 #![feature(rust_2018_preview)]
+extern crate parking_lot;
 extern crate thread_local_object;
+#[macro_use]
 pub extern crate ash;
 extern crate failure;
 extern crate serde;
@@ -44,6 +46,8 @@ pub mod errors {
     pub enum BufferError {
         #[fail(display = "Allocation failed with: {}", _0)]
         AllocationError(AllocationError),
+        #[fail(display = "Mapping failed: {}", _0)]
+        MappingError(MappingError),
         // #[fail(display = "invalid toolchain name:")]
         // InvalidToolchainName,
         // #[fail(display = "unknown toolchain version: {}", version)]

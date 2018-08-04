@@ -43,25 +43,35 @@ pub struct Buffer<T, Property, Backend: BackendApi> {
 impl<T: Copy, Backend> Buffer<T, HostVisible, Backend>
 where
     Backend: BackendApi,
-    ImplBuffer<T, HostVisible, Backend>: HostVisibleBuffer<T, Backend>
+    ImplBuffer<T, HostVisible, Backend>: HostVisibleBuffer<T, Backend>,
 {
     pub fn from_slice(
         context: &context::Context<Backend>,
         usage: BitFlags<BufferUsage>,
         data: &[T],
     ) -> Result<Self, BufferError> {
-        <ImplBuffer<T, HostVisible, Backend> as HostVisibleBuffer<T, Backend>>::from_slice(context, usage, data).map(|impl_buffer| Buffer { impl_buffer })
+        HostVisibleBuffer::from_slice(context, usage, data)
+            .map(|impl_buffer| Buffer { impl_buffer })
     }
 
-    pub fn map_memory<R, F>(&mut self, mut f: F) -> Result<R, MappingError>
+    pub fn map_memory<R, F>(&mut self, f: F) -> Result<R, MappingError>
     where
         F: Fn(&mut [T]) -> R,
     {
-        ImplBuffer::map_memory(&mut self.impl_buffer, f)
+        HostVisibleBuffer::map_memory(&mut self.impl_buffer, f)
     }
 }
 
-impl<T, Property, Backend> ImplBuffer<T, Property, Backend> where Backend: BackendApi {}
+impl<T: Copy, Property, Backend> Buffer<T, Property, Backend>
+where
+    Backend: BackendApi,
+    ImplBuffer<T, Property, Backend>: BufferApi<T, Backend>,
+{
+    fn copy_to_device_local(&self) -> Buffer<T, DeviceLocal, Backend> {
+        let impl_buffer = self.impl_buffer.copy_to_device_local();
+        Buffer { impl_buffer }
+    }
+}
 
 #[derive(Copy, Clone, EnumFlags)]
 #[repr(u32)]
