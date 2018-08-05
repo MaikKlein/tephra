@@ -146,7 +146,7 @@ pub struct Context {
     pub pdevice: vk::PhysicalDevice,
     pub device_memory_properties: vk::PhysicalDeviceMemoryProperties,
     pub queue_family_index: u32,
-    pub present_queue: vk::Queue,
+    pub present_queue: Mutex<vk::Queue>,
 
     pub surface: vk::SurfaceKHR,
     pub surface_format: vk::SurfaceFormatKHR,
@@ -166,138 +166,6 @@ pub struct Context {
 
     pub present_complete_semaphore: vk::Semaphore,
     pub rendering_complete_semaphore: vk::Semaphore,
-}
-#[cfg(all(unix, not(target_os = "android")))]
-unsafe fn create_surface<E: EntryV1_0, I: InstanceV1_0>(
-    entry: &E,
-    instance: &I,
-    window: &winit::Window,
-) -> Result<vk::SurfaceKHR, vk::Result> {
-    use winit::os::unix::WindowExt;
-    let x11_display = window.get_xlib_display().unwrap();
-    let x11_window = window.get_xlib_window().unwrap();
-    let x11_create_info = vk::XlibSurfaceCreateInfoKHR {
-        s_type: vk::StructureType::XLIB_SURFACE_CREATE_INFO_KHR,
-        p_next: ptr::null(),
-        flags: Default::default(),
-        window: x11_window as vk::Window,
-        dpy: x11_display as *mut vk::Display,
-    };
-    let xlib_surface_loader =
-        XlibSurface::new(entry, instance).expect("Unable to load xlib surface");
-    xlib_surface_loader.create_xlib_surface_khr(&x11_create_info, None)
-}
-
-#[cfg(windows)]
-unsafe fn create_surface<E: EntryV1_0, I: InstanceV1_0>(
-    entry: &E,
-    instance: &I,
-    window: &winit::Window,
-) -> Result<vk::SurfaceKHR, vk::Result> {
-    use winapi::shared::windef::HWND;
-    use winapi::um::winuser::GetWindow;
-    use winit::os::windows::WindowExt;
-
-    let hwnd = window.get_hwnd() as HWND;
-    let hinstance = GetWindow(hwnd, 0) as *const vk::c_void;
-    let win32_create_info = vk::Win32SurfaceCreateInfoKHR {
-        s_type: vk::StructureType::WIN32_SURFACE_CREATE_INFO_KHR,
-        p_next: ptr::null(),
-        flags: Default::default(),
-        hinstance: hinstance,
-        hwnd: hwnd as *const vk::c_void,
-    };
-    let win32_surface_loader =
-        Win32Surface::new(entry, instance).expect("Unable to load win32 surface");
-    win32_surface_loader.create_win32_surface_khr(&win32_create_info, None)
-}
-
-#[cfg(all(unix, not(target_os = "android")))]
-fn extension_names() -> Vec<*const i8> {
-    vec![
-        Surface::name().as_ptr(),
-        XlibSurface::name().as_ptr(),
-        DebugReport::name().as_ptr(),
-    ]
-}
-
-#[cfg(all(windows))]
-fn extension_names() -> Vec<*const i8> {
-    vec![
-        Surface::name().as_ptr(),
-        Win32Surface::name().as_ptr(),
-        DebugReport::name().as_ptr(),
-    ]
-}
-
-pub fn record_submit_commandbuffer<D: DeviceV1_0, F: FnOnce(&D, vk::CommandBuffer)>(
-    device: &D,
-    command_buffer: vk::CommandBuffer,
-    submit_queue: vk::Queue,
-    wait_mask: &[vk::PipelineStageFlags],
-    wait_semaphores: &[vk::Semaphore],
-    signal_semaphores: &[vk::Semaphore],
-    f: F,
-) {
-    unsafe {
-        device
-            .reset_command_buffer(
-                command_buffer,
-                vk::CommandBufferResetFlags::RELEASE_RESOURCES,
-            ).expect("Reset command buffer failed.");
-        let command_buffer_begin_info = vk::CommandBufferBeginInfo {
-            s_type: vk::StructureType::COMMAND_BUFFER_BEGIN_INFO,
-            p_next: ptr::null(),
-            p_inheritance_info: ptr::null(),
-            flags: vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT,
-        };
-        device
-            .begin_command_buffer(command_buffer, &command_buffer_begin_info)
-            .expect("Begin commandbuffer");
-        f(device, command_buffer);
-        device
-            .end_command_buffer(command_buffer)
-            .expect("End commandbuffer");
-        let fence_create_info = vk::FenceCreateInfo {
-            s_type: vk::StructureType::FENCE_CREATE_INFO,
-            p_next: ptr::null(),
-            flags: vk::FenceCreateFlags::empty(),
-        };
-        let submit_fence = device
-            .create_fence(&fence_create_info, None)
-            .expect("Create fence failed.");
-        let submit_info = vk::SubmitInfo {
-            s_type: vk::StructureType::SUBMIT_INFO,
-            p_next: ptr::null(),
-            wait_semaphore_count: wait_semaphores.len() as u32,
-            p_wait_semaphores: wait_semaphores.as_ptr(),
-            p_wait_dst_stage_mask: wait_mask.as_ptr(),
-            command_buffer_count: 1,
-            p_command_buffers: &command_buffer,
-            signal_semaphore_count: signal_semaphores.len() as u32,
-            p_signal_semaphores: signal_semaphores.as_ptr(),
-        };
-        device
-            .queue_submit(submit_queue, &[submit_info], submit_fence)
-            .expect("queue submit failed.");
-        device
-            .wait_for_fences(&[submit_fence], true, std::u64::MAX)
-            .expect("Wait for fence failed.");
-        device.destroy_fence(submit_fence, None);
-    }
-}
-unsafe extern "system" fn vulkan_debug_callback(
-    _: vk::DebugReportFlagsEXT,
-    _: vk::DebugReportObjectTypeEXT,
-    _: vk::uint64_t,
-    _: vk::size_t,
-    _: vk::int32_t,
-    _: *const vk::c_char,
-    p_message: *const vk::c_char,
-    _: *mut vk::c_void,
-) -> u32 {
-    println!("{:?}", CStr::from_ptr(p_message));
-    1
 }
 impl Context {
     pub fn render_loop<F: Fn()>(&self, f: F) {
@@ -436,6 +304,7 @@ impl Context {
                 .create_device(pdevice, &device_create_info, None)
                 .unwrap();
             let present_queue = device.get_device_queue(queue_family_index as u32, 0);
+            let present_queue = Mutex::new(present_queue);
 
             let surface_formats = surface_loader
                 .get_physical_device_surface_formats_khr(pdevice, surface)
@@ -601,7 +470,7 @@ impl Context {
             record_submit_commandbuffer(
                 &device,
                 setup_command_buffer,
-                present_queue,
+                &present_queue,
                 &[vk::PipelineStageFlags::BOTTOM_OF_PIPE],
                 &[],
                 &[],
@@ -725,3 +594,136 @@ impl Drop for Context {
 
 //     }
 // }
+#[cfg(all(unix, not(target_os = "android")))]
+unsafe fn create_surface<E: EntryV1_0, I: InstanceV1_0>(
+    entry: &E,
+    instance: &I,
+    window: &winit::Window,
+) -> Result<vk::SurfaceKHR, vk::Result> {
+    use winit::os::unix::WindowExt;
+    let x11_display = window.get_xlib_display().unwrap();
+    let x11_window = window.get_xlib_window().unwrap();
+    let x11_create_info = vk::XlibSurfaceCreateInfoKHR {
+        s_type: vk::StructureType::XLIB_SURFACE_CREATE_INFO_KHR,
+        p_next: ptr::null(),
+        flags: Default::default(),
+        window: x11_window as vk::Window,
+        dpy: x11_display as *mut vk::Display,
+    };
+    let xlib_surface_loader =
+        XlibSurface::new(entry, instance).expect("Unable to load xlib surface");
+    xlib_surface_loader.create_xlib_surface_khr(&x11_create_info, None)
+}
+
+#[cfg(windows)]
+unsafe fn create_surface<E: EntryV1_0, I: InstanceV1_0>(
+    entry: &E,
+    instance: &I,
+    window: &winit::Window,
+) -> Result<vk::SurfaceKHR, vk::Result> {
+    use winapi::shared::windef::HWND;
+    use winapi::um::winuser::GetWindow;
+    use winit::os::windows::WindowExt;
+
+    let hwnd = window.get_hwnd() as HWND;
+    let hinstance = GetWindow(hwnd, 0) as *const vk::c_void;
+    let win32_create_info = vk::Win32SurfaceCreateInfoKHR {
+        s_type: vk::StructureType::WIN32_SURFACE_CREATE_INFO_KHR,
+        p_next: ptr::null(),
+        flags: Default::default(),
+        hinstance: hinstance,
+        hwnd: hwnd as *const vk::c_void,
+    };
+    let win32_surface_loader =
+        Win32Surface::new(entry, instance).expect("Unable to load win32 surface");
+    win32_surface_loader.create_win32_surface_khr(&win32_create_info, None)
+}
+
+#[cfg(all(unix, not(target_os = "android")))]
+fn extension_names() -> Vec<*const i8> {
+    vec![
+        Surface::name().as_ptr(),
+        XlibSurface::name().as_ptr(),
+        DebugReport::name().as_ptr(),
+    ]
+}
+
+#[cfg(all(windows))]
+fn extension_names() -> Vec<*const i8> {
+    vec![
+        Surface::name().as_ptr(),
+        Win32Surface::name().as_ptr(),
+        DebugReport::name().as_ptr(),
+    ]
+}
+
+pub fn record_submit_commandbuffer<D: DeviceV1_0, F: FnOnce(&D, vk::CommandBuffer)>(
+    device: &D,
+    command_buffer: vk::CommandBuffer,
+    submit_queue: &Mutex<vk::Queue>,
+    wait_mask: &[vk::PipelineStageFlags],
+    wait_semaphores: &[vk::Semaphore],
+    signal_semaphores: &[vk::Semaphore],
+    f: F,
+) {
+    unsafe {
+        let submit_queue = *submit_queue.lock();
+        device
+            .reset_command_buffer(
+                command_buffer,
+                vk::CommandBufferResetFlags::RELEASE_RESOURCES,
+            ).expect("Reset command buffer failed.");
+        let command_buffer_begin_info = vk::CommandBufferBeginInfo {
+            s_type: vk::StructureType::COMMAND_BUFFER_BEGIN_INFO,
+            p_next: ptr::null(),
+            p_inheritance_info: ptr::null(),
+            flags: vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT,
+        };
+        device
+            .begin_command_buffer(command_buffer, &command_buffer_begin_info)
+            .expect("Begin commandbuffer");
+        f(device, command_buffer);
+        device
+            .end_command_buffer(command_buffer)
+            .expect("End commandbuffer");
+        let fence_create_info = vk::FenceCreateInfo {
+            s_type: vk::StructureType::FENCE_CREATE_INFO,
+            p_next: ptr::null(),
+            flags: vk::FenceCreateFlags::empty(),
+        };
+        let submit_fence = device
+            .create_fence(&fence_create_info, None)
+            .expect("Create fence failed.");
+        let submit_info = vk::SubmitInfo {
+            s_type: vk::StructureType::SUBMIT_INFO,
+            p_next: ptr::null(),
+            wait_semaphore_count: wait_semaphores.len() as u32,
+            p_wait_semaphores: wait_semaphores.as_ptr(),
+            p_wait_dst_stage_mask: wait_mask.as_ptr(),
+            command_buffer_count: 1,
+            p_command_buffers: &command_buffer,
+            signal_semaphore_count: signal_semaphores.len() as u32,
+            p_signal_semaphores: signal_semaphores.as_ptr(),
+        };
+        device
+            .queue_submit(submit_queue, &[submit_info], submit_fence)
+            .expect("queue submit failed.");
+        device
+            .wait_for_fences(&[submit_fence], true, std::u64::MAX)
+            .expect("Wait for fence failed.");
+        device.destroy_fence(submit_fence, None);
+    }
+}
+unsafe extern "system" fn vulkan_debug_callback(
+    _: vk::DebugReportFlagsEXT,
+    _: vk::DebugReportObjectTypeEXT,
+    _: vk::uint64_t,
+    _: vk::size_t,
+    _: vk::int32_t,
+    _: *const vk::c_char,
+    p_message: *const vk::c_char,
+    _: *mut vk::c_void,
+) -> u32 {
+    println!("{:?}", CStr::from_ptr(p_message));
+    1
+}
