@@ -1,3 +1,4 @@
+use super::CommandBuffer;
 use super::Vulkan;
 use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk;
@@ -120,29 +121,27 @@ where
     }
 
     fn copy_to_device_local(&self) -> Result<ImplBuffer<T, DeviceLocal, Vulkan>, BufferError> {
-        let command_buffer = self.buffer.context.get_command_buffer();
         let context = &self.buffer.context;
         let dst_buffer =
             ImplBuffer::<T, DeviceLocal, Vulkan>::allocate(context, self.usage, self.buffer.len)?;
-        super::record_submit_commandbuffer(
-            &context.device,
-            command_buffer.inner,
-            &context.present_queue,
+        let command_buffer = CommandBuffer::record(context, |command_buffer| unsafe {
+            context.device.cmd_copy_buffer(
+                command_buffer,
+                self.buffer.buffer,
+                dst_buffer.buffer.buffer,
+                &[vk::BufferCopy {
+                    src_offset: 0,
+                    dst_offset: 0,
+                    size: (self.buffer.len * size_of::<T>()) as _,
+                }],
+            );
+        });
+        context.present_queue.submit(
+            context,
             &[vk::PipelineStageFlags::BOTTOM_OF_PIPE],
             &[],
             &[],
-            |device, command_buffer| unsafe {
-                context.device.cmd_copy_buffer(
-                    command_buffer,
-                    self.buffer.buffer,
-                    dst_buffer.buffer.buffer,
-                    &[vk::BufferCopy {
-                        src_offset: 0,
-                        dst_offset: 0,
-                        size: (self.buffer.len * size_of::<T>()) as _,
-                    }],
-                );
-            },
+            command_buffer,
         );
         Ok(dst_buffer)
     }

@@ -1,13 +1,14 @@
 use ash::extensions::{DebugReport, Surface, Swapchain, XlibSurface};
 use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0, V1_0};
 use ash::vk;
+use std::ptr;
 use ash::{Device, Entry, Instance};
 use context;
 use parking_lot::Mutex;
 use std::cell::RefCell;
 use std::ffi::{CStr, CString};
+use std::marker::PhantomData;
 use std::ops::Drop;
-use std::ptr;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;
 use thread_local_object::ThreadLocal;
@@ -34,7 +35,7 @@ impl ThreadLocalCommandPool {
         }
     }
 
-    fn get_command_buffer(&self, context: &Context) -> CommandBuffer {
+    fn get_command_buffer(&self, context: &Context) -> RecordCommandBuffer {
         let has_local_value = self.thread_local_command_pool.get(|value| value.is_some());
         if !has_local_value {
             let _ = self
@@ -98,25 +99,129 @@ impl CommandPool {
             self.command_buffers.extend(v.into_iter());
         }
     }
-    pub fn get_command_buffer(&mut self, context: &Context) -> CommandBuffer {
-        // Add queued command buffers
-        self.command_buffers.extend(self.receiver.try_iter());
+    pub fn get_command_buffer(&mut self, context: &Context) -> RecordCommandBuffer {
+        {
+            let reset_command_buffer_iter = self.receiver.try_iter().map(|command_buffer| {
+                unsafe {
+                    context
+                        .device
+                        .reset_command_buffer(
+                            command_buffer,
+                            vk::CommandBufferResetFlags::RELEASE_RESOURCES,
+                        ).expect("Reset command buffer failed.");
+                }
+                command_buffer
+            });
+            // Add queued command buffers
+            self.command_buffers.extend(reset_command_buffer_iter);
+        }
         let free_command_buffer = self.command_buffers.pop().unwrap_or_else(|| {
             // If no buffer is available, we need to allocate
             self.allocate_command_buffers(context, 10);
             self.command_buffers.pop().expect("CommandBuffer")
         });
 
-        CommandBuffer {
+        RecordCommandBuffer {
             inner: free_command_buffer,
             sender: self.sender.clone(),
+            _m: PhantomData,
         }
     }
 }
 
+#[derive(Debug)]
+pub struct Queue {
+    pub inner: Mutex<vk::Queue>,
+}
+
+impl Queue {
+    pub fn new(queue: vk::Queue) -> Queue {
+        Queue {
+            inner: Mutex::new(queue),
+        }
+    }
+
+    pub fn submit(
+        &self,
+        context: &context::Context<Vulkan>,
+        wait_mask: &[vk::PipelineStageFlags],
+        wait_semaphores: &[vk::Semaphore],
+        signal_semaphores: &[vk::Semaphore],
+        command_buffer: CommandBuffer,
+    ) {
+        unsafe {
+            let fence_create_info = vk::FenceCreateInfo {
+                s_type: vk::StructureType::FENCE_CREATE_INFO,
+                p_next: ptr::null(),
+                flags: vk::FenceCreateFlags::empty(),
+            };
+            let submit_fence = context.device
+                .create_fence(&fence_create_info, None)
+                .expect("Create fence failed.");
+            let queue = self.inner.lock();
+            let submit_info = vk::SubmitInfo {
+                s_type: vk::StructureType::SUBMIT_INFO,
+                p_next: ptr::null(),
+                wait_semaphore_count: wait_semaphores.len() as u32,
+                p_wait_semaphores: wait_semaphores.as_ptr(),
+                p_wait_dst_stage_mask: wait_mask.as_ptr(),
+                command_buffer_count: 1,
+                p_command_buffers: &command_buffer.inner,
+                signal_semaphore_count: signal_semaphores.len() as u32,
+                p_signal_semaphores: signal_semaphores.as_ptr(),
+            };
+            context
+                .device
+                .queue_submit(*queue, &[submit_info], submit_fence);
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct RecordCommandBuffer {
+    inner: vk::CommandBuffer,
+    sender: Sender<vk::CommandBuffer>,
+    _m: PhantomData<*const ()>,
+}
+
+#[derive(Debug)]
 pub struct CommandBuffer {
     inner: vk::CommandBuffer,
     sender: Sender<vk::CommandBuffer>,
+}
+
+impl CommandBuffer {
+    pub fn record<F>(context: &context::Context<Vulkan>, f: F) -> Self
+    where
+        F: Fn(vk::CommandBuffer),
+    {
+        let RecordCommandBuffer {
+            inner: command_buffer,
+            sender,
+            ..
+        } = context.command_pool.get_command_buffer(context);
+        let command_buffer_begin_info = vk::CommandBufferBeginInfo {
+            s_type: vk::StructureType::COMMAND_BUFFER_BEGIN_INFO,
+            p_next: ptr::null(),
+            p_inheritance_info: ptr::null(),
+            flags: vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT,
+        };
+        unsafe {
+            context
+                .device
+                .begin_command_buffer(command_buffer, &command_buffer_begin_info)
+                .expect("Begin commandbuffer");
+            f(command_buffer);
+            context
+                .device
+                .end_command_buffer(command_buffer)
+                .expect("End commandbuffer");
+            CommandBuffer {
+                inner: command_buffer,
+                sender,
+            }
+        }
+    }
 }
 
 impl Drop for CommandBuffer {
@@ -146,7 +251,7 @@ pub struct Context {
     pub pdevice: vk::PhysicalDevice,
     pub device_memory_properties: vk::PhysicalDeviceMemoryProperties,
     pub queue_family_index: u32,
-    pub present_queue: Mutex<vk::Queue>,
+    pub present_queue: Queue,
 
     pub surface: vk::SurfaceKHR,
     pub surface_format: vk::SurfaceFormatKHR,
@@ -304,7 +409,7 @@ impl Context {
                 .create_device(pdevice, &device_create_info, None)
                 .unwrap();
             let present_queue = device.get_device_queue(queue_family_index as u32, 0);
-            let present_queue = Mutex::new(present_queue);
+            let present_queue = Queue::new(present_queue);
 
             let surface_formats = surface_loader
                 .get_physical_device_surface_formats_khr(pdevice, surface)
@@ -470,7 +575,7 @@ impl Context {
             record_submit_commandbuffer(
                 &device,
                 setup_command_buffer,
-                &present_queue,
+                &present_queue.inner,
                 &[vk::PipelineStageFlags::BOTTOM_OF_PIPE],
                 &[],
                 &[],
@@ -576,9 +681,6 @@ impl Context {
                 context: Arc::new(context),
             }
         }
-    }
-    pub fn get_command_buffer(&self) -> CommandBuffer {
-        self.command_pool.get_command_buffer(self)
     }
 }
 impl Drop for Context {

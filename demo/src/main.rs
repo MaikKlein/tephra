@@ -453,7 +453,7 @@ fn main() {
             record_submit_commandbuffer(
                 &context.device,
                 context.draw_command_buffer,
-                &context.present_queue,
+                &context.present_queue.inner,
                 &[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT],
                 &[context.present_complete_semaphore],
                 &[context.rendering_complete_semaphore],
@@ -508,7 +508,7 @@ fn main() {
             };
             context
                 .swapchain_loader
-                .queue_present_khr(*context.present_queue.lock(), &present_info)
+                .queue_present_khr(*context.present_queue.inner.lock(), &present_info)
                 .unwrap();
         });
 
