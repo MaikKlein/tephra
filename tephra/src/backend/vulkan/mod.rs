@@ -100,7 +100,7 @@ impl CommandPool {
     }
     pub fn get_command_buffer(&mut self, context: &Context) -> CommandBuffer {
         // Add queued command buffers
-        self.command_buffers.extend(self.receiver.iter());
+        self.command_buffers.extend(self.receiver.try_iter());
         let free_command_buffer = self.command_buffers.pop().unwrap_or_else(|| {
             // If no buffer is available, we need to allocate
             self.allocate_command_buffers(context, 10);

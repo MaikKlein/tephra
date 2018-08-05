@@ -27,16 +27,53 @@ where
     Self: Sized,
     T: Copy,
 {
-    fn copy_to_device_local(&self) -> ImplBuffer<T, DeviceLocal, Backend>;
+    fn allocate(
+        context: &context::Context<Backend>,
+        usage: BitFlags<BufferUsage>,
+        elements: usize,
+    ) -> Result<Self, BufferError>;
+
+    fn copy_to_device_local(&self) -> Result<ImplBuffer<T, DeviceLocal, Backend>, BufferError>;
 }
 
-pub struct ImplBuffer<T, Property, Backend: BackendApi> {
+pub trait BufferProperty {
+    fn property() -> Property;
+}
+
+#[derive(Copy, Clone)]
+pub enum Property {
+    HostVisible,
+    DeviceLocal,
+}
+
+impl BufferProperty for HostVisible {
+    fn property() -> Property {
+        Property::HostVisible
+    }
+}
+
+impl BufferProperty for DeviceLocal {
+    fn property() -> Property {
+        Property::DeviceLocal
+    }
+}
+
+pub struct ImplBuffer<T, Property, Backend>
+where
+    Backend: BackendApi,
+    Property: BufferProperty,
+{
     pub buffer: Backend::Buffer,
     pub usage: BitFlags<BufferUsage>,
     pub _m: PhantomData<T>,
     pub _property: PhantomData<Property>,
 }
-pub struct Buffer<T, Property, Backend: BackendApi> {
+
+pub struct Buffer<T, Property, Backend>
+where
+    Property: BufferProperty,
+    Backend: BackendApi,
+{
     pub impl_buffer: ImplBuffer<T, Property, Backend>,
 }
 
@@ -65,11 +102,13 @@ where
 impl<T: Copy, Property, Backend> Buffer<T, Property, Backend>
 where
     Backend: BackendApi,
+    Property: BufferProperty,
     ImplBuffer<T, Property, Backend>: BufferApi<T, Backend>,
 {
-    fn copy_to_device_local(&self) -> Buffer<T, DeviceLocal, Backend> {
-        let impl_buffer = self.impl_buffer.copy_to_device_local();
-        Buffer { impl_buffer }
+    pub fn copy_to_device_local(&self) -> Result<Buffer<T, DeviceLocal, Backend>, BufferError> {
+        self.impl_buffer
+            .copy_to_device_local()
+            .map(|impl_buffer| Buffer { impl_buffer })
     }
 }
 

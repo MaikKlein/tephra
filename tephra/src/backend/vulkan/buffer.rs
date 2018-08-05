@@ -1,7 +1,10 @@
 use super::Vulkan;
 use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk;
-use buffer::{BufferApi, BufferUsage, DeviceLocal, HostVisible, HostVisibleBuffer, ImplBuffer};
+use buffer::{
+    BufferApi, BufferProperty, BufferUsage, DeviceLocal, HostVisible, HostVisibleBuffer,
+    ImplBuffer, Property,
+};
 use context::Context;
 use enumflags::BitFlags;
 use errors::{BufferError, MappingError};
@@ -38,13 +41,110 @@ fn bitflag_to_bufferflags(usage: BitFlags<BufferUsage>) -> vk::BufferUsageFlags 
     flag
 }
 
+fn property_to_vk_property(property: Property) -> vk::MemoryPropertyFlags {
+    match property {
+        Property::HostVisible => vk::MemoryPropertyFlags::HOST_VISIBLE,
+        Property::DeviceLocal => vk::MemoryPropertyFlags::DEVICE_LOCAL,
+    }
+}
+
 impl<T, Property> BufferApi<T, Vulkan> for ImplBuffer<T, Property, Vulkan>
 where
     T: Copy,
+    Property: BufferProperty,
 {
-    fn copy_to_device_local(&self) -> ImplBuffer<T, DeviceLocal, Vulkan> {
+    fn allocate(
+        context: &Context<Vulkan>,
+        usage: BitFlags<BufferUsage>,
+        elements: usize,
+    ) -> Result<Self, BufferError> {
+        unsafe {
+            let device_memory_properties = context
+                .instance
+                .get_physical_device_memory_properties(context.physical_device);
+            // make sure we can always copy from and to a buffer
+            let vk_usage = bitflag_to_bufferflags(usage)
+                | vk::BufferUsageFlags::TRANSFER_SRC
+                | vk::BufferUsageFlags::TRANSFER_DST;
+            let vertex_input_buffer_info = vk::BufferCreateInfo {
+                s_type: vk::StructureType::BUFFER_CREATE_INFO,
+                p_next: ptr::null(),
+                flags: vk::BufferCreateFlags::empty(),
+                size: (elements * size_of::<T>()) as u64,
+                usage: vk_usage,
+                sharing_mode: vk::SharingMode::EXCLUSIVE,
+                queue_family_index_count: 0,
+                p_queue_family_indices: ptr::null(),
+            };
+            let vertex_input_buffer = context
+                .device
+                .create_buffer(&vertex_input_buffer_info, None)
+                .unwrap();
+            let vertex_input_buffer_memory_req = context
+                .device
+                .get_buffer_memory_requirements(vertex_input_buffer);
+            let vertex_input_buffer_memory_index = find_memorytype_index(
+                &vertex_input_buffer_memory_req,
+                &device_memory_properties,
+                property_to_vk_property(Property::property()),
+            ).expect("Unable to find suitable memorytype for the vertex buffer.");
+
+            let vertex_buffer_allocate_info = vk::MemoryAllocateInfo {
+                s_type: vk::StructureType::MEMORY_ALLOCATE_INFO,
+                p_next: ptr::null(),
+                allocation_size: vertex_input_buffer_memory_req.size,
+                memory_type_index: vertex_input_buffer_memory_index,
+            };
+            let vertex_input_buffer_memory = context
+                .device
+                .allocate_memory(&vertex_buffer_allocate_info, None)
+                .unwrap();
+            context
+                .device
+                .bind_buffer_memory(vertex_input_buffer, vertex_input_buffer_memory, 0)
+                .unwrap();
+            let inner_buffer = BufferData {
+                context: context.clone(),
+                buffer: vertex_input_buffer,
+                memory: vertex_input_buffer_memory,
+                len: elements,
+            };
+            let buffer = ImplBuffer {
+                buffer: inner_buffer,
+                usage,
+                _m: PhantomData,
+                _property: PhantomData,
+            };
+            Ok(buffer)
+        }
+    }
+
+    fn copy_to_device_local(&self) -> Result<ImplBuffer<T, DeviceLocal, Vulkan>, BufferError> {
         let command_buffer = self.buffer.context.get_command_buffer();
-        unimplemented!()
+        let context = &self.buffer.context;
+        let dst_buffer =
+            ImplBuffer::<T, DeviceLocal, Vulkan>::allocate(context, self.usage, self.buffer.len)?;
+        super::record_submit_commandbuffer(
+            &context.device,
+            command_buffer.inner,
+            &context.present_queue,
+            &[vk::PipelineStageFlags::BOTTOM_OF_PIPE],
+            &[],
+            &[],
+            |device, command_buffer| unsafe {
+                context.device.cmd_copy_buffer(
+                    command_buffer,
+                    self.buffer.buffer,
+                    dst_buffer.buffer.buffer,
+                    &[vk::BufferCopy {
+                        src_offset: 0,
+                        dst_offset: 0,
+                        size: (self.buffer.len * size_of::<T>()) as _,
+                    }],
+                );
+            },
+        );
+        Ok(dst_buffer)
     }
 }
 impl<T> HostVisibleBuffer<T, Vulkan> for ImplBuffer<T, HostVisible, Vulkan>
@@ -77,62 +177,7 @@ where
         data: &[T],
     ) -> Result<Self, BufferError> {
         unsafe {
-            let device_memory_properties = context
-                .instance
-                .get_physical_device_memory_properties(context.physical_device);
-            // make sure we can always copy from and to a buffer
-            let vk_usage = bitflag_to_bufferflags(usage)
-                | vk::BufferUsageFlags::TRANSFER_SRC
-                | vk::BufferUsageFlags::TRANSFER_DST;
-            let vertex_input_buffer_info = vk::BufferCreateInfo {
-                s_type: vk::StructureType::BUFFER_CREATE_INFO,
-                p_next: ptr::null(),
-                flags: vk::BufferCreateFlags::empty(),
-                size: (data.len() * size_of::<T>()) as u64,
-                usage: vk_usage,
-                sharing_mode: vk::SharingMode::EXCLUSIVE,
-                queue_family_index_count: 0,
-                p_queue_family_indices: ptr::null(),
-            };
-            let vertex_input_buffer = context
-                .device
-                .create_buffer(&vertex_input_buffer_info, None)
-                .unwrap();
-            let vertex_input_buffer_memory_req = context
-                .device
-                .get_buffer_memory_requirements(vertex_input_buffer);
-            let vertex_input_buffer_memory_index = find_memorytype_index(
-                &vertex_input_buffer_memory_req,
-                &device_memory_properties,
-                vk::MemoryPropertyFlags::HOST_VISIBLE,
-            ).expect("Unable to find suitable memorytype for the vertex buffer.");
-
-            let vertex_buffer_allocate_info = vk::MemoryAllocateInfo {
-                s_type: vk::StructureType::MEMORY_ALLOCATE_INFO,
-                p_next: ptr::null(),
-                allocation_size: vertex_input_buffer_memory_req.size,
-                memory_type_index: vertex_input_buffer_memory_index,
-            };
-            let vertex_input_buffer_memory = context
-                .device
-                .allocate_memory(&vertex_buffer_allocate_info, None)
-                .unwrap();
-            context
-                .device
-                .bind_buffer_memory(vertex_input_buffer, vertex_input_buffer_memory, 0)
-                .unwrap();
-            let inner_buffer = BufferData {
-                context: context.clone(),
-                buffer: vertex_input_buffer,
-                memory: vertex_input_buffer_memory,
-                len: data.len(),
-            };
-            let mut buffer = ImplBuffer {
-                buffer: inner_buffer,
-                usage,
-                _m: PhantomData,
-                _property: PhantomData,
-            };
+            let mut buffer = Self::allocate(context, usage, data.len())?;
             buffer
                 .map_memory(|slice| slice.copy_from_slice(data))
                 .map_err(BufferError::MappingError)?;

@@ -183,6 +183,7 @@ fn main() {
         ];
         let vertex_buffer = Buffer::from_slice(&context, BufferUsage::Vertex.into(), &vertices)
             .expect("Failed to create buffer");
+        let vertex_buffer = vertex_buffer.copy_to_device_local().expect("device");
         let vertex_spv_file =
             File::open(Path::new("shader/triangle/vert.spv")).expect("Could not find vert.spv.");
         let frag_spv_file =
