@@ -5,11 +5,10 @@ use std::io::{self, Read};
 use std::marker::PhantomData;
 use std::path::Path;
 
-pub trait ShaderApi<Type, Backend>
+pub trait ShaderApi<Backend>
 where
     Self: Sized,
     Backend: BackendApi,
-    Type: GetShaderType,
 {
     fn load(context: &Context<Backend>, bytes: &[u8]) -> Result<Self, ShaderError>;
 }
@@ -38,16 +37,14 @@ impl GetShaderType for Fragment {
     }
 }
 
-pub struct Shader<T: GetShaderType, Backend: BackendApi> {
-    _shader_type: PhantomData<T>,
+pub struct Shader<Backend: BackendApi> {
     pub shader_data: Backend::Shader,
 }
 
-impl<T, Backend> Shader<T, Backend>
+impl<Backend> Shader<Backend>
 where
-    T: GetShaderType,
     Backend: BackendApi,
-    Backend::Shader: ShaderApi<T, Backend>,
+    Backend::Shader: ShaderApi<Backend>,
 {
     pub fn load<P: AsRef<Path>>(context: &Context<Backend>, p: P) -> Result<Self, ShaderError> {
         let file = File::open(p.as_ref()).map_err(ShaderError::IoError)?;
@@ -55,7 +52,6 @@ where
         let shader_data = Backend::Shader::load(context, &bytes)?;
         let shader = Shader {
             shader_data,
-            _shader_type: PhantomData,
         };
         Ok(shader)
     }
@@ -68,5 +64,3 @@ pub enum ShaderError {
     #[fail(display = "IO error {}", _0)]
     IoError(io::Error),
 }
-pub type VertexShader<Backend> = Shader<Vertex, Backend>;
-pub type FragmentShader<Backend> = Shader<Fragment, Backend>;

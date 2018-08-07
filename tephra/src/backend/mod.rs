@@ -8,4 +8,5 @@ where
     type Buffer;
     type Context: Clone;
     type Renderpass;
+    type Pipeline;
 }

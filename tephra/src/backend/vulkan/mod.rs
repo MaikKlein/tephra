@@ -15,6 +15,7 @@ use thread_local_object::ThreadLocal;
 pub mod buffer;
 pub mod renderpass;
 pub mod shader;
+pub mod pipeline;
 #[derive(Copy, Clone)]
 pub struct Vulkan;
 use super::BackendApi;
@@ -24,6 +25,7 @@ impl BackendApi for Vulkan {
     type Context = Arc<Context>;
     type Buffer = buffer::BufferData;
     type Renderpass = renderpass::RenderpassData;
+    type Pipeline = pipeline::PipelineData;
 }
 
 #[derive(Clone)]

@@ -20,10 +20,7 @@ impl Drop for ShaderData {
     }
 }
 
-impl<Type> ShaderApi<Type, Vulkan> for ShaderData
-where
-    Type: GetShaderType,
-{
+impl ShaderApi<Vulkan> for ShaderData {
     fn load(context: &Context<Vulkan>, bytes: &[u8]) -> Result<Self, ShaderError> {
         unsafe {
             let shader_info = vk::ShaderModuleCreateInfo {

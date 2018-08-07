@@ -9,6 +9,7 @@ use ash::vk;
 use std::default::Default;
 use std::ffi::CString;
 use std::ptr;
+use tephra::failure::Fail;
 
 use std::fs::File;
 use std::io::Read;
@@ -16,7 +17,8 @@ use std::mem;
 use std::path::Path;
 use tephra::backend::vulkan::{record_submit_commandbuffer, Context};
 use tephra::buffer::{Buffer, BufferUsage};
-use tephra::shader::{FragmentShader, VertexShader};
+pub use tephra::renderpass::{Pass, Renderpass, VertexInput, VertexInputData, VertexType};
+use tephra::shader::Shader;
 
 // Simple offset_of macro akin to C++ offsetof
 #[macro_export]
@@ -28,6 +30,33 @@ macro_rules! offset_of {
             (&b.$field as *const _ as isize) - (&b as *const _ as isize)
         }
     }};
+}
+
+pub struct TrianglePass;
+impl Pass for TrianglePass {
+    type Input = Vertex;
+}
+#[derive(Clone, Debug, Copy)]
+pub struct Vertex {
+    pub pos: [f32; 4],
+    pub color: [f32; 4],
+}
+
+impl VertexInput for Vertex {
+    fn vertex_input_data() -> Vec<VertexInputData> {
+        vec![
+            VertexInputData {
+                binding: 0,
+                location: 0,
+                vertex_type: VertexType::F32(4),
+            },
+            VertexInputData {
+                binding: 0,
+                location: 1,
+                vertex_type: VertexType::F32(4),
+            },
+        ]
+    }
 }
 
 // impl Drop for ExampleBase {
@@ -56,84 +85,11 @@ macro_rules! offset_of {
 //     }
 // }
 
-#[derive(Clone, Debug, Copy)]
-struct Vertex {
-    pos: [f32; 4],
-    color: [f32; 4],
-}
-
 fn main() {
     unsafe {
         let context = Context::new();
-        let renderpass_attachments = [
-            vk::AttachmentDescription {
-                format: context.surface_format.format,
-                flags: vk::AttachmentDescriptionFlags::empty(),
-                samples: vk::SampleCountFlags::TYPE_1,
-                load_op: vk::AttachmentLoadOp::CLEAR,
-                store_op: vk::AttachmentStoreOp::STORE,
-                stencil_load_op: vk::AttachmentLoadOp::DONT_CARE,
-                stencil_store_op: vk::AttachmentStoreOp::DONT_CARE,
-                initial_layout: vk::ImageLayout::UNDEFINED,
-                final_layout: vk::ImageLayout::PRESENT_SRC_KHR,
-            },
-            vk::AttachmentDescription {
-                format: vk::Format::D16_UNORM,
-                flags: vk::AttachmentDescriptionFlags::empty(),
-                samples: vk::SampleCountFlags::TYPE_1,
-                load_op: vk::AttachmentLoadOp::CLEAR,
-                store_op: vk::AttachmentStoreOp::DONT_CARE,
-                stencil_load_op: vk::AttachmentLoadOp::DONT_CARE,
-                stencil_store_op: vk::AttachmentStoreOp::DONT_CARE,
-                initial_layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-                final_layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-            },
-        ];
-        let color_attachment_ref = vk::AttachmentReference {
-            attachment: 0,
-            layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-        };
-        let depth_attachment_ref = vk::AttachmentReference {
-            attachment: 1,
-            layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-        };
-        let dependency = vk::SubpassDependency {
-            dependency_flags: Default::default(),
-            src_subpass: vk::SUBPASS_EXTERNAL,
-            dst_subpass: Default::default(),
-            src_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
-            src_access_mask: Default::default(),
-            dst_access_mask: vk::AccessFlags::COLOR_ATTACHMENT_READ
-                | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
-            dst_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
-        };
-        let subpass = vk::SubpassDescription {
-            color_attachment_count: 1,
-            p_color_attachments: &color_attachment_ref,
-            p_depth_stencil_attachment: &depth_attachment_ref,
-            flags: Default::default(),
-            pipeline_bind_point: vk::PipelineBindPoint::GRAPHICS,
-            input_attachment_count: 0,
-            p_input_attachments: ptr::null(),
-            p_resolve_attachments: ptr::null(),
-            preserve_attachment_count: 0,
-            p_preserve_attachments: ptr::null(),
-        };
-        let renderpass_create_info = vk::RenderPassCreateInfo {
-            s_type: vk::StructureType::RENDER_PASS_CREATE_INFO,
-            flags: Default::default(),
-            p_next: ptr::null(),
-            attachment_count: renderpass_attachments.len() as u32,
-            p_attachments: renderpass_attachments.as_ptr(),
-            subpass_count: 1,
-            p_subpasses: &subpass,
-            dependency_count: 1,
-            p_dependencies: &dependency,
-        };
-        let renderpass = context
-            .device
-            .create_render_pass(&renderpass_create_info, None)
-            .unwrap();
+        let triangle_pass = TrianglePass;
+        let renderpass = Renderpass::new(&context, triangle_pass);
         let framebuffers: Vec<vk::Framebuffer> = context
             .present_image_views
             .iter()
@@ -143,7 +99,7 @@ fn main() {
                     s_type: vk::StructureType::FRAMEBUFFER_CREATE_INFO,
                     p_next: ptr::null(),
                     flags: Default::default(),
-                    render_pass: renderpass,
+                    render_pass: renderpass.impl_render_pass.data.render_pass,
                     attachment_count: framebuffer_attachments.len() as u32,
                     p_attachments: framebuffer_attachments.as_ptr(),
                     width: context.surface_resolution.width,
@@ -175,18 +131,15 @@ fn main() {
                 color: [1.0, 0.0, 0.0, 1.0],
             },
         ];
+
         let vertex_buffer = Buffer::from_slice(&context, BufferUsage::Vertex.into(), &vertices)
-            .expect("Failed to create buffer");
-        let vertex_buffer = vertex_buffer.copy_to_device_local().expect("device");
-        let vertex_spv_file =
-            File::open(Path::new("shader/triangle/vert.spv")).expect("Could not find vert.spv.");
-        let frag_spv_file =
-            File::open(Path::new("shader/triangle/frag.spv")).expect("Could not find frag.spv.");
+            .and_then(|buffer| buffer.copy_to_device_local())
+            .expect("Failed to create vertex buffer");
 
         let vertex_shader_module =
-            VertexShader::load(&context, "shader/triangle/vert.spv").expect("vertex");
+            Shader::load(&context, "shader/triangle/vert.spv").expect("vertex");
         let fragment_shader_module =
-            FragmentShader::load(&context, "shader/triangle/frag.spv").expect("vertex");
+            Shader::load(&context, "shader/triangle/frag.spv").expect("vertex");
 
         let layout_create_info = vk::PipelineLayoutCreateInfo {
             s_type: vk::StructureType::PIPELINE_LAYOUT_CREATE_INFO,
@@ -373,7 +326,7 @@ fn main() {
             p_color_blend_state: &color_blend_state,
             p_dynamic_state: &dynamic_state_info,
             layout: pipeline_layout,
-            render_pass: renderpass,
+            render_pass: renderpass.impl_render_pass.data.render_pass,
             subpass: 0,
             base_pipeline_handle: vk::Pipeline::null(),
             base_pipeline_index: 0,
@@ -411,7 +364,7 @@ fn main() {
             let render_pass_begin_info = vk::RenderPassBeginInfo {
                 s_type: vk::StructureType::RENDER_PASS_BEGIN_INFO,
                 p_next: ptr::null(),
-                render_pass: renderpass,
+                render_pass: renderpass.impl_render_pass.data.render_pass,
                 framebuffer: framebuffers[present_index as usize],
                 render_area: vk::Rect2D {
                     offset: vk::Offset2D { x: 0, y: 0 },
@@ -492,6 +445,5 @@ fn main() {
         for framebuffer in framebuffers {
             context.device.destroy_framebuffer(framebuffer, None);
         }
-        context.device.destroy_render_pass(renderpass, None);
     }
 }
