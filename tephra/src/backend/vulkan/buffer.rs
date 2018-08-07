@@ -3,12 +3,11 @@ use super::Vulkan;
 use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk;
 use buffer::{
-    BufferApi, BufferProperty, BufferUsage, DeviceLocal, HostVisible, HostVisibleBuffer,
-    ImplBuffer, Property,
+    BufferApi, BufferError, BufferProperty, BufferUsage, DeviceLocal, HostVisible,
+    HostVisibleBuffer, ImplBuffer, MappingError, Property,
 };
 use context::Context;
 use enumflags::BitFlags;
-use errors::{BufferError, MappingError};
 use std::marker::PhantomData;
 use std::mem::size_of;
 use std::ptr;
@@ -138,7 +137,7 @@ where
         });
         context.present_queue.submit(
             context,
-            &[vk::PipelineStageFlags::BOTTOM_OF_PIPE],
+            &[vk::PipelineStageFlags::TOP_OF_PIPE],
             &[],
             &[],
             command_buffer,

@@ -1,9 +1,28 @@
+use backend::BackendApi;
 use context;
 use enumflags::BitFlags;
-use errors::{BufferError, MappingError};
 use std::marker::PhantomData;
-use traits::BackendApi;
 
+#[derive(Debug, Fail)]
+pub enum AllocationError {
+    #[fail(display = "Unsupported memory type")]
+    UnsupportedMemorytype,
+}
+#[derive(Debug, Fail)]
+pub enum MappingError {
+    #[fail(display = "Offset is out of range")]
+    OutOfRange,
+    #[fail(display = "Failed to map memory")]
+    Failed,
+}
+
+#[derive(Debug, Fail)]
+pub enum BufferError {
+    #[fail(display = "Allocation failed with: {}", _0)]
+    AllocationError(AllocationError),
+    #[fail(display = "Mapping failed: {}", _0)]
+    MappingError(MappingError),
+}
 pub enum HostVisible {}
 pub enum DeviceLocal {}
 

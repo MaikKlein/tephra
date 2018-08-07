@@ -1,7 +1,6 @@
 use ash::extensions::{DebugReport, Surface, Swapchain, XlibSurface};
 use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0, V1_0};
 use ash::vk;
-use std::ptr;
 use ash::{Device, Entry, Instance};
 use context;
 use parking_lot::Mutex;
@@ -9,16 +8,22 @@ use std::cell::RefCell;
 use std::ffi::{CStr, CString};
 use std::marker::PhantomData;
 use std::ops::Drop;
+use std::ptr;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;
 use thread_local_object::ThreadLocal;
 pub mod buffer;
+pub mod renderpass;
+pub mod shader;
 #[derive(Copy, Clone)]
 pub struct Vulkan;
+use super::BackendApi;
 
-impl crate::traits::BackendApi for Vulkan {
-    type Buffer = buffer::BufferData;
+impl BackendApi for Vulkan {
+    type Shader = shader::ShaderData;
     type Context = Arc<Context>;
+    type Buffer = buffer::BufferData;
+    type Renderpass = renderpass::RenderpassData;
 }
 
 #[derive(Clone)]
@@ -155,7 +160,8 @@ impl Queue {
                 p_next: ptr::null(),
                 flags: vk::FenceCreateFlags::empty(),
             };
-            let submit_fence = context.device
+            let submit_fence = context
+                .device
                 .create_fence(&fence_create_info, None)
                 .expect("Create fence failed.");
             let queue = self.inner.lock();

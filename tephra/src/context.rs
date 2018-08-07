@@ -1,4 +1,4 @@
-use traits::BackendApi;
+use backend::BackendApi;
 use std::ops::Deref;
 
 #[derive(Clone)]
@@ -7,7 +7,9 @@ pub struct Context<Backend: BackendApi> {
 }
 
 impl<Backend> Deref for Context<Backend>
-where Backend: BackendApi {
+where
+    Backend: BackendApi,
+{
     type Target = Backend::Context;
     fn deref(&self) -> &Self::Target {
         &self.context
