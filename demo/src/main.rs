@@ -1,4 +1,3 @@
-#[macro_use]
 extern crate ash;
 extern crate tephra;
 pub use tephra::winit;
@@ -10,6 +9,14 @@ use ash::vk;
 use std::default::Default;
 use std::ffi::CString;
 use std::ptr;
+
+use std::fs::File;
+use std::io::Read;
+use std::mem;
+use std::path::Path;
+use tephra::backend::vulkan::{record_submit_commandbuffer, Context};
+use tephra::buffer::{Buffer, BufferUsage};
+use tephra::shader::{FragmentShader, VertexShader};
 
 // Simple offset_of macro akin to C++ offsetof
 #[macro_export]
@@ -48,19 +55,6 @@ macro_rules! offset_of {
 //         }
 //     }
 // }
-
-use ash::util::*;
-use std::fs::File;
-use std::io::Read;
-use std::mem;
-use std::mem::align_of;
-use std::path::Path;
-use std::sync::Arc;
-use tephra::backend::vulkan::{
-    record_submit_commandbuffer, Context, ThreadLocalCommandPool, Vulkan,
-};
-use tephra::buffer::{Buffer, BufferUsage};
-use tephra::context;
 
 #[derive(Clone, Debug, Copy)]
 struct Vertex {
@@ -189,34 +183,10 @@ fn main() {
         let frag_spv_file =
             File::open(Path::new("shader/triangle/frag.spv")).expect("Could not find frag.spv.");
 
-        let vertex_bytes: Vec<u8> = vertex_spv_file
-            .bytes()
-            .filter_map(|byte| byte.ok())
-            .collect();
-        let vertex_shader_info = vk::ShaderModuleCreateInfo {
-            s_type: vk::StructureType::SHADER_MODULE_CREATE_INFO,
-            p_next: ptr::null(),
-            flags: Default::default(),
-            code_size: vertex_bytes.len(),
-            p_code: vertex_bytes.as_ptr() as *const u32,
-        };
-        let frag_bytes: Vec<u8> = frag_spv_file.bytes().filter_map(|byte| byte.ok()).collect();
-        let frag_shader_info = vk::ShaderModuleCreateInfo {
-            s_type: vk::StructureType::SHADER_MODULE_CREATE_INFO,
-            p_next: ptr::null(),
-            flags: Default::default(),
-            code_size: frag_bytes.len(),
-            p_code: frag_bytes.as_ptr() as *const u32,
-        };
-        let vertex_shader_module = context
-            .device
-            .create_shader_module(&vertex_shader_info, None)
-            .expect("Vertex shader module error");
-
-        let fragment_shader_module = context
-            .device
-            .create_shader_module(&frag_shader_info, None)
-            .expect("Fragment shader module error");
+        let vertex_shader_module =
+            VertexShader::load(&context, "shader/triangle/vert.spv").expect("vertex");
+        let fragment_shader_module =
+            FragmentShader::load(&context, "shader/triangle/frag.spv").expect("vertex");
 
         let layout_create_info = vk::PipelineLayoutCreateInfo {
             s_type: vk::StructureType::PIPELINE_LAYOUT_CREATE_INFO,
@@ -239,7 +209,7 @@ fn main() {
                 s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
                 p_next: ptr::null(),
                 flags: Default::default(),
-                module: vertex_shader_module,
+                module: vertex_shader_module.shader_data.shader_module,
                 p_name: shader_entry_name.as_ptr(),
                 p_specialization_info: ptr::null(),
                 stage: vk::ShaderStageFlags::VERTEX,
@@ -248,7 +218,7 @@ fn main() {
                 s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
                 p_next: ptr::null(),
                 flags: Default::default(),
-                module: fragment_shader_module,
+                module: fragment_shader_module.shader_data.shader_module,
                 p_name: shader_entry_name.as_ptr(),
                 p_specialization_info: ptr::null(),
                 stage: vk::ShaderStageFlags::FRAGMENT,
@@ -519,12 +489,6 @@ fn main() {
         context
             .device
             .destroy_pipeline_layout(pipeline_layout, None);
-        context
-            .device
-            .destroy_shader_module(vertex_shader_module, None);
-        context
-            .device
-            .destroy_shader_module(fragment_shader_module, None);
         for framebuffer in framebuffers {
             context.device.destroy_framebuffer(framebuffer, None);
         }

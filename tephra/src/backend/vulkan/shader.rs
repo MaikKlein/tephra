@@ -7,7 +7,7 @@ use std::ops::Drop;
 use std::ptr;
 pub struct ShaderData {
     context: Context<Vulkan>,
-    shader_module: vk::ShaderModule,
+    pub shader_module: vk::ShaderModule,
 }
 
 impl Drop for ShaderData {

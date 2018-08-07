@@ -1,6 +1,5 @@
 use backend::BackendApi;
 use context;
-use enumflags::BitFlags;
 use std::marker::PhantomData;
 
 #[derive(Debug, Fail)]
@@ -33,7 +32,7 @@ where
 {
     fn from_slice(
         context: &context::Context<Backend>,
-        usage: BitFlags<BufferUsage>,
+        usage: BufferUsage,
         data: &[T],
     ) -> Result<Self, BufferError>;
     fn map_memory<R, F>(&mut self, f: F) -> Result<R, MappingError>
@@ -48,7 +47,7 @@ where
 {
     fn allocate(
         context: &context::Context<Backend>,
-        usage: BitFlags<BufferUsage>,
+        usage: BufferUsage,
         elements: usize,
     ) -> Result<Self, BufferError>;
 
@@ -83,7 +82,7 @@ where
     Property: BufferProperty,
 {
     pub buffer: Backend::Buffer,
-    pub usage: BitFlags<BufferUsage>,
+    pub usage: BufferUsage,
     pub _m: PhantomData<T>,
     pub _property: PhantomData<Property>,
 }
@@ -103,7 +102,7 @@ where
 {
     pub fn from_slice(
         context: &context::Context<Backend>,
-        usage: BitFlags<BufferUsage>,
+        usage: BufferUsage,
         data: &[T],
     ) -> Result<Self, BufferError> {
         HostVisibleBuffer::from_slice(context, usage, data)
@@ -131,10 +130,9 @@ where
     }
 }
 
-#[derive(Copy, Clone, EnumFlags)]
-#[repr(u32)]
+#[derive(Copy, Clone)]
 pub enum BufferUsage {
-    Vertex = 1 << 0,
-    Index = 1 << 1,
-    Uniform = 1 << 2,
+    Vertex,
+    Index,
+    Uniform,
 }

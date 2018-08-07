@@ -7,7 +7,6 @@ use buffer::{
     HostVisibleBuffer, ImplBuffer, MappingError, Property,
 };
 use context::Context;
-use enumflags::BitFlags;
 use std::marker::PhantomData;
 use std::mem::size_of;
 use std::ptr;
@@ -29,16 +28,12 @@ impl Drop for BufferData {
     }
 }
 
-fn bitflag_to_bufferflags(usage: BitFlags<BufferUsage>) -> vk::BufferUsageFlags {
-    let mut flag = vk::BufferUsageFlags::default();
-    if usage.contains(BufferUsage::Vertex) {
-        flag |= vk::BufferUsageFlags::VERTEX_BUFFER;
+fn bitflag_to_bufferflags(usage: BufferUsage) -> vk::BufferUsageFlags {
+    match usage {
+        BufferUsage::Vertex => vk::BufferUsageFlags::VERTEX_BUFFER,
+        BufferUsage::Index => vk::BufferUsageFlags::INDEX_BUFFER,
+        BufferUsage::Uniform => vk::BufferUsageFlags::UNIFORM_BUFFER,
     }
-    if usage.contains(BufferUsage::Index) {
-        flag |= vk::BufferUsageFlags::INDEX_BUFFER;
-    }
-    // [TODO] Add all variants
-    flag
 }
 
 fn property_to_vk_property(property: Property) -> vk::MemoryPropertyFlags {
@@ -55,7 +50,7 @@ where
 {
     fn allocate(
         context: &Context<Vulkan>,
-        usage: BitFlags<BufferUsage>,
+        usage: BufferUsage,
         elements: usize,
     ) -> Result<Self, BufferError> {
         unsafe {
@@ -171,16 +166,14 @@ where
 
     fn from_slice(
         context: &Context<Vulkan>,
-        usage: BitFlags<BufferUsage>,
+        usage: BufferUsage,
         data: &[T],
     ) -> Result<Self, BufferError> {
-        unsafe {
             let mut buffer = Self::allocate(context, usage, data.len())?;
             buffer
                 .map_memory(|slice| slice.copy_from_slice(data))
                 .map_err(BufferError::MappingError)?;
             Ok(buffer)
-        }
     }
 }
 

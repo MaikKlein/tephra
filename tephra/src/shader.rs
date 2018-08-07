@@ -40,7 +40,7 @@ impl GetShaderType for Fragment {
 
 pub struct Shader<T: GetShaderType, Backend: BackendApi> {
     _shader_type: PhantomData<T>,
-    shader_data: Backend::Shader,
+    pub shader_data: Backend::Shader,
 }
 
 impl<T, Backend> Shader<T, Backend>
@@ -68,5 +68,5 @@ pub enum ShaderError {
     #[fail(display = "IO error {}", _0)]
     IoError(io::Error),
 }
-// pub type VertexShader = Shader<Vertex>;
-// pub type FragmentShader = Shader<Fragment>;
+pub type VertexShader<Backend> = Shader<Vertex, Backend>;
+pub type FragmentShader<Backend> = Shader<Fragment, Backend>;
