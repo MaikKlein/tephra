@@ -43,11 +43,12 @@ fn property_to_vk_property(property: Property) -> vk::MemoryPropertyFlags {
     }
 }
 
-impl<T, Property> BufferApi<T, Vulkan> for ImplBuffer<T, Property, Vulkan>
+impl<T, Property> BufferApi<Vulkan> for ImplBuffer<T, Property, Vulkan>
 where
     T: Copy,
     Property: BufferProperty,
 {
+    type Item = T;
     fn allocate(
         context: &Context<Vulkan>,
         usage: BufferUsage,
@@ -169,11 +170,11 @@ where
         usage: BufferUsage,
         data: &[T],
     ) -> Result<Self, BufferError> {
-            let mut buffer = Self::allocate(context, usage, data.len())?;
-            buffer
-                .map_memory(|slice| slice.copy_from_slice(data))
-                .map_err(BufferError::MappingError)?;
-            Ok(buffer)
+        let mut buffer = Self::allocate(context, usage, data.len())?;
+        buffer
+            .map_memory(|slice| slice.copy_from_slice(data))
+            .map_err(BufferError::MappingError)?;
+        Ok(buffer)
     }
 }
 

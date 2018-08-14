@@ -40,18 +40,18 @@ where
         F: Fn(&mut [T]) -> R;
 }
 
-pub trait BufferApi<T, Backend: BackendApi>
+pub trait BufferApi<Backend: BackendApi>
 where
     Self: Sized,
-    T: Copy,
 {
+    type Item: Copy;
     fn allocate(
         context: &context::Context<Backend>,
         usage: BufferUsage,
         elements: usize,
     ) -> Result<Self, BufferError>;
 
-    fn copy_to_device_local(&self) -> Result<ImplBuffer<T, DeviceLocal, Backend>, BufferError>;
+    fn copy_to_device_local(&self) -> Result<ImplBuffer<Self::Item, DeviceLocal, Backend>, BufferError>;
 }
 
 pub trait BufferProperty {
@@ -121,7 +121,7 @@ impl<T: Copy, Property, Backend> Buffer<T, Property, Backend>
 where
     Backend: BackendApi,
     Property: BufferProperty,
-    ImplBuffer<T, Property, Backend>: BufferApi<T, Backend>,
+    ImplBuffer<T, Property, Backend>: BufferApi<Backend, Item=T>,
 {
     pub fn copy_to_device_local(&self) -> Result<Buffer<T, DeviceLocal, Backend>, BufferError> {
         self.impl_buffer

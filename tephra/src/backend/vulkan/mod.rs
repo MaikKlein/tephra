@@ -13,9 +13,11 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;
 use thread_local_object::ThreadLocal;
 pub mod buffer;
+pub mod pipeline;
 pub mod renderpass;
 pub mod shader;
-pub mod pipeline;
+pub mod image;
+pub mod swapchain;
 #[derive(Copy, Clone)]
 pub struct Vulkan;
 use super::BackendApi;
@@ -26,6 +28,10 @@ impl BackendApi for Vulkan {
     type Buffer = buffer::BufferData;
     type Renderpass = renderpass::RenderpassData;
     type Pipeline = pipeline::PipelineData;
+    type Render = renderpass::RenderData;
+    type Framebuffer = image::FramebufferData;
+    type Image = image::ImageData;
+    type Swapchain = swapchain::SwapchainData;
 }
 
 #[derive(Clone)]
@@ -181,6 +187,8 @@ impl Queue {
             context
                 .device
                 .queue_submit(*queue, &[submit_info], submit_fence);
+            // TODO: Future
+            context.device.wait_for_fences(&[submit_fence], true, u64::max_value());
         }
     }
 }

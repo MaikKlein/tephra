@@ -38,7 +38,7 @@ impl GetShaderType for Fragment {
 }
 
 pub struct Shader<Backend: BackendApi> {
-    pub shader_data: Backend::Shader,
+    pub data: Backend::Shader,
 }
 
 impl<Backend> Shader<Backend>
@@ -49,10 +49,8 @@ where
     pub fn load<P: AsRef<Path>>(context: &Context<Backend>, p: P) -> Result<Self, ShaderError> {
         let file = File::open(p.as_ref()).map_err(ShaderError::IoError)?;
         let bytes: Vec<_> = file.bytes().filter_map(Result::ok).collect();
-        let shader_data = Backend::Shader::load(context, &bytes)?;
-        let shader = Shader {
-            shader_data,
-        };
+        let data = Backend::Shader::load(context, &bytes)?;
+        let shader = Shader { data };
         Ok(shader)
     }
 }

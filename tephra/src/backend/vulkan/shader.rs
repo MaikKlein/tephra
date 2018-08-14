@@ -19,7 +19,6 @@ impl Drop for ShaderData {
         }
     }
 }
-
 impl ShaderApi<Vulkan> for ShaderData {
     fn load(context: &Context<Vulkan>, bytes: &[u8]) -> Result<Self, ShaderError> {
         unsafe {

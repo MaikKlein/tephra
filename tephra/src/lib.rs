@@ -9,6 +9,7 @@ pub extern crate winit;
 #[macro_use]
 extern crate failure_derive;
 
+pub mod swapchain;
 pub mod backend;
 pub mod buffer;
 pub mod context;
@@ -17,3 +18,9 @@ pub mod pipeline;
 pub mod renderpass;
 pub mod shader;
 
+#[derive(Copy, Clone, Default, Debug)]
+pub struct Viewport {
+    pub origin: (f32, f32),
+    pub dimensions: (f32, f32),
+    pub depth_range: (f32, f32),
+}
