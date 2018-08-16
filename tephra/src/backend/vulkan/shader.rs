@@ -1,12 +1,12 @@
 use super::Vulkan;
 use ash::version::DeviceV1_0;
 use ash::vk;
-use context::Context;
-use shader::{GetShaderType, ShaderApi, ShaderError};
+use super::Context;
+use shader::{CreateShader, GetShaderType, ShaderApi, ShaderError, Shader};
 use std::ops::Drop;
 use std::ptr;
 pub struct ShaderData {
-    context: Context<Vulkan>,
+    context: Context,
     pub shader_module: vk::ShaderModule,
 }
 
@@ -19,8 +19,11 @@ impl Drop for ShaderData {
         }
     }
 }
-impl ShaderApi<Vulkan> for ShaderData {
-    fn load(context: &Context<Vulkan>, bytes: &[u8]) -> Result<Self, ShaderError> {
+impl ShaderApi for ShaderData {
+}
+impl CreateShader for Context {
+    fn load(&self, bytes: &[u8]) -> Result<Shader, ShaderError> {
+        let context = self;
         unsafe {
             let shader_info = vk::ShaderModuleCreateInfo {
                 s_type: vk::StructureType::SHADER_MODULE_CREATE_INFO,
@@ -37,7 +40,10 @@ impl ShaderApi<Vulkan> for ShaderData {
                 context: context.clone(),
                 shader_module,
             };
-            Ok(shader_data)
+            let shader = Shader {
+                data: Box::new(shader_data)
+            };
+            Ok(shader)
         }
     }
 }

@@ -1,17 +1,34 @@
-use backend::BackendApi;
 use std::ops::Deref;
+use std::sync::Arc;
+
+use buffer::CreateBuffer;
+use downcast;
+use image::{CreateFramebuffer, CreateImage};
+use pipeline::CreatePipeline;
+use renderpass::CreateRenderpass;
+use shader::CreateShader;
+use swapchain::CreateSwapchain;
+
+pub trait ContextApi: downcast::Downcast
+where
+    Self: CreateImage
+        + CreateSwapchain
+        + CreateShader
+        + CreatePipeline
+        + CreateRenderpass
+        + CreateBuffer,
+{
+}
+impl_downcast!(ContextApi);
 
 #[derive(Clone)]
-pub struct Context<Backend: BackendApi> {
-    pub context: Backend::Context,
+pub struct Context {
+    pub context: Arc<dyn ContextApi>,
 }
 
-impl<Backend> Deref for Context<Backend>
-where
-    Backend: BackendApi,
-{
-    type Target = Backend::Context;
+impl Deref for Context {
+    type Target = ContextApi;
     fn deref(&self) -> &Self::Target {
-        &self.context
+        self.context.as_ref()
     }
 }

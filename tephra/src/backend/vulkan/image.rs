@@ -1,23 +1,30 @@
+use downcast::Downcast;
+use std::any::Any;
 use super::buffer;
 use super::{CommandBuffer, Vulkan};
 use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk;
-use context::Context;
-use image::{Image, ImageApi, Resolution};
+use super::Context;
+use image::{
+    CreateFramebuffer, CreateImage, Framebuffer, FramebufferApi, Image, ImageApi, RenderTarget, RenderTargetInfo,
+    Resolution,
+};
+use renderpass::{Pass, Renderpass};
 use std::ptr;
 pub struct FramebufferData {}
 pub struct ImageData {
-    pub context: Context<Vulkan>,
+    pub context: Context,
     pub image: vk::Image,
     pub image_view: vk::ImageView,
 }
 
-impl ImageApi for Image<Vulkan> {
-    type Backend = Vulkan;
-    fn create_depth(ctx: &Context<Vulkan>, resolution: Resolution) -> Image<Vulkan> {
-        Self::allocate(ctx, resolution)
+impl ImageApi for ImageData {}
+impl CreateImage for Context {
+    fn create_depth(&self, resolution: Resolution) -> Image {
+        Self::allocate(self, resolution)
     }
-    fn allocate(ctx: &Context<Vulkan>, resolution: Resolution) -> Image<Vulkan> {
+    fn allocate(&self, resolution: Resolution) -> Image {
+        let ctx = self;
         unsafe {
             let device_memory_properties = ctx
                 .instance
@@ -128,7 +135,45 @@ impl ImageApi for Image<Vulkan> {
                 image_view,
                 image: depth_image,
             };
-            Image { data }
+            Image {
+                data: Box::new(data),
+            }
         }
+    }
+}
+
+impl FramebufferApi for FramebufferData {
+}
+impl CreateFramebuffer for FramebufferData {
+    fn new(
+        &self,
+        render_target_info: &RenderTargetInfo,
+    ) -> Self {
+        // unsafe {
+        //     let render_target_info = target.render_target();
+        //     let framebuffer_attachments: Vec<vk::ImageView> = render_target_info
+        //         .image_views
+        //         .iter()
+        //         .map(|&image| {
+        //             let image_data = image.data.downcast_ref::<ImageData>().unwrap();
+        //             image_data.image_view
+        //         }).collect();
+        //     let frame_buffer_create_info = vk::FramebufferCreateInfo {
+        //         s_type: vk::StructureType::FRAMEBUFFER_CREATE_INFO,
+        //         p_next: ptr::null(),
+        //         flags: Default::default(),
+        //         render_pass: renderpass.impl_render_pass.data.render_pass,
+        //         attachment_count: framebuffer_attachments.len() as u32,
+        //         p_attachments: framebuffer_attachments.as_ptr(),
+        //         width: context.surface_resolution.width,
+        //         height: context.surface_resolution.height,
+        //         layers: 1,
+        //     };
+        //     context
+        //         .device
+        //         .create_framebuffer(&frame_buffer_create_info, None)
+        //         .unwrap();
+        // }
+        unimplemented!()
     }
 }

@@ -1,5 +1,8 @@
 use backend::BackendApi;
 use context::Context;
+use downcast::Downcast;
+use renderpass::{Pass, Renderpass};
+use std::any::Any;
 pub enum ImageLayout {
     Undefined,
     Color,
@@ -10,48 +13,72 @@ pub struct Resolution {
     pub width: u32,
     pub height: u32,
 }
-pub trait ImageApi {
-    type Backend: BackendApi;
-    fn allocate(context: &Context<Self::Backend>, resolution: Resolution) -> Image<Self::Backend>;
-    fn create_depth(
-        context: &Context<Self::Backend>,
-        resolution: Resolution,
-    ) -> Image<Self::Backend>;
+
+pub trait CreateImage {
+    fn allocate(&self, resolution: Resolution) -> Image;
+    fn create_depth(&self, resolution: Resolution) -> Image;
 }
 
-pub struct Image<Backend: BackendApi> {
-    pub data: Backend::Image,
-}
-impl<Backend> Image<Backend>
+pub trait DowncastImage
 where
-    Backend: BackendApi,
-    Self: ImageApi<Backend = Backend>,
+    Self: ImageApi,
 {
-    pub fn allocate(context: &Context<Backend>, resolution: Resolution) -> Image<Backend> {
-        <Self as ImageApi>::allocate(context, resolution)
-    }
-    pub fn create_depth(context: &Context<Backend>, resolution: Resolution) -> Image<Backend> {
-        <Self as ImageApi>::create_depth(context, resolution)
+    fn downcast<B: BackendApi>(&self) -> &B::Image {
+        self.as_any().downcast_ref::<B::Image>().expect("Downcast Image Vulkan")
     }
 }
+impl DowncastImage for ImageApi {}
 
-pub struct RenderTargetInfo<'a, Backend: BackendApi> {
-    pub image_views: Vec<&'a Image<Backend>>,
+pub trait ImageApi: Downcast {}
+
+impl_downcast!(ImageApi);
+
+pub struct Image {
+    pub data: Box<dyn ImageApi>,
 }
 
-pub trait RenderTarget<Backend: BackendApi> {
-    fn render_target(&self) -> RenderTargetInfo<Backend>;
+impl Image where {
+    pub fn allocate(ctx: &Context, resolution: Resolution) -> Image {
+        CreateImage::allocate(ctx.context.as_ref(), resolution)
+    }
+
+    pub fn create_depth(context: &Context, resolution: Resolution) -> Image {
+        context.create_depth(resolution)
+    }
 }
 
-pub trait FramebufferApi<Backend: BackendApi> {
-    fn new<T: RenderTarget<Backend>>(context: &Context<Backend>) -> Framebuffer<T, Backend>;
+pub struct RenderTargetInfo<'a> {
+    pub image_views: Vec<&'a Image>,
 }
 
-pub struct Framebuffer<T, Backend>
+pub trait RenderTarget {
+    fn render_target(&self) -> RenderTargetInfo;
+}
+
+pub trait CreateFramebuffer {
+    fn new(&self, render_target: &RenderTargetInfo) -> Self;
+}
+
+pub trait FramebufferApi: Downcast {}
+impl_downcast!(FramebufferApi);
+
+pub struct Framebuffer<T>
 where
-    T: RenderTarget<Backend>,
-    Backend: BackendApi,
+    T: RenderTarget,
 {
-    pub render_targets: T,
-    pub data: Backend::Framebuffer,
+    pub render_target: T,
+    pub data: Box<dyn FramebufferApi>,
 }
+
+// impl<Target> Framebuffer<Target>
+// where
+//     Target: RenderTarget,
+// {
+//     pub fn new<T: RenderTarget, P: Pass>(
+//         context: &Context<Backend>,
+//         target: T,
+//         renderpass: &Renderpass<P, Backend>,
+//     ) -> Framebuffer<T, Backend> {
+//         <Self as FramebufferApi>::new(context, target, renderpass)
+//     }
+// }

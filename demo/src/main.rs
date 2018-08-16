@@ -7,31 +7,40 @@ extern crate winapi;
 pub use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0, V1_0};
 use ash::vk;
 use std::default::Default;
+use std::marker::PhantomData;
 use std::ptr;
 use tephra::failure::Fail;
 
-use tephra::backend::vulkan::{record_submit_commandbuffer, Context};
+use tephra::backend::vulkan::{self, record_submit_commandbuffer, Context, Vulkan};
 use tephra::backend::BackendApi;
-use tephra::buffer::{Buffer, BufferUsage};
-use tephra::image::{Resolution, Image, RenderTarget, RenderTargetInfo};
+use tephra::buffer::{Buffer, BufferUsage, Property};
+use tephra::image::{Image, RenderTarget, RenderTargetInfo, Resolution};
 use tephra::pipeline::{Pipeline, PipelineBuilder};
 use tephra::renderpass::{Pass, Renderpass, VertexInput, VertexInputData, VertexType};
 use tephra::shader::Shader;
 use tephra::swapchain::Swapchain;
 
-pub struct TrianglePass;
-impl Pass for TrianglePass {
+pub struct TrianglePass<'a> {
+    _m: PhantomData<&'a ()>,
+}
+impl<'a> TrianglePass<'a> {
+    pub fn new() -> Self {
+        TrianglePass { _m: PhantomData }
+    }
+}
+
+impl<'a> Pass for TrianglePass<'a> {
     type Input = Vertex;
-    //type Output = Output;
+    type Target = Target<'a>;
 }
 
-pub struct Target<'a, Backend: BackendApi> {
-    color: &'a Image<Backend>,
-    depth: &'a Image<Backend>,
+pub struct Target<'a> {
+    color: &'a Image,
+    depth: &'a Image,
 }
 
-impl<'a, Backend: BackendApi> RenderTarget<Backend> for Target<'a, Backend> {
-    fn render_target(&self) -> RenderTargetInfo<Backend> {
+impl<'a> RenderTarget for Target<'a> {
+    fn render_target(&self) -> RenderTargetInfo {
         RenderTargetInfo {
             image_views: vec![&self.color, &self.depth],
         }
@@ -64,39 +73,47 @@ impl VertexInput for Vertex {
 fn main() {
     unsafe {
         let context = Context::new();
-        let renderpass = Renderpass::new(&context, TrianglePass);
+        let ctx = context.context.downcast_ref::<Context>().unwrap();
+        let renderpass = Renderpass::new(&context, TrianglePass::new());
+        let vkrenderpass = renderpass
+            .renderpass
+            .downcast_ref::<vulkan::renderpass::RenderpassData>()
+            .unwrap()
+            .renderpass;
         let resolution = Resolution {
             width: 1920,
-            height: 1080
+            height: 1080,
         };
         //let swapchain = Swapchain::new(&context);
         let depth_image = Image::create_depth(&context, resolution);
-        let framebuffers: Vec<vk::Framebuffer> = context
+        let framebuffers: Vec<vk::Framebuffer> = ctx
             .present_image_views
             .iter()
             .map(|&present_image_view| {
-                let framebuffer_attachments = [present_image_view, context.depth_image_view];
+                let framebuffer_attachments = [present_image_view, ctx.depth_image_view];
                 let frame_buffer_create_info = vk::FramebufferCreateInfo {
                     s_type: vk::StructureType::FRAMEBUFFER_CREATE_INFO,
                     p_next: ptr::null(),
                     flags: Default::default(),
-                    render_pass: renderpass.impl_render_pass.data.render_pass,
+                    render_pass: vkrenderpass,
                     attachment_count: framebuffer_attachments.len() as u32,
                     p_attachments: framebuffer_attachments.as_ptr(),
-                    width: context.surface_resolution.width,
-                    height: context.surface_resolution.height,
+                    width: ctx.surface_resolution.width,
+                    height: ctx.surface_resolution.height,
                     layers: 1,
                 };
-                context
-                    .device
+                ctx.device
                     .create_framebuffer(&frame_buffer_create_info, None)
                     .unwrap()
             }).collect();
 
         let index_buffer_data = [0u32, 1, 2];
-        let index_buffer =
-            Buffer::from_slice(&context, BufferUsage::Index.into(), &index_buffer_data)
-                .expect("index buffer");
+        let index_buffer = Buffer::from_slice(
+            &context,
+            Property::HostVisible,
+            BufferUsage::Index,
+            &index_buffer_data,
+        ).expect("index buffer");
 
         let vertices = [
             Vertex {
@@ -113,40 +130,45 @@ fn main() {
             },
         ];
 
-        let vertex_buffer = Buffer::from_slice(&context, BufferUsage::Vertex.into(), &vertices)
-            .and_then(|buffer| buffer.copy_to_device_local())
-            .expect("Failed to create vertex buffer");
+        let vertex_buffer = Buffer::from_slice(
+            &context,
+            Property::HostVisible,
+            BufferUsage::Vertex,
+            &vertices,
+        ).expect("Failed to create vertex buffer");
+        let vk_index = index_buffer.downcast::<Vulkan>();
+        let vk_vertex = vertex_buffer.downcast::<Vulkan>();
 
         let vertex_shader_module =
             Shader::load(&context, "shader/triangle/vert.spv").expect("vertex");
         let fragment_shader_module =
             Shader::load(&context, "shader/triangle/frag.spv").expect("vertex");
         let pipeline = PipelineBuilder::new()
-            .with_vertex_shader(vertex_shader_module)
-            .with_fragment_shader(fragment_shader_module)
+            .with_vertex_shader(&vertex_shader_module)
+            .with_fragment_shader(&fragment_shader_module)
             .with_renderpass(&renderpass)
             .build(&context);
 
         let viewports = [vk::Viewport {
             x: 0.0,
             y: 0.0,
-            width: context.surface_resolution.width as f32,
-            height: context.surface_resolution.height as f32,
+            width: ctx.surface_resolution.width as f32,
+            height: ctx.surface_resolution.height as f32,
             min_depth: 0.0,
             max_depth: 1.0,
         }];
         let scissors = [vk::Rect2D {
             offset: vk::Offset2D { x: 0, y: 0 },
-            extent: context.surface_resolution.clone(),
+            extent: ctx.surface_resolution.clone(),
         }];
-        let graphic_pipeline = pipeline.data.pipeline;
-        context.render_loop(|| {
-            let present_index = context
+        let graphic_pipeline = pipeline.downcast::<Vulkan>().pipeline;
+        ctx.render_loop(|| {
+            let present_index = ctx
                 .swapchain_loader
                 .acquire_next_image_khr(
-                    context.swapchain,
+                    ctx.swapchain,
                     std::u64::MAX,
-                    context.present_complete_semaphore,
+                    ctx.present_complete_semaphore,
                     vk::Fence::null(),
                 ).unwrap();
             let clear_values = [
@@ -166,22 +188,22 @@ fn main() {
             let render_pass_begin_info = vk::RenderPassBeginInfo {
                 s_type: vk::StructureType::RENDER_PASS_BEGIN_INFO,
                 p_next: ptr::null(),
-                render_pass: renderpass.impl_render_pass.data.render_pass,
+                render_pass: vkrenderpass,
                 framebuffer: framebuffers[present_index as usize],
                 render_area: vk::Rect2D {
                     offset: vk::Offset2D { x: 0, y: 0 },
-                    extent: context.surface_resolution.clone(),
+                    extent: ctx.surface_resolution.clone(),
                 },
                 clear_value_count: clear_values.len() as u32,
                 p_clear_values: clear_values.as_ptr(),
             };
             record_submit_commandbuffer(
-                &context.device,
-                context.draw_command_buffer,
-                &context.present_queue.inner,
+                &ctx.device,
+                ctx.draw_command_buffer,
+                &ctx.present_queue.inner,
                 &[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT],
-                &[context.present_complete_semaphore],
-                &[context.rendering_complete_semaphore],
+                &[ctx.present_complete_semaphore],
+                &[ctx.rendering_complete_semaphore],
                 |device, draw_command_buffer| {
                     device.cmd_begin_render_pass(
                         draw_command_buffer,
@@ -198,12 +220,12 @@ fn main() {
                     device.cmd_bind_vertex_buffers(
                         draw_command_buffer,
                         0,
-                        &[vertex_buffer.impl_buffer.buffer.buffer],
+                        &[vk_vertex.buffer],
                         &[0],
                     );
                     device.cmd_bind_index_buffer(
                         draw_command_buffer,
-                        index_buffer.impl_buffer.buffer.buffer,
+                        vk_index.buffer,
                         0,
                         vk::IndexType::UINT32,
                     );
@@ -225,21 +247,20 @@ fn main() {
                 s_type: vk::StructureType::PRESENT_INFO_KHR,
                 p_next: ptr::null(),
                 wait_semaphore_count: 1,
-                p_wait_semaphores: &context.rendering_complete_semaphore,
+                p_wait_semaphores: &ctx.rendering_complete_semaphore,
                 swapchain_count: 1,
-                p_swapchains: &context.swapchain,
+                p_swapchains: &ctx.swapchain,
                 p_image_indices: &present_index,
                 p_results: ptr::null_mut(),
             };
-            context
-                .swapchain_loader
-                .queue_present_khr(*context.present_queue.inner.lock(), &present_info)
+            ctx.swapchain_loader
+                .queue_present_khr(*ctx.present_queue.inner.lock(), &present_info)
                 .unwrap();
         });
 
-        context.device.device_wait_idle().unwrap();
-        for framebuffer in framebuffers {
-            context.device.destroy_framebuffer(framebuffer, None);
-        }
+        // context.device.device_wait_idle().unwrap();
+        // for framebuffer in framebuffers {
+        //     context.device.destroy_framebuffer(framebuffer, None);
+        // }
     }
 }

@@ -2,20 +2,26 @@ use super::image::ImageData;
 use super::Vulkan;
 use ash::version::DeviceV1_0;
 use ash::vk;
-use context::Context;
+use super::Context;
 use image::{Image};
 use std::ptr;
-use swapchain::{Swapchain, SwapchainApi};
+use swapchain::{CreateSwapchain, Swapchain, SwapchainApi};
 
 pub struct SwapchainData {
-    pub context: Context<Vulkan>,
-    pub present_images: Vec<Image<Vulkan>>,
+    pub context: Context,
+    pub present_images: Vec<Image>,
     pub swapchain: vk::SwapchainKHR,
 }
 
-impl SwapchainApi for Swapchain<Vulkan> {
-    type Backend = Vulkan;
-    fn new(ctx: &Context<Vulkan>) -> Swapchain<Vulkan> {
+impl SwapchainApi for SwapchainData {
+    fn present_images(&self) -> &[Image] {
+        &self.present_images
+    }
+}
+
+impl CreateSwapchain for Context {
+    fn new(&self) -> Swapchain {
+        let ctx = self;
         unsafe {
             let surface_formats = ctx
                 .surface_loader
@@ -91,7 +97,7 @@ impl SwapchainApi for Swapchain<Vulkan> {
                 .get_swapchain_images_khr(swapchain)
                 .unwrap();
 
-            let present_images: Vec<Image<Vulkan>> = present_images
+            let present_images: Vec<Image> = present_images
                 .iter()
                 .map(|&image| {
                     let create_view_info = vk::ImageViewCreateInfo {
@@ -124,18 +130,14 @@ impl SwapchainApi for Swapchain<Vulkan> {
                         image,
                         image_view,
                     };
-                    Image { data }
+                    Image { data: Box::new(data) }
                 }).collect();
             let data = SwapchainData {
                 context: ctx.clone(),
                 swapchain,
                 present_images,
             };
-            Swapchain { data }
+            Swapchain { data: Box::new(data) }
         }
-    }
-
-    fn present_images(&self) -> &[Image<Vulkan>] {
-        &self.data.present_images
     }
 }

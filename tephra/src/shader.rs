@@ -5,12 +5,11 @@ use std::io::{self, Read};
 use std::marker::PhantomData;
 use std::path::Path;
 
-pub trait ShaderApi<Backend>
-where
-    Self: Sized,
-    Backend: BackendApi,
+use downcast::Downcast;
+
+pub trait CreateShader
 {
-    fn load(context: &Context<Backend>, bytes: &[u8]) -> Result<Self, ShaderError>;
+    fn load(&self, bytes: &[u8]) -> Result<Shader, ShaderError>;
 }
 
 pub enum ShaderType {
@@ -37,21 +36,23 @@ impl GetShaderType for Fragment {
     }
 }
 
-pub struct Shader<Backend: BackendApi> {
-    pub data: Backend::Shader,
+pub trait ShaderApi: Downcast {
+}
+impl_downcast!(ShaderApi);
+
+pub struct Shader {
+    pub data: Box<dyn ShaderApi>
 }
 
-impl<Backend> Shader<Backend>
-where
-    Backend: BackendApi,
-    Backend::Shader: ShaderApi<Backend>,
+impl Shader
 {
-    pub fn load<P: AsRef<Path>>(context: &Context<Backend>, p: P) -> Result<Self, ShaderError> {
+    pub fn load<P: AsRef<Path>>(context: &Context, p: P) -> Result<Shader, ShaderError> {
         let file = File::open(p.as_ref()).map_err(ShaderError::IoError)?;
         let bytes: Vec<_> = file.bytes().filter_map(Result::ok).collect();
-        let data = Backend::Shader::load(context, &bytes)?;
-        let shader = Shader { data };
-        Ok(shader)
+        CreateShader::load(context.context.as_ref(), &bytes)
+    }
+    pub fn downcast<B: BackendApi>(&self) -> &B::Shader {
+        self.data.downcast_ref::<B::Shader>().expect("Downcast Shader Vulkan")
     }
 }
 

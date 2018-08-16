@@ -1,6 +1,8 @@
 use backend::BackendApi;
-use context;
+use context::Context;
+use downcast::Downcast;
 use std::marker::PhantomData;
+use std::mem::size_of;
 
 #[derive(Debug, Fail)]
 pub enum AllocationError {
@@ -22,37 +24,40 @@ pub enum BufferError {
     #[fail(display = "Mapping failed: {}", _0)]
     MappingError(MappingError),
 }
+
 pub enum HostVisible {}
 pub enum DeviceLocal {}
 
-pub trait HostVisibleBuffer<T, Backend: BackendApi>
-where
-    Self: Sized,
-    T: Copy,
-{
-    fn from_slice(
-        context: &context::Context<Backend>,
-        usage: BufferUsage,
-        data: &[T],
-    ) -> Result<Self, BufferError>;
-    fn map_memory<R, F>(&mut self, f: F) -> Result<R, MappingError>
-    where
-        F: Fn(&mut [T]) -> R;
-}
+//pub trait HostVisibleBuffer<T, Backend: BackendApi>
+//where
+//    Self: Sized,
+//    T: Copy,
+//{
+//    //fn from_slice(
+//        // context: &context::Context<Backend>,
+//        // usage: BufferUsage,
+//        // data: &[T],
+//    // ) -> Result<Self, BufferError>;
+//    // fn map_memory<R, F>(&mut self, f: F) -> Result<R, MappingError>
+//    // where
+//        // F: Fn(&mut [T]) -> R;
+//}
 
-pub trait BufferApi<Backend: BackendApi>
-where
-    Self: Sized,
-{
-    type Item: Copy;
+pub trait CreateBuffer {
     fn allocate(
-        context: &context::Context<Backend>,
+        &self,
+        property: Property,
         usage: BufferUsage,
-        elements: usize,
-    ) -> Result<Self, BufferError>;
-
-    fn copy_to_device_local(&self) -> Result<ImplBuffer<Self::Item, DeviceLocal, Backend>, BufferError>;
+        size: u64,
+    ) -> Result<Box<dyn BufferApi>, BufferError>;
 }
+
+pub trait BufferApi: Downcast {
+    fn map_memory(&self) -> Result<*mut (), MappingError>;
+    fn unmap_memory(&self);
+    //fn copy_to_device_local(&self) -> Result<Box<dyn BufferApi>, BufferError>;
+}
+impl_downcast!(BufferApi);
 
 pub trait BufferProperty {
     fn property() -> Property;
@@ -76,59 +81,86 @@ impl BufferProperty for DeviceLocal {
     }
 }
 
-pub struct ImplBuffer<T, Property, Backend>
-where
-    Backend: BackendApi,
-    Property: BufferProperty,
-{
-    pub buffer: Backend::Buffer,
-    pub usage: BufferUsage,
-    pub _m: PhantomData<T>,
-    pub _property: PhantomData<Property>,
+pub struct Buffer<T> {
+    _m: PhantomData<T>,
+    pub buffer: Box<dyn BufferApi>,
 }
+impl<T: Copy> Buffer<T> {
+    pub fn downcast<B: BackendApi>(&self) -> &B::Buffer
+    where
+        B::Buffer: BufferApi,
+    {
+        self.buffer
+            .downcast_ref::<B::Buffer>()
+            .expect("Downcast Buffer Vulkan")
+    }
+    pub fn allocate(
+        context: &Context,
+        property: Property,
+        usage: BufferUsage,
+        elements: u64,
+    ) -> Result<Self, BufferError> {
+        let size = elements * size_of::<T>() as u64;
+        let buffer = CreateBuffer::allocate(context.context.as_ref(), property, usage, size)?;
+        Ok(Buffer {
+            buffer,
+            _m: PhantomData,
+        })
+    }
 
-pub struct Buffer<T, Property, Backend>
-where
-    Property: BufferProperty,
-    Backend: BackendApi,
-{
-    pub impl_buffer: ImplBuffer<T, Property, Backend>,
-}
-
-impl<T: Copy, Backend> Buffer<T, HostVisible, Backend>
-where
-    Backend: BackendApi,
-    ImplBuffer<T, HostVisible, Backend>: HostVisibleBuffer<T, Backend>,
-{
     pub fn from_slice(
-        context: &context::Context<Backend>,
+        ctx: &Context,
+        property: Property,
         usage: BufferUsage,
         data: &[T],
     ) -> Result<Self, BufferError> {
-        HostVisibleBuffer::from_slice(context, usage, data)
-            .map(|impl_buffer| Buffer { impl_buffer })
-    }
-
-    pub fn map_memory<R, F>(&mut self, f: F) -> Result<R, MappingError>
-    where
-        F: Fn(&mut [T]) -> R,
-    {
-        HostVisibleBuffer::map_memory(&mut self.impl_buffer, f)
-    }
-}
-
-impl<T: Copy, Property, Backend> Buffer<T, Property, Backend>
-where
-    Backend: BackendApi,
-    Property: BufferProperty,
-    ImplBuffer<T, Property, Backend>: BufferApi<Backend, Item=T>,
-{
-    pub fn copy_to_device_local(&self) -> Result<Buffer<T, DeviceLocal, Backend>, BufferError> {
-        self.impl_buffer
-            .copy_to_device_local()
-            .map(|impl_buffer| Buffer { impl_buffer })
+        use std::slice::from_raw_parts_mut;
+        let buffer = Self::allocate(ctx, property, usage, data.len() as u64)?;
+        let mapping_ptr = buffer
+            .buffer
+            .map_memory()
+            .map_err(|err| BufferError::MappingError(err))?;
+        let slice = unsafe { from_raw_parts_mut::<T>(mapping_ptr as *mut T, data.len()) };
+        slice.copy_from_slice(data);
+        buffer.buffer.unmap_memory();
+        Ok(buffer)
     }
 }
+
+// impl<T: Copy, Backend> Buffer<T, HostVisible, Backend>
+// where
+//     Backend: BackendApi,
+//     ImplBuffer<T, HostVisible, Backend>: HostVisibleBuffer<T, Backend>,
+// {
+//     pub fn from_slice(
+//         context: &context::Context<Backend>,
+//         usage: BufferUsage,
+//         data: &[T],
+//     ) -> Result<Self, BufferError> {
+//         HostVisibleBuffer::from_slice(context, usage, data)
+//             .map(|impl_buffer| Buffer { impl_buffer })
+//     }
+
+//     pub fn map_memory<R, F>(&mut self, f: F) -> Result<R, MappingError>
+//     where
+//         F: Fn(&mut [T]) -> R,
+//     {
+//         HostVisibleBuffer::map_memory(&mut self.impl_buffer, f)
+//     }
+// }
+
+// impl<T: Copy, Property, Backend> Buffer<T, Property, Backend>
+// where
+//     Backend: BackendApi,
+//     Property: BufferProperty,
+//     ImplBuffer<T, Property, Backend>: BufferApi<Backend, Item=T>,
+// {
+//     pub fn copy_to_device_local(&self) -> Result<Buffer<T, DeviceLocal, Backend>, BufferError> {
+//         self.impl_buffer
+//             .copy_to_device_local()
+//             .map(|impl_buffer| Buffer { impl_buffer })
+//     }
+// }
 
 #[derive(Copy, Clone)]
 pub enum BufferUsage {

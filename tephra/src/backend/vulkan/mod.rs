@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use ash::extensions::{DebugReport, Surface, Swapchain, XlibSurface};
 use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0, V1_0};
 use ash::vk;
@@ -7,28 +8,28 @@ use parking_lot::Mutex;
 use std::cell::RefCell;
 use std::ffi::{CStr, CString};
 use std::marker::PhantomData;
-use std::ops::Drop;
+use std::ops::{Deref, Drop };
 use std::ptr;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;
 use thread_local_object::ThreadLocal;
+use context::ContextApi;
+use backend::BackendApi;
 pub mod buffer;
 pub mod pipeline;
 pub mod renderpass;
 pub mod shader;
 pub mod image;
 pub mod swapchain;
+
 #[derive(Copy, Clone)]
 pub struct Vulkan;
-use super::BackendApi;
-
 impl BackendApi for Vulkan {
     type Shader = shader::ShaderData;
-    type Context = Arc<Context>;
+    type Context = Context;
     type Buffer = buffer::BufferData;
     type Renderpass = renderpass::RenderpassData;
     type Pipeline = pipeline::PipelineData;
-    type Render = renderpass::RenderData;
     type Framebuffer = image::FramebufferData;
     type Image = image::ImageData;
     type Swapchain = swapchain::SwapchainData;
@@ -156,7 +157,7 @@ impl Queue {
 
     pub fn submit(
         &self,
-        context: &context::Context<Vulkan>,
+        context: &Context,
         wait_mask: &[vk::PipelineStageFlags],
         wait_semaphores: &[vk::Semaphore],
         signal_semaphores: &[vk::Semaphore],
@@ -207,7 +208,7 @@ pub struct CommandBuffer {
 }
 
 impl CommandBuffer {
-    pub fn record<F>(context: &context::Context<Vulkan>, f: F) -> Self
+    pub fn record<F>(context: &Context, f: F) -> Self
     where
         F: Fn(vk::CommandBuffer),
     {
@@ -247,7 +248,18 @@ impl Drop for CommandBuffer {
     }
 }
 
+#[derive(Clone)]
 pub struct Context {
+    inner: Arc<InnerContext>
+}
+
+impl Deref for Context {
+    type Target = InnerContext;
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+pub struct InnerContext {
     pub entry: Entry<V1_0>,
     pub instance: Instance<V1_0>,
     pub device: Device<V1_0>,
@@ -288,6 +300,8 @@ pub struct Context {
     pub present_complete_semaphore: vk::Semaphore,
     pub rendering_complete_semaphore: vk::Semaphore,
 }
+impl ContextApi for Context {
+}
 impl Context {
     pub fn render_loop<F: Fn()>(&self, f: F) {
         use winit::*;
@@ -309,7 +323,7 @@ impl Context {
             }
         });
     }
-    pub fn new() -> context::Context<Vulkan> {
+    pub fn new() -> context::Context {
         unsafe {
             let window_width = 1000;
             let window_height = 1000;
@@ -661,7 +675,7 @@ impl Context {
             let rendering_complete_semaphore = device
                 .create_semaphore(&semaphore_create_info, None)
                 .unwrap();
-            let context = Context {
+            let context = InnerContext {
                 command_pool: ThreadLocalCommandPool::new(queue_family_index),
                 entry,
                 physical_device: pdevice,
@@ -693,7 +707,11 @@ impl Context {
                 debug_report_loader: debug_report_loader,
                 depth_image_memory: depth_image_memory,
             };
+            let context = Context {
+                inner: Arc::new(context)
+            };
             context::Context {
+                // FIXME: Only one Arc
                 context: Arc::new(context),
             }
         }

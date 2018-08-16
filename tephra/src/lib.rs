@@ -8,6 +8,8 @@ extern crate serde;
 pub extern crate winit;
 #[macro_use]
 extern crate failure_derive;
+#[macro_use]
+extern crate downcast_rs as downcast;
 
 pub mod swapchain;
 pub mod backend;

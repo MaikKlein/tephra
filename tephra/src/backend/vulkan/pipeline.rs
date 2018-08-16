@@ -1,8 +1,8 @@
+use super::Context;
 use super::Vulkan;
 use ash::version::DeviceV1_0;
 use ash::vk;
-use context::Context;
-use pipeline::{PipelineApi, PipelineBuilder};
+use pipeline::{CreatePipeline, Pipeline, PipelineApi, PipelineBuilder};
 use renderpass::Pass;
 use std::ffi::CString;
 use std::mem;
@@ -25,14 +25,16 @@ macro_rules! offset_of {
         }
     }};
 }
-impl PipelineApi<Vulkan> for PipelineData {
-    fn from_pipeline_builder<P: Pass>(
-        context: &Context<Vulkan>,
-        pipline_builder: PipelineBuilder<P, Vulkan>,
-    ) -> Self {
+impl PipelineApi for PipelineData {}
+impl CreatePipeline for Context {
+    fn from_pipeline_builder(&self, pipline_builder: PipelineBuilder) -> Pipeline {
         let vertex_shader = pipline_builder.vertex_shader.expect("vertex");
+        let vk_vertex = vertex_shader.downcast::<Vulkan>();
         let fragment_shader = pipline_builder.fragment_shader.expect("vertex");
+        let vk_fragment = fragment_shader.downcast::<Vulkan>();
         let renderpass = pipline_builder.renderpass.expect("renderpass");
+        let vk_renderpass = renderpass.downcast::<Vulkan>();
+        let context = self;
         unsafe {
             let layout_create_info = vk::PipelineLayoutCreateInfo {
                 s_type: vk::StructureType::PIPELINE_LAYOUT_CREATE_INFO,
@@ -44,7 +46,7 @@ impl PipelineApi<Vulkan> for PipelineData {
                 p_push_constant_ranges: ptr::null(),
             };
 
-            let pipeline_layout = context
+            let pipeline_layout = self
                 .device
                 .create_pipeline_layout(&layout_create_info, None)
                 .unwrap();
@@ -55,7 +57,7 @@ impl PipelineApi<Vulkan> for PipelineData {
                     s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
                     p_next: ptr::null(),
                     flags: Default::default(),
-                    module: vertex_shader.data.shader_module,
+                    module: vk_vertex.shader_module,
                     p_name: shader_entry_name.as_ptr(),
                     p_specialization_info: ptr::null(),
                     stage: vk::ShaderStageFlags::VERTEX,
@@ -64,7 +66,7 @@ impl PipelineApi<Vulkan> for PipelineData {
                     s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
                     p_next: ptr::null(),
                     flags: Default::default(),
-                    module: fragment_shader.data.shader_module,
+                    module: vk_fragment.shader_module,
                     p_name: shader_entry_name.as_ptr(),
                     p_specialization_info: ptr::null(),
                     stage: vk::ShaderStageFlags::FRAGMENT,
@@ -220,7 +222,7 @@ impl PipelineApi<Vulkan> for PipelineData {
                 p_color_blend_state: &color_blend_state,
                 p_dynamic_state: &dynamic_state_info,
                 layout: pipeline_layout,
-                render_pass: renderpass.impl_render_pass.data.render_pass,
+                render_pass: vk_renderpass.renderpass,
                 subpass: 0,
                 base_pipeline_handle: vk::Pipeline::null(),
                 base_pipeline_index: 0,
@@ -234,9 +236,13 @@ impl PipelineApi<Vulkan> for PipelineData {
                 ).expect("Unable to create graphics pipeline");
 
             let graphic_pipeline = graphics_pipelines[0];
-            PipelineData{
+            let data = PipelineData {
                 pipeline: graphic_pipeline,
-            }
+            };
+            let pipeline = Pipeline {
+                data: Box::new(data)
+            };
+            pipeline
         }
     }
 }

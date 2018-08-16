@@ -1,22 +1,22 @@
 use super::CommandBuffer;
+use super::Context;
 use super::Vulkan;
 use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk;
 use buffer::{
-    BufferApi, BufferError, BufferProperty, BufferUsage, DeviceLocal, HostVisible,
-    HostVisibleBuffer, ImplBuffer, MappingError, Property,
+    BufferApi, BufferError, BufferProperty, BufferUsage, CreateBuffer, DeviceLocal, HostVisible,
+    MappingError, Property,
 };
-use context::Context;
 use std::marker::PhantomData;
 use std::mem::size_of;
 use std::ptr;
 
 /// Vulkan specifc data
 pub struct BufferData {
-    pub context: Context<Vulkan>,
+    pub context: Context,
     pub buffer: vk::Buffer,
     pub memory: vk::DeviceMemory,
-    pub len: usize,
+    pub size: u64,
 }
 
 impl Drop for BufferData {
@@ -43,17 +43,9 @@ fn property_to_vk_property(property: Property) -> vk::MemoryPropertyFlags {
     }
 }
 
-impl<T, Property> BufferApi<Vulkan> for ImplBuffer<T, Property, Vulkan>
-where
-    T: Copy,
-    Property: BufferProperty,
-{
-    type Item = T;
-    fn allocate(
-        context: &Context<Vulkan>,
-        usage: BufferUsage,
-        elements: usize,
-    ) -> Result<Self, BufferError> {
+impl CreateBuffer for Context {
+    fn allocate(&self, property: Property, usage: BufferUsage, size: u64) -> Result<Box<dyn BufferApi>, BufferError> {
+        let context = self;
         unsafe {
             let device_memory_properties = context
                 .instance
@@ -66,7 +58,7 @@ where
                 s_type: vk::StructureType::BUFFER_CREATE_INFO,
                 p_next: ptr::null(),
                 flags: vk::BufferCreateFlags::empty(),
-                size: (elements * size_of::<T>()) as u64,
+                size,
                 usage: vk_usage,
                 sharing_mode: vk::SharingMode::EXCLUSIVE,
                 queue_family_index_count: 0,
@@ -82,7 +74,7 @@ where
             let vertex_input_buffer_memory_index = find_memorytype_index(
                 &vertex_input_buffer_memory_req,
                 &device_memory_properties,
-                property_to_vk_property(Property::property()),
+                property_to_vk_property(property),
             ).expect("Unable to find suitable memorytype for the vertex buffer.");
 
             let vertex_buffer_allocate_info = vk::MemoryAllocateInfo {
@@ -103,80 +95,90 @@ where
                 context: context.clone(),
                 buffer: vertex_input_buffer,
                 memory: vertex_input_buffer_memory,
-                len: elements,
+                size,
             };
-            let buffer = ImplBuffer {
-                buffer: inner_buffer,
-                usage,
-                _m: PhantomData,
-                _property: PhantomData,
-            };
-            Ok(buffer)
+            Ok(Box::new(inner_buffer))
         }
     }
-
-    fn copy_to_device_local(&self) -> Result<ImplBuffer<T, DeviceLocal, Vulkan>, BufferError> {
-        let context = &self.buffer.context;
-        let dst_buffer =
-            ImplBuffer::<T, DeviceLocal, Vulkan>::allocate(context, self.usage, self.buffer.len)?;
-        let command_buffer = CommandBuffer::record(context, |command_buffer| unsafe {
-            context.device.cmd_copy_buffer(
-                command_buffer,
-                self.buffer.buffer,
-                dst_buffer.buffer.buffer,
-                &[vk::BufferCopy {
-                    src_offset: 0,
-                    dst_offset: 0,
-                    size: (self.buffer.len * size_of::<T>()) as _,
-                }],
-            );
-        });
-        context.present_queue.submit(
-            context,
-            &[vk::PipelineStageFlags::TOP_OF_PIPE],
-            &[],
-            &[],
-            command_buffer,
-        );
-        Ok(dst_buffer)
-    }
 }
-impl<T> HostVisibleBuffer<T, Vulkan> for ImplBuffer<T, HostVisible, Vulkan>
-where
-    T: Copy,
-{
-    fn map_memory<R, F>(&mut self, f: F) -> Result<R, MappingError>
-    where
-        F: Fn(&mut [T]) -> R,
-    {
-        use std::slice::from_raw_parts_mut;
+impl BufferApi for BufferData {
+    fn map_memory(&self) -> Result<*mut (), MappingError> {
         unsafe {
-            let byte_len = (self.buffer.len * size_of::<T>()) as u64;
-            let mapping_ptr = self
-                .buffer
+            let ptr = self
                 .context
                 .device
-                .map_memory(self.buffer.memory, 0, byte_len, vk::MemoryMapFlags::empty())
+                .map_memory(self.memory, 0, self.size, vk::MemoryMapFlags::empty())
                 .map_err(|_| MappingError::Failed)?;
-            let slice = from_raw_parts_mut::<T>(mapping_ptr as *mut T, self.buffer.len);
-            let r = f(slice);
-            self.buffer.context.device.unmap_memory(self.buffer.memory);
-            Ok(r)
+            Ok(ptr as *mut ())
         }
     }
-
-    fn from_slice(
-        context: &Context<Vulkan>,
-        usage: BufferUsage,
-        data: &[T],
-    ) -> Result<Self, BufferError> {
-        let mut buffer = Self::allocate(context, usage, data.len())?;
-        buffer
-            .map_memory(|slice| slice.copy_from_slice(data))
-            .map_err(BufferError::MappingError)?;
-        Ok(buffer)
+    fn unmap_memory(&self) {
+        unsafe {
+            self.context.device.unmap_memory(self.memory);
+        }
     }
+    // fn copy_to_device_local(&self) -> Result<Box<dyn BufferApi>, BufferError> {
+    //     let context = &self.buffer.context;
+    //     let dst_buffer =
+    //         ImplBuffer::<T, DeviceLocal, Vulkan>::allocate(context, self.usage, self.buffer.len)?;
+    //     let command_buffer = CommandBuffer::record(context, |command_buffer| unsafe {
+    //         context.device.cmd_copy_buffer(
+    //             command_buffer,
+    //             self.buffer.buffer,
+    //             dst_buffer.buffer.buffer,
+    //             &[vk::BufferCopy {
+    //                 src_offset: 0,
+    //                 dst_offset: 0,
+    //                 size: (self.buffer.len * size_of::<T>()) as _,
+    //             }],
+    //         );
+    //     });
+    //     context.present_queue.submit(
+    //         context,
+    //         &[vk::PipelineStageFlags::TOP_OF_PIPE],
+    //         &[],
+    //         &[],
+    //         command_buffer,
+    //     );
+    //     Ok(dst_buffer)
+    // }
 }
+// impl<T> HostVisibleBuffer<T, Vulkan> for ImplBuffer<T, HostVisible, Vulkan>
+// where
+//     T: Copy,
+// {
+//     fn map_memory<R, F>(&mut self, f: F) -> Result<R, MappingError>
+//     where
+//         F: Fn(&mut [T]) -> R,
+//     {
+//         use std::slice::from_raw_parts_mut;
+//         unsafe {
+//             let byte_len = (self.buffer.len * size_of::<T>()) as u64;
+//             let mapping_ptr = self
+//                 .buffer
+//                 .context
+//                 .device
+//                 .map_memory(self.buffer.memory, 0, byte_len, vk::MemoryMapFlags::empty())
+//                 .map_err(|_| MappingError::Failed)?;
+//             let slice = from_raw_parts_mut::<T>(mapping_ptr as *mut T, self.buffer.len);
+//             let r = f(slice);
+//             self.buffer.context.device.unmap_memory(self.buffer.memory);
+//             Ok(r)
+//         }
+//     }
+
+//     fn from_slice(
+//         context: &Context<Vulkan>,
+//         usage: BufferUsage,
+//         data: &[T],
+//     ) -> Result<Self, BufferError> {
+//         let mut buffer = Self::allocate(context, usage, data.len())?;
+//         buffer
+//             .map_memory(|slice| slice.copy_from_slice(data))
+//             .map_err(BufferError::MappingError)?;
+//         Ok(buffer)
+//     }
+// }
 
 /// helper function to find the correct memory index
 pub fn find_memorytype_index(

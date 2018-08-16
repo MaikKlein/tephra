@@ -3,72 +3,62 @@ use context::Context;
 use renderpass::{Pass, Renderpass};
 use shader::Shader;
 use std::marker::PhantomData;
+use downcast::Downcast;
 pub trait VertexInput {}
 
-pub trait PipelineApi<Backend>
-where
-    Backend: BackendApi,
-{
-    fn from_pipeline_builder<P: Pass>(
-        context: &Context<Backend>,
-        pipline_builder: PipelineBuilder<P, Backend>,
-    ) -> Self;
+pub trait CreatePipeline {
+    fn from_pipeline_builder(&self, pipline_builder: PipelineBuilder) -> Pipeline;
 }
 
-pub struct PipelineBuilder<'a, P: Pass + 'a, Backend>
-where
-    Backend: BackendApi,
-{
-    pub vertex_shader: Option<Shader<Backend>>,
-    pub fragment_shader: Option<Shader<Backend>>,
-    pub renderpass: Option<&'a Renderpass<P, Backend>>,
-    _m: PhantomData<Backend>,
+pub trait PipelineApi: Downcast {
+}
+impl_downcast!(PipelineApi);
+
+pub struct PipelineBuilder<'a> {
+    pub vertex_shader: Option<&'a Shader>,
+    pub fragment_shader: Option<&'a Shader>,
+    pub renderpass: Option<&'a Renderpass>,
 }
 
-impl<'a, P, Backend> PipelineBuilder<'a, P, Backend>
-where
-    P: Pass + 'a,
-    Backend: BackendApi,
-    Backend::Pipeline: PipelineApi<Backend>,
-{
+impl<'a> PipelineBuilder<'a> {
     pub fn new() -> Self {
         PipelineBuilder {
-            _m: PhantomData,
             vertex_shader: None,
             fragment_shader: None,
             renderpass: None,
         }
     }
 
-    pub fn with_vertex_shader(self, shader: Shader<Backend>) -> Self {
+    pub fn with_vertex_shader(self, shader: &'a Shader) -> Self {
         PipelineBuilder {
             vertex_shader: Some(shader),
             ..self
         }
     }
 
-    pub fn with_renderpass(self, renderpass: &'a Renderpass<P, Backend>) -> Self {
+    pub fn with_renderpass(self, renderpass: &'a Renderpass) -> Self {
         PipelineBuilder {
             renderpass: Some(renderpass),
             ..self
         }
     }
-    pub fn with_fragment_shader(self, shader: Shader<Backend>) -> Self {
+    pub fn with_fragment_shader(self, shader: &'a Shader) -> Self {
         PipelineBuilder {
             fragment_shader: Some(shader),
             ..self
         }
     }
 
-    pub fn build(self, context: &Context<Backend>) -> Pipeline<Backend> {
-        let data = PipelineApi::from_pipeline_builder(context, self);
-        Pipeline { data }
+    pub fn build(self, ctx: &Context) -> Pipeline {
+        ctx.from_pipeline_builder(self)
     }
 }
 
-pub struct Pipeline<Backend>
-where
-    Backend: BackendApi,
-{
-    pub data: Backend::Pipeline,
+pub struct Pipeline {
+    pub data: Box<dyn PipelineApi>,
+}
+impl Pipeline {
+    pub fn downcast<B: BackendApi>(&self) -> &B::Pipeline {
+        self.data.downcast_ref::<B::Pipeline>().expect("Vulkan Backend Pipeline")
+    }
 }
