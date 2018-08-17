@@ -1,9 +1,9 @@
 use super::image::ImageData;
+use super::Context;
 use super::Vulkan;
 use ash::version::DeviceV1_0;
 use ash::vk;
-use super::Context;
-use image::{Image};
+use image::Image;
 use std::ptr;
 use swapchain::{CreateSwapchain, Swapchain, SwapchainApi};
 
@@ -16,6 +16,36 @@ pub struct SwapchainData {
 impl SwapchainApi for SwapchainData {
     fn present_images(&self) -> &[Image] {
         &self.present_images
+    }
+    fn aquire_next_image(&self) -> u32 {
+        unsafe {
+            self.context
+                .swapchain_loader
+                .acquire_next_image_khr(
+                    self.swapchain,
+                    std::u64::MAX,
+                    self.context.present_complete_semaphore,
+                    vk::Fence::null(),
+                ).unwrap()
+        }
+    }
+    fn present(&self, index: u32) {
+        unsafe {
+            let present_info = vk::PresentInfoKHR {
+                s_type: vk::StructureType::PRESENT_INFO_KHR,
+                p_next: ptr::null(),
+                wait_semaphore_count: 1,
+                p_wait_semaphores: &self.context.rendering_complete_semaphore,
+                swapchain_count: 1,
+                p_swapchains: &self.swapchain,
+                p_image_indices: &index,
+                p_results: ptr::null_mut(),
+            };
+            self.context
+                .swapchain_loader
+                .queue_present_khr(*self.context.present_queue.inner.lock(), &present_info)
+                .unwrap();
+        }
     }
 }
 
@@ -130,14 +160,18 @@ impl CreateSwapchain for Context {
                         image,
                         image_view,
                     };
-                    Image { data: Box::new(data) }
+                    Image {
+                        data: Box::new(data),
+                    }
                 }).collect();
             let data = SwapchainData {
                 context: ctx.clone(),
                 swapchain,
                 present_images,
             };
-            Swapchain { data: Box::new(data) }
+            Swapchain {
+                data: Box::new(data),
+            }
         }
     }
 }

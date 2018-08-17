@@ -19,16 +19,6 @@ pub trait CreateImage {
     fn create_depth(&self, resolution: Resolution) -> Image;
 }
 
-pub trait DowncastImage
-where
-    Self: ImageApi,
-{
-    fn downcast<B: BackendApi>(&self) -> &B::Image {
-        self.as_any().downcast_ref::<B::Image>().expect("Downcast Image Vulkan")
-    }
-}
-impl DowncastImage for ImageApi {}
-
 pub trait ImageApi: Downcast {}
 
 impl_downcast!(ImageApi);
@@ -38,6 +28,11 @@ pub struct Image {
 }
 
 impl Image where {
+    pub fn downcast<B: BackendApi>(&self) -> &B::Image {
+        self.data
+            .downcast_ref::<B::Image>()
+            .expect("Downcast Image Vulkan")
+    }
     pub fn allocate(ctx: &Context, resolution: Resolution) -> Image {
         CreateImage::allocate(ctx.context.as_ref(), resolution)
     }

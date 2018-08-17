@@ -86,10 +86,7 @@ pub struct Buffer<T> {
     pub buffer: Box<dyn BufferApi>,
 }
 impl<T: Copy> Buffer<T> {
-    pub fn downcast<B: BackendApi>(&self) -> &B::Buffer
-    where
-        B::Buffer: BufferApi,
-    {
+    pub fn downcast<B: BackendApi>(&self) -> &B::Buffer {
         self.buffer
             .downcast_ref::<B::Buffer>()
             .expect("Downcast Buffer Vulkan")

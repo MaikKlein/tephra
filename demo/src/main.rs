@@ -84,12 +84,12 @@ fn main() {
             width: 1920,
             height: 1080,
         };
-        //let swapchain = Swapchain::new(&context);
+        let swapchain = Swapchain::new(&context);
         let depth_image = Image::create_depth(&context, resolution);
-        let framebuffers: Vec<vk::Framebuffer> = ctx
-            .present_image_views
+        let framebuffers: Vec<vk::Framebuffer> = swapchain.present_images()
             .iter()
-            .map(|&present_image_view| {
+            .map(|present_image| {
+                let present_image_view = present_image.downcast::<Vulkan>().image_view;
                 let framebuffer_attachments = [present_image_view, ctx.depth_image_view];
                 let frame_buffer_create_info = vk::FramebufferCreateInfo {
                     s_type: vk::StructureType::FRAMEBUFFER_CREATE_INFO,
@@ -163,14 +163,7 @@ fn main() {
         }];
         let graphic_pipeline = pipeline.downcast::<Vulkan>().pipeline;
         ctx.render_loop(|| {
-            let present_index = ctx
-                .swapchain_loader
-                .acquire_next_image_khr(
-                    ctx.swapchain,
-                    std::u64::MAX,
-                    ctx.present_complete_semaphore,
-                    vk::Fence::null(),
-                ).unwrap();
+            let present_index = swapchain.aquire_next_image();
             let clear_values = [
                 vk::ClearValue {
                     color: vk::ClearColorValue {
@@ -243,19 +236,7 @@ fn main() {
                 },
             );
             //let mut present_info_err = mem::uninitialized();
-            let present_info = vk::PresentInfoKHR {
-                s_type: vk::StructureType::PRESENT_INFO_KHR,
-                p_next: ptr::null(),
-                wait_semaphore_count: 1,
-                p_wait_semaphores: &ctx.rendering_complete_semaphore,
-                swapchain_count: 1,
-                p_swapchains: &ctx.swapchain,
-                p_image_indices: &present_index,
-                p_results: ptr::null_mut(),
-            };
-            ctx.swapchain_loader
-                .queue_present_khr(*ctx.present_queue.inner.lock(), &present_info)
-                .unwrap();
+            swapchain.present(present_index);
         });
 
         // context.device.device_wait_idle().unwrap();

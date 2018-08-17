@@ -285,9 +285,9 @@ pub struct InnerContext {
     pub surface_format: vk::SurfaceFormatKHR,
     pub surface_resolution: vk::Extent2D,
 
-    pub swapchain: vk::SwapchainKHR,
-    pub present_images: Vec<vk::Image>,
-    pub present_image_views: Vec<vk::ImageView>,
+    // pub swapchain: vk::SwapchainKHR,
+    // pub present_images: Vec<vk::Image>,
+    // pub present_image_views: Vec<vk::ImageView>,
 
     pub pool: vk::CommandPool,
     pub draw_command_buffer: vk::CommandBuffer,
@@ -488,29 +488,29 @@ impl Context {
                 .unwrap_or(vk::PresentModeKHR::FIFO);
             let swapchain_loader =
                 Swapchain::new(&instance, &device).expect("Unable to load swapchain");
-            let swapchain_create_info = vk::SwapchainCreateInfoKHR {
-                s_type: vk::StructureType::SWAPCHAIN_CREATE_INFO_KHR,
-                p_next: ptr::null(),
-                flags: Default::default(),
-                surface: surface,
-                min_image_count: desired_image_count,
-                image_color_space: surface_format.color_space,
-                image_format: surface_format.format,
-                image_extent: surface_resolution.clone(),
-                image_usage: vk::ImageUsageFlags::COLOR_ATTACHMENT,
-                image_sharing_mode: vk::SharingMode::EXCLUSIVE,
-                pre_transform: pre_transform,
-                composite_alpha: vk::CompositeAlphaFlagsKHR::OPAQUE,
-                present_mode: present_mode,
-                clipped: 1,
-                old_swapchain: vk::SwapchainKHR::null(),
-                image_array_layers: 1,
-                p_queue_family_indices: ptr::null(),
-                queue_family_index_count: 0,
-            };
-            let swapchain = swapchain_loader
-                .create_swapchain_khr(&swapchain_create_info, None)
-                .unwrap();
+            // let swapchain_create_info = vk::SwapchainCreateInfoKHR {
+            //     s_type: vk::StructureType::SWAPCHAIN_CREATE_INFO_KHR,
+            //     p_next: ptr::null(),
+            //     flags: Default::default(),
+            //     surface: surface,
+            //     min_image_count: desired_image_count,
+            //     image_color_space: surface_format.color_space,
+            //     image_format: surface_format.format,
+            //     image_extent: surface_resolution.clone(),
+            //     image_usage: vk::ImageUsageFlags::COLOR_ATTACHMENT,
+            //     image_sharing_mode: vk::SharingMode::EXCLUSIVE,
+            //     pre_transform: pre_transform,
+            //     composite_alpha: vk::CompositeAlphaFlagsKHR::OPAQUE,
+            //     present_mode: present_mode,
+            //     clipped: 1,
+            //     old_swapchain: vk::SwapchainKHR::null(),
+            //     image_array_layers: 1,
+            //     p_queue_family_indices: ptr::null(),
+            //     queue_family_index_count: 0,
+            // };
+            // let swapchain = swapchain_loader
+            //     .create_swapchain_khr(&swapchain_create_info, None)
+            //     .unwrap();
             let pool_create_info = vk::CommandPoolCreateInfo {
                 s_type: vk::StructureType::COMMAND_POOL_CREATE_INFO,
                 p_next: ptr::null(),
@@ -531,35 +531,35 @@ impl Context {
             let setup_command_buffer = command_buffers[0];
             let draw_command_buffer = command_buffers[1];
 
-            let present_images = swapchain_loader
-                .get_swapchain_images_khr(swapchain)
-                .unwrap();
-            let present_image_views: Vec<vk::ImageView> = present_images
-                .iter()
-                .map(|&image| {
-                    let create_view_info = vk::ImageViewCreateInfo {
-                        s_type: vk::StructureType::IMAGE_VIEW_CREATE_INFO,
-                        p_next: ptr::null(),
-                        flags: Default::default(),
-                        view_type: vk::ImageViewType::TYPE_2D,
-                        format: surface_format.format,
-                        components: vk::ComponentMapping {
-                            r: vk::ComponentSwizzle::R,
-                            g: vk::ComponentSwizzle::G,
-                            b: vk::ComponentSwizzle::B,
-                            a: vk::ComponentSwizzle::A,
-                        },
-                        subresource_range: vk::ImageSubresourceRange {
-                            aspect_mask: vk::ImageAspectFlags::COLOR,
-                            base_mip_level: 0,
-                            level_count: 1,
-                            base_array_layer: 0,
-                            layer_count: 1,
-                        },
-                        image: image,
-                    };
-                    device.create_image_view(&create_view_info, None).unwrap()
-                }).collect();
+            // let present_images = swapchain_loader
+            //     .get_swapchain_images_khr(swapchain)
+            //     .unwrap();
+            // let present_image_views: Vec<vk::ImageView> = present_images
+            //     .iter()
+            //     .map(|&image| {
+            //         let create_view_info = vk::ImageViewCreateInfo {
+            //             s_type: vk::StructureType::IMAGE_VIEW_CREATE_INFO,
+            //             p_next: ptr::null(),
+            //             flags: Default::default(),
+            //             view_type: vk::ImageViewType::TYPE_2D,
+            //             format: surface_format.format,
+            //             components: vk::ComponentMapping {
+            //                 r: vk::ComponentSwizzle::R,
+            //                 g: vk::ComponentSwizzle::G,
+            //                 b: vk::ComponentSwizzle::B,
+            //                 a: vk::ComponentSwizzle::A,
+            //             },
+            //             subresource_range: vk::ImageSubresourceRange {
+            //                 aspect_mask: vk::ImageAspectFlags::COLOR,
+            //                 base_mip_level: 0,
+            //                 level_count: 1,
+            //                 base_array_layer: 0,
+            //                 layer_count: 1,
+            //             },
+            //             image: image,
+            //         };
+            //         device.create_image_view(&create_view_info, None).unwrap()
+            //     }).collect();
             let device_memory_properties = instance.get_physical_device_memory_properties(pdevice);
             let depth_image_create_info = vk::ImageCreateInfo {
                 s_type: vk::StructureType::IMAGE_CREATE_INFO,
@@ -692,9 +692,8 @@ impl Context {
                 present_queue: present_queue,
                 surface_resolution: surface_resolution,
                 swapchain_loader: swapchain_loader,
-                swapchain: swapchain,
-                present_images: present_images,
-                present_image_views: present_image_views,
+                // present_images: present_images,
+                // present_image_views: present_image_views,
                 pool: pool,
                 draw_command_buffer: draw_command_buffer,
                 setup_command_buffer: setup_command_buffer,
