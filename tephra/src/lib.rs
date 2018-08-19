@@ -10,6 +10,7 @@ pub extern crate winit;
 extern crate failure_derive;
 #[macro_use]
 extern crate downcast_rs as downcast;
+extern crate petgraph;
 
 pub mod swapchain;
 pub mod backend;
@@ -19,6 +20,7 @@ pub mod image;
 pub mod pipeline;
 pub mod renderpass;
 pub mod shader;
+pub mod framegraph;
 
 #[derive(Copy, Clone, Default, Debug)]
 pub struct Viewport {

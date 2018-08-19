@@ -14,6 +14,7 @@ use tephra::failure::Fail;
 use tephra::backend::vulkan::{self, record_submit_commandbuffer, Context, Vulkan};
 use tephra::backend::BackendApi;
 use tephra::buffer::{Buffer, BufferUsage, Property};
+use tephra::framegraph::*;
 use tephra::image::{Image, RenderTarget, RenderTargetInfo, Resolution};
 use tephra::pipeline::{Pipeline, PipelineBuilder};
 use tephra::renderpass::{Pass, Renderpass, VertexInput, VertexInputData, VertexType};
@@ -69,10 +70,81 @@ impl VertexInput for Vertex {
         ]
     }
 }
+// pub fn gbuffer() {
+//     let mut fg = Framegraph::new();
+//     pub struct GBufferData {
+//         depth_buffer: Resource<Image>,
+//         gbuffer1: Resource<Image>,
+//         gbuffer2: Resource<Image>,
+//     }
+
+//     let gbuffer_pass = fg.add_render_pass("GBuffer Pass", |builder| GBufferData {
+//         depth_buffer: builder.create_image("Depth Buffer"),
+//         gbuffer1: builder.create_image("GBuffer1"),
+//         gbuffer2: builder.create_image("GBuffer2"),
+//     });
+
+//     pub struct LightingData {
+//         depth_buffer: Resource<Image>,
+//         gbuffer1: Resource<Image>,
+//         gbuffer2: Resource<Image>,
+//         lighting_buffer: Resource<Image>,
+//     }
+
+//     pub struct SomeOtherData {
+//         gbuffer: Resource<Image>,
+//     }
+
+//     let some_other_pass = fg.add_render_pass("Some Other Pass", |builder| SomeOtherData {
+//         gbuffer: builder.write(gbuffer_pass.gbuffer2),
+//     });
+
+//     let lighting_pass = fg.add_render_pass("Lighting Pass", |builder| LightingData {
+//         depth_buffer: builder.read(gbuffer_pass.depth_buffer),
+//         gbuffer1: builder.read(gbuffer_pass.gbuffer1),
+//         gbuffer2: builder.read(some_other_pass.gbuffer),
+//         lighting_buffer: builder.create_image("Lighting Buffer"),
+//     });
+
+//     pub struct PostData {
+//         lighting_buffer: Resource<Image>,
+//         color_image: Resource<Image>,
+//     }
+
+//     let post_pass = fg.add_render_pass("Postprocess Pass", |builder| PostData {
+//         lighting_buffer: builder.read(lighting_pass.lighting_buffer),
+//         color_image: builder.create_image("Color Image"),
+//     });
+
+//     let compiled_fg = fg.compile();
+//     compiled_fg.export_graphviz("graph.dot");
+// }
+
+pub fn triangle_pass() -> Framegraph<Compiled> {
+    let mut fg = Framegraph::new();
+    pub struct TriangleData {
+        pub color: Resource<Image>,
+        pub depth: Resource<Image>,
+    }
+    let triangle_pass = fg.add_render_pass(
+        "Triangle Pass",
+        |builder| TriangleData {
+            color: builder.create_image("Color"),
+            depth: builder.create_image("Depth"),
+        },
+        |data, context| {
+            println!("T");
+        },
+    );
+    fg.compile()
+}
 
 fn main() {
     unsafe {
+        //gbuffer();
         let context = Context::new();
+        let triangle_pass = triangle_pass();
+        triangle_pass.execute(&context);
         let ctx = context.context.downcast_ref::<Context>().unwrap();
         let renderpass = Renderpass::new(&context, TrianglePass::new());
         let vkrenderpass = renderpass
@@ -86,7 +158,8 @@ fn main() {
         };
         let swapchain = Swapchain::new(&context);
         let depth_image = Image::create_depth(&context, resolution);
-        let framebuffers: Vec<vk::Framebuffer> = swapchain.present_images()
+        let framebuffers: Vec<vk::Framebuffer> = swapchain
+            .present_images()
             .iter()
             .map(|present_image| {
                 let present_image_view = present_image.downcast::<Vulkan>().image_view;
