@@ -303,7 +303,7 @@ pub struct InnerContext {
 impl ContextApi for Context {
 }
 impl Context {
-    pub fn render_loop<F: Fn()>(&self, f: F) {
+    pub fn render_loop<F: FnMut()>(&self, mut f: F) {
         use winit::*;
         self.events_loop.borrow_mut().run_forever(|event| {
             f();

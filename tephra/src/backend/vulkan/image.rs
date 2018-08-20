@@ -6,7 +6,7 @@ use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk;
 use super::Context;
 use image::{
-    CreateFramebuffer, CreateImage, Framebuffer, FramebufferApi, Image, ImageApi, RenderTarget, RenderTargetInfo,
+    CreateFramebuffer, CreateImage, Framebuffer, FramebufferApi, Image, ImageApi, RenderTarget, RenderTargetInfo, ImageDesc,
     Resolution,
 };
 use renderpass::{Pass, Renderpass};
@@ -16,14 +16,16 @@ pub struct ImageData {
     pub context: Context,
     pub image: vk::Image,
     pub image_view: vk::ImageView,
+    pub desc: ImageDesc,
 }
 
-impl ImageApi for ImageData {}
-impl CreateImage for Context {
-    fn create_depth(&self, resolution: Resolution) -> Image {
-        Self::allocate(self, resolution)
+impl ImageApi for ImageData {
+    fn desc(&self) -> &ImageDesc {
+        &self.desc
     }
-    fn allocate(&self, resolution: Resolution) -> Image {
+}
+impl CreateImage for Context {
+    fn allocate(&self, desc: ImageDesc) -> Image {
         let ctx = self;
         unsafe {
             let device_memory_properties = ctx
@@ -36,8 +38,8 @@ impl CreateImage for Context {
                 image_type: vk::ImageType::TYPE_2D,
                 format: vk::Format::D16_UNORM,
                 extent: vk::Extent3D {
-                    width: resolution.width,
-                    height: resolution.height,
+                    width: desc.resolution.width,
+                    height: desc.resolution.height,
                     depth: 1,
                 },
                 mip_levels: 1,
@@ -134,6 +136,7 @@ impl CreateImage for Context {
                 context: ctx.clone(),
                 image_view,
                 image: depth_image,
+                desc,
             };
             Image {
                 data: Box::new(data),

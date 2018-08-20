@@ -37,9 +37,9 @@ pub trait VertexInput {
 //     pub data: Backend::Render,
 // }
 
-pub trait Pass {
+pub trait Pass<'a> {
     type Input: VertexInput;
-    type Target: RenderTarget;
+    type Target: RenderTarget<'a>;
     //fn render<Backend: BackendApi>(&self, render: &Render<Backend>) {}
 }
 
@@ -57,7 +57,7 @@ impl Renderpass {
     pub fn downcast<B: BackendApi>(&self) -> &B::Renderpass {
         self.renderpass.downcast_ref::<B::Renderpass>().unwrap()
     }
-    pub fn new<P: Pass>(context: &Context, _p: P) -> Self {
+    pub fn new<'a, P: Pass<'a>>(context: &Context, _p: P) -> Self {
         CreateRenderpass::new(context.context.as_ref(), &P::Input::vertex_input_data())
     }
 }

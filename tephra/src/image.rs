@@ -15,16 +15,22 @@ pub struct Resolution {
 }
 
 pub trait CreateImage {
-    fn allocate(&self, resolution: Resolution) -> Image;
-    fn create_depth(&self, resolution: Resolution) -> Image;
+    fn allocate(&self, desc: ImageDesc) -> Image;
 }
 
-pub trait ImageApi: Downcast {}
+pub trait ImageApi: Downcast {
+    fn desc(&self) -> &ImageDesc;
+}
 
 impl_downcast!(ImageApi);
 
 pub struct Image {
     pub data: Box<dyn ImageApi>,
+}
+
+pub struct ImageDesc {
+    pub resolution: Resolution,
+    pub layout: ImageLayout,
 }
 
 impl Image where {
@@ -33,12 +39,8 @@ impl Image where {
             .downcast_ref::<B::Image>()
             .expect("Downcast Image Vulkan")
     }
-    pub fn allocate(ctx: &Context, resolution: Resolution) -> Image {
-        CreateImage::allocate(ctx.context.as_ref(), resolution)
-    }
-
-    pub fn create_depth(context: &Context, resolution: Resolution) -> Image {
-        context.create_depth(resolution)
+    pub fn allocate(ctx: &Context, desc: ImageDesc) -> Image {
+        CreateImage::allocate(ctx.context.as_ref(), desc)
     }
 }
 
@@ -46,7 +48,7 @@ pub struct RenderTargetInfo<'a> {
     pub image_views: Vec<&'a Image>,
 }
 
-pub trait RenderTarget {
+pub trait RenderTarget<'a> {
     fn render_target(&self) -> RenderTargetInfo;
 }
 
@@ -59,7 +61,7 @@ impl_downcast!(FramebufferApi);
 
 pub struct Framebuffer<T>
 where
-    T: RenderTarget,
+    for<'a> T: RenderTarget<'a>,
 {
     pub render_target: T,
     pub data: Box<dyn FramebufferApi>,
@@ -67,13 +69,13 @@ where
 
 // impl<Target> Framebuffer<Target>
 // where
-//     Target: RenderTarget,
+//     for<'a> Target: RenderTarget<'a>,
 // {
-//     pub fn new<T: RenderTarget, P: Pass>(
+//     pub fn new<P: Pass<'a>>(
 //         context: &Context<Backend>,
-//         target: T,
+//         target: P::Target,
 //         renderpass: &Renderpass<P, Backend>,
-//     ) -> Framebuffer<T, Backend> {
+//     ) -> Framebuffer<P::Target, Backend> {
 //         <Self as FramebufferApi>::new(context, target, renderpass)
 //     }
 // }

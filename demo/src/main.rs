@@ -15,32 +15,25 @@ use tephra::backend::vulkan::{self, record_submit_commandbuffer, Context, Vulkan
 use tephra::backend::BackendApi;
 use tephra::buffer::{Buffer, BufferUsage, Property};
 use tephra::framegraph::*;
-use tephra::image::{Image, RenderTarget, RenderTargetInfo, Resolution};
+use tephra::image::{Image, ImageDesc, ImageLayout, RenderTarget, RenderTargetInfo, Resolution};
 use tephra::pipeline::{Pipeline, PipelineBuilder};
 use tephra::renderpass::{Pass, Renderpass, VertexInput, VertexInputData, VertexType};
 use tephra::shader::Shader;
-use tephra::swapchain::Swapchain;
+use tephra::swapchain::{Swapchain, SwapchainError};
 
-pub struct TrianglePass<'a> {
-    _m: PhantomData<&'a ()>,
-}
-impl<'a> TrianglePass<'a> {
-    pub fn new() -> Self {
-        TrianglePass { _m: PhantomData }
-    }
-}
+pub struct TrianglePass;
 
-impl<'a> Pass for TrianglePass<'a> {
+impl<'target> Pass<'target> for TrianglePass {
     type Input = Vertex;
-    type Target = Target<'a>;
+    type Target = TriangleRT<'target>;
 }
 
-pub struct Target<'a> {
+pub struct TriangleRT<'a> {
     color: &'a Image,
     depth: &'a Image,
 }
 
-impl<'a> RenderTarget for Target<'a> {
+impl<'a> RenderTarget<'a> for TriangleRT<'a> {
     fn render_target(&self) -> RenderTargetInfo {
         RenderTargetInfo {
             image_views: vec![&self.color, &self.depth],
@@ -146,7 +139,7 @@ fn main() {
         let triangle_pass = triangle_pass();
         triangle_pass.execute(&context);
         let ctx = context.context.downcast_ref::<Context>().unwrap();
-        let renderpass = Renderpass::new(&context, TrianglePass::new());
+        let renderpass = Renderpass::new(&context, TrianglePass{});
         let vkrenderpass = renderpass
             .renderpass
             .downcast_ref::<vulkan::renderpass::RenderpassData>()
@@ -156,8 +149,12 @@ fn main() {
             width: 1920,
             height: 1080,
         };
-        let swapchain = Swapchain::new(&context);
-        let depth_image = Image::create_depth(&context, resolution);
+        let mut swapchain = Swapchain::new(&context);
+        let depth_desc = ImageDesc {
+            resolution: swapchain.resolution(),
+            layout: ImageLayout::Depth,
+        };
+        let depth_image = Image::allocate(&context, depth_desc);
         let framebuffers: Vec<vk::Framebuffer> = swapchain
             .present_images()
             .iter()
@@ -236,7 +233,18 @@ fn main() {
         }];
         let graphic_pipeline = pipeline.downcast::<Vulkan>().pipeline;
         ctx.render_loop(|| {
-            let present_index = swapchain.aquire_next_image();
+            let a =  swapchain.aquire_next_image();
+            let present_index =  match a {
+                Result::Ok(index) => index,
+                Err(err) => match err {
+                    SwapchainError::OutOfDate => {
+                        swapchain.recreate();
+                        swapchain.aquire_next_image().expect("Unable to acquire image")
+                    },
+                    _ => panic!("{}", err),
+                },
+            };
+            println!("{:?}", swapchain.resolution());
             let clear_values = [
                 vk::ClearValue {
                     color: vk::ClearColorValue {
@@ -308,13 +316,7 @@ fn main() {
                     device.cmd_end_render_pass(draw_command_buffer);
                 },
             );
-            //let mut present_info_err = mem::uninitialized();
             swapchain.present(present_index);
         });
-
-        // context.device.device_wait_idle().unwrap();
-        // for framebuffer in framebuffers {
-        //     context.device.destroy_framebuffer(framebuffer, None);
-        // }
     }
 }

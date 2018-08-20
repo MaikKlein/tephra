@@ -177,7 +177,7 @@ impl Framegraph {
     ) -> Arc<RenderTask<Data>>
     where
         Setup: Fn(&mut TaskBuilder) -> Data,
-        Data: 'static, //Execute: Fn(&Pass, &Context) + 'static
+        Data: 'static,
     {
         let (pass_handle, task) = {
             let renderpass = NodeRenderpass { name };
