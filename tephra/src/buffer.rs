@@ -55,6 +55,7 @@ pub trait CreateBuffer {
 pub trait BufferApi: Downcast {
     fn map_memory(&self) -> Result<*mut (), MappingError>;
     fn unmap_memory(&self);
+    fn size(&self) -> u64;
     //fn copy_to_device_local(&self) -> Result<Box<dyn BufferApi>, BufferError>;
 }
 impl_downcast!(BufferApi);
@@ -90,6 +91,9 @@ impl<T: Copy> Buffer<T> {
         self.buffer
             .downcast_ref::<B::Buffer>()
             .expect("Downcast Buffer Vulkan")
+    }
+    pub fn len(&self) -> u32 {
+        (self.buffer.size() / size_of::<T>() as u64) as u32
     }
     pub fn allocate(
         context: &Context,

@@ -21,6 +21,7 @@ pub mod pipeline;
 pub mod renderpass;
 pub mod shader;
 pub mod framegraph;
+pub mod render;
 
 #[derive(Copy, Clone, Default, Debug)]
 pub struct Viewport {

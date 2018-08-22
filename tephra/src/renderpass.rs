@@ -1,21 +1,24 @@
+use pipeline::PipelineState;
 use ash::vk;
 use backend::BackendApi;
 use buffer::{Buffer, BufferProperty};
 use context::Context;
 use downcast::Downcast;
 use image::RenderTarget;
-use pipeline::Pipeline;
+use image::RenderTargetInfo;
 use std::marker::PhantomData;
 use std::ops::Deref;
 
+#[derive(Copy, Clone)]
 pub enum VertexType {
     F32(usize),
 }
 
 pub struct VertexInputData {
     pub vertex_type: VertexType,
-    pub binding: usize,
-    pub location: usize,
+    pub binding: u32,
+    pub location: u32,
+    pub offset: u32,
 }
 pub trait VertexInput {
     fn vertex_input_data() -> Vec<VertexInputData>;
@@ -37,30 +40,31 @@ pub trait VertexInput {
 //     pub data: Backend::Render,
 // }
 
-pub trait Pass<'a> {
-    type Input: VertexInput;
-    type Target: RenderTarget<'a>;
-    //fn render<Backend: BackendApi>(&self, render: &Render<Backend>) {}
-}
+//pub trait Pass<'a> {
+//    type Input: VertexInput;
+//    type Target: RenderTarget<'a>;
+//    //fn render<Backend: BackendApi>(&self, render: &Render<Backend>) {}
+//}
 
-pub trait CreateRenderpass {
-    fn new(&self, vertex_input: &[VertexInputData]) -> Renderpass;
-}
+//pub trait CreateRenderpass {
+//    fn new(&self, vertex_input: &[VertexInputData]) -> Renderpass;
+//}
 
-pub trait RenderpassApi: Downcast {}
-impl_downcast!(RenderpassApi);
+//pub trait RenderpassApi: Downcast {}
+//impl_downcast!(RenderpassApi);
 
-pub struct Renderpass {
-    pub renderpass: Box<dyn RenderpassApi>,
-}
-impl Renderpass {
-    pub fn downcast<B: BackendApi>(&self) -> &B::Renderpass {
-        self.renderpass.downcast_ref::<B::Renderpass>().unwrap()
-    }
-    pub fn new<'a, P: Pass<'a>>(context: &Context, _p: P) -> Self {
-        CreateRenderpass::new(context.context.as_ref(), &P::Input::vertex_input_data())
-    }
-}
+// pub struct Renderpass {
+//     pub renderpass: Box<dyn RenderpassApi>,
+// }
+// impl Renderpass {
+//     pub fn downcast<B: BackendApi>(&self) -> &B::Renderpass {
+//         self.renderpass.downcast_ref::<B::Renderpass>().unwrap()
+//     }
+//     pub fn new<'a, P: Pass<'a>>(context: &Context, _p: P) -> Self {
+//         CreateRenderpass::new(context.context.as_ref(), &P::Input::vertex_input_data())
+//     }
+// }
+
 
 // impl<P> Renderpass<P>
 // where
@@ -86,10 +90,10 @@ impl Renderpass {
 //     }
 // }
 
-pub struct ImplRenderpass<Backend>
-where
-    Backend: BackendApi,
-{
-    pub data: Backend::Renderpass,
-    pub _m: PhantomData<Backend>,
-}
+// pub struct ImplRenderpass<Backend>
+// where
+//     Backend: BackendApi,
+// {
+//     pub data: Backend::Renderpass,
+//     pub _m: PhantomData<Backend>,
+// }

@@ -1,6 +1,8 @@
 use context::Context;
-use image::Image;
+use framegraph::render_task::{Execute, RenderTask};
+use image::{Image, ImageDesc};
 use petgraph::{self, Graph};
+use render::Render;
 use std::clone::Clone;
 use std::collections::HashMap;
 use std::fmt;
@@ -8,6 +10,7 @@ use std::fs::File;
 use std::marker::PhantomData;
 use std::path::Path;
 use std::sync::Arc;
+pub mod render_task;
 
 pub enum ResourceData {
     Image,
@@ -49,7 +52,7 @@ pub struct TaskBuilder<'graph> {
     framegraph: &'graph mut Framegraph<Recording>,
 }
 impl<'graph> TaskBuilder<'graph> {
-    pub fn create_image(&mut self, name: &'static str) -> Resource<Image> {
+    pub fn create_image(&mut self, name: &'static str, desc: ImageDesc) -> Resource<Image> {
         let node_resource = Node::Resource(NodeResource {
             id: 0,
             version: 0,
@@ -59,6 +62,7 @@ impl<'graph> TaskBuilder<'graph> {
         self.framegraph
             .graph
             .add_edge(self.pass_handle, node, "Create");
+        self.framegraph.state.image_data.insert(node, desc);
         Resource::new(name, 0, node)
     }
 
@@ -125,61 +129,74 @@ impl fmt::Display for Node {
         write!(f, "{:#?}", self)
     }
 }
-pub struct Recording;
-
 type TaskIndex = usize;
 #[derive(Debug)]
 struct TaskData {
     task_index: TaskIndex,
     inputs: Vec<TaskIndex>,
 }
-pub struct Compiled {}
+type ExecuteFn = Box<dyn Fn(&Context)>;
+pub struct Compiled {
+    images: HashMap<Handle, Image>,
+    render: HashMap<Handle, Render>,
+}
+
+pub type ResourceMap = HashMap<Handle, Vec<Resource<Image>>>;
+pub struct Recording {
+    image_data: HashMap<Handle, ImageDesc>,
+    image_resource_map: ResourceMap,
+}
+
 pub struct Framegraph<T = Recording> {
     state: T,
     graph: Graph<Node, &'static str>,
     resources: Vec<()>,
     execute_fns: HashMap<Handle, Arc<dyn Execute>>,
 }
-
-pub struct RenderTask<T> {
-    data: T,
-    execute: fn(&T, &Context),
+pub trait GetResource<T> {
+    fn get_resource(&self, resource: Resource<T>) -> &T;
 }
 
-pub trait Execute {
-    fn execute(&self, ctx: &Context);
-}
-
-impl<T> Execute for RenderTask<T> {
-    fn execute(&self, ctx: &Context) {
-        (self.execute)(&self.data, ctx)
+impl GetResource<Image> for Framegraph<Compiled> {
+    fn get_resource(&self, resource: Resource<Image>) -> &Image {
+        self.state.images.get(&resource.handle).expect("get image")
     }
 }
-pub trait Task {
-    type Data;
-    fn execute(&self, ctx: &Context);
+
+impl Framegraph<Compiled> {
+    pub fn get_resource<T>(&self, resource: Resource<T>) -> &T
+    where
+        Self: GetResource<T>,
+    {
+        GetResource::get_resource(self, resource)
+    }
 }
-type ExecuteFn = Box<dyn Fn(&Context)>;
+
 impl Framegraph {
     pub fn new() -> Self {
         Framegraph {
-            state: Recording {},
+            state: Recording {
+                image_data: HashMap::new(),
+                image_resource_map: HashMap::new(),
+            },
             graph: Graph::new(),
             resources: Vec::new(),
             execute_fns: HashMap::new(),
         }
     }
-    pub fn add_render_pass<Data, Setup>(
+    pub fn add_render_pass<Data, Pass, Setup>(
         &mut self,
         name: &'static str,
         setup: Setup,
-        execute: fn(&Data, &Context),
+        pass: Pass,
+        execute: fn(&Data, &Render, &Context),
     ) -> Arc<RenderTask<Data>>
     where
         Setup: Fn(&mut TaskBuilder) -> Data,
+        Pass: Fn(&Data) -> Vec<Resource<Image>>,
         Data: 'static,
     {
-        let (pass_handle, task) = {
+        let (pass_handle, image_resources, task) = {
             let renderpass = NodeRenderpass { name };
             let pass_handle = self.graph.add_node(Node::Renderpass(renderpass));
             let mut builder = TaskBuilder {
@@ -187,18 +204,44 @@ impl Framegraph {
                 framegraph: self,
             };
             let data = setup(&mut builder);
+            let image_resources = pass(&data);
             let task = RenderTask { data, execute };
-            (pass_handle, Arc::new(task))
+            (pass_handle, image_resources, Arc::new(task))
         };
         self.execute_fns.insert(pass_handle, task.clone());
+        self.state
+            .image_resource_map
+            .insert(pass_handle, image_resources);
         task
     }
-    pub fn compile(self) -> Framegraph<Compiled> {
+    pub fn compile(self, ctx: &Context) -> Framegraph<Compiled> {
+        let images: HashMap<_, _> = self
+            .state
+            .image_data
+            .iter()
+            .map(|(&node, image_desc)| {
+                let image = Image::allocate(ctx, image_desc.clone());
+                (node, image)
+            })
+            .collect();
+        let render: HashMap<_, _> = self
+            .state
+            .image_resource_map
+            .iter()
+            .map(|(&handle, image_resources)| {
+                let images: Vec<&Image> = image_resources
+                    .iter()
+                    .map(|&resource| images.get(&resource.handle).expect("resource"))
+                    .collect();
+                (handle, Render::new(ctx, &images))
+            })
+            .collect();
+        let state = Compiled { images, render };
         Framegraph {
             execute_fns: self.execute_fns,
             resources: self.resources,
             graph: self.graph,
-            state: Compiled {},
+            state,
         }
     }
 }
@@ -211,9 +254,12 @@ impl Framegraph<Compiled> {
             .filter(|&idx| match self.graph[idx] {
                 Node::Renderpass(_) => true,
                 _ => false,
-            }).for_each(|idx| {
+            })
+            .for_each(|idx| {
                 let execute = self.execute_fns.get(&idx).expect("renderpass");
-                execute.execute(ctx);
+
+                let render = self.state.render.get(&idx).expect("render");
+                execute.execute(render, ctx);
             });
     }
     pub fn export_graphviz<P: AsRef<Path>>(&self, path: P) {

@@ -21,6 +21,7 @@ pub mod renderpass;
 pub mod shader;
 pub mod image;
 pub mod swapchain;
+pub mod render;
 
 #[derive(Copy, Clone)]
 pub struct Vulkan;
@@ -28,9 +29,9 @@ impl BackendApi for Vulkan {
     type Shader = shader::ShaderData;
     type Context = Context;
     type Buffer = buffer::BufferData;
-    type Renderpass = renderpass::RenderpassData;
-    type Pipeline = pipeline::PipelineData;
-    type Framebuffer = image::FramebufferData;
+    //type Renderpass = renderpass::RenderpassData;
+    // type Pipeline = pipeline::PipelineData;
+    // type Framebuffer = image::FramebufferData;
     type Image = image::ImageData;
     type Swapchain = swapchain::SwapchainData;
 }
@@ -299,6 +300,7 @@ pub struct InnerContext {
 
     pub present_complete_semaphore: vk::Semaphore,
     pub rendering_complete_semaphore: vk::Semaphore,
+    pub pipeline_cache: vk::PipelineCache,
 }
 impl ContextApi for Context {
 }
@@ -675,6 +677,8 @@ impl Context {
             let rendering_complete_semaphore = device
                 .create_semaphore(&semaphore_create_info, None)
                 .unwrap();
+            let pipeline_cache_create_info = vk::PipelineCacheCreateInfo::default();
+            let pipeline_cache =  device.create_pipeline_cache(&pipeline_cache_create_info, None).expect("pipeline cache");
             let context = InnerContext {
                 command_pool: ThreadLocalCommandPool::new(queue_family_index),
                 entry,
@@ -705,6 +709,7 @@ impl Context {
                 debug_call_back: debug_call_back,
                 debug_report_loader: debug_report_loader,
                 depth_image_memory: depth_image_memory,
+                pipeline_cache,
             };
             let context = Context {
                 inner: Arc::new(context)

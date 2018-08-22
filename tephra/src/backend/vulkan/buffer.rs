@@ -22,8 +22,8 @@ pub struct BufferData {
 impl Drop for BufferData {
     fn drop(&mut self) {
         unsafe {
-            self.context.device.destroy_buffer(self.buffer, None);
-            self.context.device.free_memory(self.memory, None);
+            // self.context.device.destroy_buffer(self.buffer, None);
+            // self.context.device.free_memory(self.memory, None);
         }
     }
 }
@@ -44,7 +44,12 @@ fn property_to_vk_property(property: Property) -> vk::MemoryPropertyFlags {
 }
 
 impl CreateBuffer for Context {
-    fn allocate(&self, property: Property, usage: BufferUsage, size: u64) -> Result<Box<dyn BufferApi>, BufferError> {
+    fn allocate(
+        &self,
+        property: Property,
+        usage: BufferUsage,
+        size: u64,
+    ) -> Result<Box<dyn BufferApi>, BufferError> {
         let context = self;
         unsafe {
             let device_memory_properties = context
@@ -71,11 +76,12 @@ impl CreateBuffer for Context {
             let vertex_input_buffer_memory_req = context
                 .device
                 .get_buffer_memory_requirements(vertex_input_buffer);
-            let vertex_input_buffer_memory_index = find_memorytype_index(
-                &vertex_input_buffer_memory_req,
-                &device_memory_properties,
-                property_to_vk_property(property),
-            ).expect("Unable to find suitable memorytype for the vertex buffer.");
+            let vertex_input_buffer_memory_index =
+                find_memorytype_index(
+                    &vertex_input_buffer_memory_req,
+                    &device_memory_properties,
+                    property_to_vk_property(property),
+                ).expect("Unable to find suitable memorytype for the vertex buffer.");
 
             let vertex_buffer_allocate_info = vk::MemoryAllocateInfo {
                 s_type: vk::StructureType::MEMORY_ALLOCATE_INFO,
@@ -102,6 +108,9 @@ impl CreateBuffer for Context {
     }
 }
 impl BufferApi for BufferData {
+    fn size(&self) -> u64 {
+        self.size
+    }
     fn map_memory(&self) -> Result<*mut (), MappingError> {
         unsafe {
             let ptr = self

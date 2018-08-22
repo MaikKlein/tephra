@@ -6,12 +6,12 @@ use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk;
 use super::Context;
 use image::{
-    CreateFramebuffer, CreateImage, Framebuffer, FramebufferApi, Image, ImageApi, RenderTarget, RenderTargetInfo, ImageDesc,
+    ImageLayout, CreateImage, Image, ImageApi, RenderTarget, RenderTargetInfo, ImageDesc,
     Resolution,
 };
-use renderpass::{Pass, Renderpass};
+//use renderpass::{Pass, Renderpass};
 use std::ptr;
-pub struct FramebufferData {}
+// pub struct FramebufferData {}
 pub struct ImageData {
     pub context: Context,
     pub image: vk::Image,
@@ -26,6 +26,28 @@ impl ImageApi for ImageData {
 }
 impl CreateImage for Context {
     fn allocate(&self, desc: ImageDesc) -> Image {
+        let aspect_mask = match desc.layout {
+            ImageLayout::Color => vk::ImageAspectFlags::COLOR,
+            ImageLayout::Depth => vk::ImageAspectFlags::DEPTH,
+        };
+        let format = match desc.layout {
+            ImageLayout::Color => vk::Format::B8G8R8A8_SRGB,
+            ImageLayout::Depth => vk::Format::D16_UNORM,
+        };
+        let usage = match desc.layout {
+            ImageLayout::Color => vk::ImageUsageFlags::COLOR_ATTACHMENT,
+            ImageLayout::Depth => vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
+        };
+
+        let access = match desc.layout {
+            ImageLayout::Color => vk::AccessFlags::empty(),
+            // ImageLayout::Color => vk::AccessFlags::COLOR_ATTACHMENT_READ | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+            ImageLayout::Depth => vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_READ | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE
+        };
+        let target_layout = match desc.layout {
+            ImageLayout::Color => vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+            ImageLayout::Depth => vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+        };
         let ctx = self;
         unsafe {
             let device_memory_properties = ctx
@@ -36,7 +58,7 @@ impl CreateImage for Context {
                 p_next: ptr::null(),
                 flags: Default::default(),
                 image_type: vk::ImageType::TYPE_2D,
-                format: vk::Format::D16_UNORM,
+                format,
                 extent: vk::Extent3D {
                     width: desc.resolution.width,
                     height: desc.resolution.height,
@@ -46,7 +68,7 @@ impl CreateImage for Context {
                 array_layers: 1,
                 samples: vk::SampleCountFlags::TYPE_1,
                 tiling: vk::ImageTiling::OPTIMAL,
-                usage: vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
+                usage,
                 sharing_mode: vk::SharingMode::EXCLUSIVE,
                 queue_family_index_count: 0,
                 p_queue_family_indices: ptr::null(),
@@ -81,15 +103,14 @@ impl CreateImage for Context {
                     s_type: vk::StructureType::IMAGE_MEMORY_BARRIER,
                     p_next: ptr::null(),
                     src_access_mask: Default::default(),
-                    dst_access_mask: vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_READ
-                        | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
+                    dst_access_mask: access,
                     old_layout: vk::ImageLayout::UNDEFINED,
-                    new_layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                    new_layout: target_layout,
                     src_queue_family_index: vk::QUEUE_FAMILY_IGNORED,
                     dst_queue_family_index: vk::QUEUE_FAMILY_IGNORED,
                     image: depth_image,
                     subresource_range: vk::ImageSubresourceRange {
-                        aspect_mask: vk::ImageAspectFlags::DEPTH,
+                        aspect_mask,
                         base_mip_level: 0,
                         level_count: 1,
                         base_array_layer: 0,
@@ -120,7 +141,7 @@ impl CreateImage for Context {
                     a: vk::ComponentSwizzle::IDENTITY,
                 },
                 subresource_range: vk::ImageSubresourceRange {
-                    aspect_mask: vk::ImageAspectFlags::DEPTH,
+                    aspect_mask,
                     base_mip_level: 0,
                     level_count: 1,
                     base_array_layer: 0,
@@ -145,38 +166,38 @@ impl CreateImage for Context {
     }
 }
 
-impl FramebufferApi for FramebufferData {
-}
-impl CreateFramebuffer for FramebufferData {
-    fn new(
-        &self,
-        render_target_info: &RenderTargetInfo,
-    ) -> Self {
-        // unsafe {
-        //     let render_target_info = target.render_target();
-        //     let framebuffer_attachments: Vec<vk::ImageView> = render_target_info
-        //         .image_views
-        //         .iter()
-        //         .map(|&image| {
-        //             let image_data = image.data.downcast_ref::<ImageData>().unwrap();
-        //             image_data.image_view
-        //         }).collect();
-        //     let frame_buffer_create_info = vk::FramebufferCreateInfo {
-        //         s_type: vk::StructureType::FRAMEBUFFER_CREATE_INFO,
-        //         p_next: ptr::null(),
-        //         flags: Default::default(),
-        //         render_pass: renderpass.impl_render_pass.data.render_pass,
-        //         attachment_count: framebuffer_attachments.len() as u32,
-        //         p_attachments: framebuffer_attachments.as_ptr(),
-        //         width: context.surface_resolution.width,
-        //         height: context.surface_resolution.height,
-        //         layers: 1,
-        //     };
-        //     context
-        //         .device
-        //         .create_framebuffer(&frame_buffer_create_info, None)
-        //         .unwrap();
-        // }
-        unimplemented!()
-    }
-}
+// impl FramebufferApi for FramebufferData {
+// }
+// impl CreateFramebuffer for FramebufferData {
+//     fn new(
+//         &self,
+//         render_target_info: &RenderTargetInfo,
+//     ) -> Self {
+//         // unsafe {
+//         //     let render_target_info = target.render_target();
+//         //     let framebuffer_attachments: Vec<vk::ImageView> = render_target_info
+//         //         .image_views
+//         //         .iter()
+//         //         .map(|&image| {
+//         //             let image_data = image.data.downcast_ref::<ImageData>().unwrap();
+//         //             image_data.image_view
+//         //         }).collect();
+//         //     let frame_buffer_create_info = vk::FramebufferCreateInfo {
+//         //         s_type: vk::StructureType::FRAMEBUFFER_CREATE_INFO,
+//         //         p_next: ptr::null(),
+//         //         flags: Default::default(),
+//         //         render_pass: renderpass.impl_render_pass.data.render_pass,
+//         //         attachment_count: framebuffer_attachments.len() as u32,
+//         //         p_attachments: framebuffer_attachments.as_ptr(),
+//         //         width: context.surface_resolution.width,
+//         //         height: context.surface_resolution.height,
+//         //         layers: 1,
+//         //     };
+//         //     context
+//         //         .device
+//         //         .create_framebuffer(&frame_buffer_create_info, None)
+//         //         .unwrap();
+//         // }
+//         unimplemented!()
+//     }
+// }

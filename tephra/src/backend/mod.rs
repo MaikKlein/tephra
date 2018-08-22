@@ -1,9 +1,9 @@
 pub mod vulkan;
 use shader::ShaderApi;
 use buffer::BufferApi;
-use renderpass::RenderpassApi;
-use pipeline::PipelineApi;
-use image::{ImageApi, FramebufferApi};
+//use renderpass::RenderpassApi;
+//use pipeline::PipelineApi;
+use image::{ImageApi};
 use swapchain::SwapchainApi;
 
 pub trait BackendApi
@@ -13,10 +13,10 @@ where
     type Context: Clone;
     type Shader: ShaderApi;
     type Buffer: BufferApi;
-    type Renderpass: RenderpassApi;
-    type Pipeline: PipelineApi;
+    //type Renderpass: RenderpassApi;
+    //type Pipeline: PipelineApi;
     //type Render;
-    type Framebuffer: FramebufferApi;
+    //type Framebuffer: FramebufferApi;
     type Image: ImageApi;
     type Swapchain: SwapchainApi;
 }

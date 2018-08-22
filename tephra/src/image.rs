@@ -1,10 +1,11 @@
+use std::ops::Deref;
 use backend::BackendApi;
 use context::Context;
 use downcast::Downcast;
-use renderpass::{Pass, Renderpass};
+//use renderpass::{Pass, Renderpass};
 use std::any::Any;
+#[derive(Debug, Copy, Clone)]
 pub enum ImageLayout {
-    Undefined,
     Color,
     Depth,
 }
@@ -27,13 +28,20 @@ impl_downcast!(ImageApi);
 pub struct Image {
     pub data: Box<dyn ImageApi>,
 }
+impl Deref for Image {
+    type Target = ImageApi;
+    fn deref(&self) -> &Self::Target {
+        self.data.as_ref()
+    }
+}
 
+#[derive(Debug, Clone)]
 pub struct ImageDesc {
     pub resolution: Resolution,
     pub layout: ImageLayout,
 }
 
-impl Image where {
+impl Image {
     pub fn downcast<B: BackendApi>(&self) -> &B::Image {
         self.data
             .downcast_ref::<B::Image>()

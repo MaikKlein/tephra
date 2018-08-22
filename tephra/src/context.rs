@@ -3,20 +3,16 @@ use std::sync::Arc;
 
 use buffer::CreateBuffer;
 use downcast;
-use image::{CreateFramebuffer, CreateImage};
-use pipeline::CreatePipeline;
-use renderpass::CreateRenderpass;
+use image::CreateImage;
+// use pipeline::CreatePipeline;
+// use renderpass::CreateRenderpass;
+use render::CreateRender;
 use shader::CreateShader;
 use swapchain::CreateSwapchain;
 
 pub trait ContextApi: downcast::Downcast
 where
-    Self: CreateImage
-        + CreateSwapchain
-        + CreateShader
-        + CreatePipeline
-        + CreateRenderpass
-        + CreateBuffer,
+    Self: CreateImage + CreateSwapchain + CreateShader + CreateBuffer + CreateRender,
 {
 }
 impl_downcast!(ContextApi);
