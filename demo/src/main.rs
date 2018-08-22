@@ -150,38 +150,38 @@ pub fn triangle_pass(ctx: &context::Context, resolution: Resolution) -> Framegra
                 &index_buffer_data,
             ).expect("index buffer");
 
-            // let vertices = [
-            //     Vertex {
-            //         pos: [-1.0, 1.0, 0.0, 1.0],
-            //         color: [0.0, 1.0, 0.0, 1.0],
-            //     },
-            //     Vertex {
-            //         pos: [1.0, 1.0, 0.0, 1.0],
-            //         color: [0.0, 0.0, 1.0, 1.0],
-            //     },
-            //     Vertex {
-            //         pos: [0.0, -1.0, 0.0, 1.0],
-            //         color: [1.0, 0.0, 0.0, 1.0],
-            //     },
-            // ];
+            let vertices = [
+                Vertex {
+                    pos: [-1.0, 1.0, 0.0, 1.0],
+                    color: [0.0, 1.0, 0.0, 1.0],
+                },
+                Vertex {
+                    pos: [1.0, 1.0, 0.0, 1.0],
+                    color: [0.0, 0.0, 1.0, 1.0],
+                },
+                Vertex {
+                    pos: [0.0, -1.0, 0.0, 1.0],
+                    color: [1.0, 0.0, 0.0, 1.0],
+                },
+            ];
 
-            // let vertex_buffer = Buffer::from_slice(
-            //     &context,
-            //     Property::HostVisible,
-            //     BufferUsage::Vertex,
-            //     &vertices,
-            // ).expect("Failed to create vertex buffer");
+            let vertex_buffer = Buffer::from_slice(
+                &context,
+                Property::HostVisible,
+                BufferUsage::Vertex,
+                &vertices,
+            ).expect("Failed to create vertex buffer");
             // let vk_index = index_buffer.downcast::<Vulkan>();
             // let vk_vertex = vertex_buffer.downcast::<Vulkan>();
 
-            // let vertex_shader_module =
-            //     Shader::load(&context, "shader/triangle/vert.spv").expect("vertex");
-            // let fragment_shader_module =
-            //     Shader::load(&context, "shader/triangle/frag.spv").expect("vertex");
-            // let state = PipelineState::new()
-            //     .with_vertex_shader(&vertex_shader_module)
-            //     .with_fragment_shader(&fragment_shader_module);
-            // render.draw_indexed(&state, &vertex_buffer, &index_buffer);
+            let vertex_shader_module =
+                Shader::load(&context, "shader/triangle/vert.spv").expect("vertex");
+            let fragment_shader_module =
+                Shader::load(&context, "shader/triangle/frag.spv").expect("vertex");
+            let state = PipelineState::new()
+                .with_vertex_shader(&vertex_shader_module)
+                .with_fragment_shader(&fragment_shader_module);
+            render.draw_indexed(&state, &vertex_buffer, &index_buffer);
         },
     );
     fg.compile(ctx)
@@ -189,140 +189,31 @@ pub fn triangle_pass(ctx: &context::Context, resolution: Resolution) -> Framegra
 
 fn main() {
     unsafe {
-        //gbuffer();
         let context = Context::new();
-        let ctx = context.context.downcast_ref::<Context>().unwrap();
-        // let renderpass = Renderpass::new(&context, TrianglePass {});
-        // let vkrenderpass = renderpass
-        //     .renderpass
-        //     .downcast_ref::<vulkan::renderpass::RenderpassData>()
-        //     .unwrap()
-        //     .renderpass;
         let mut swapchain = Swapchain::new(&context);
         let triangle_pass = triangle_pass(&context, swapchain.resolution());
-        // let framebuffers: Vec<vk::Framebuffer> = swapchain
-        //     .present_images()
-        //     .iter()
-        //     .map(|present_image| {
-        //         let present_image_view = present_image.downcast::<Vulkan>().image_view;
-        //         let framebuffer_attachments = [present_image_view, ctx.depth_image_view];
-        //         let frame_buffer_create_info = vk::FramebufferCreateInfo {
-        //             s_type: vk::StructureType::FRAMEBUFFER_CREATE_INFO,
-        //             p_next: ptr::null(),
-        //             flags: Default::default(),
-        //             render_pass: vkrenderpass,
-        //             attachment_count: framebuffer_attachments.len() as u32,
-        //             p_attachments: framebuffer_attachments.as_ptr(),
-        //             width: ctx.surface_resolution.width,
-        //             height: ctx.surface_resolution.height,
-        //             layers: 1,
-        //         };
-        //         ctx.device
-        //             .create_framebuffer(&frame_buffer_create_info, None)
-        //             .unwrap()
-        //     }).collect();
-
-        // let viewports = [vk::Viewport {
-        //     x: 0.0,
-        //     y: 0.0,
-        //     width: ctx.surface_resolution.width as f32,
-        //     height: ctx.surface_resolution.height as f32,
-        //     min_depth: 0.0,
-        //     max_depth: 1.0,
-        // }];
-        // let scissors = [vk::Rect2D {
-        //     offset: vk::Offset2D { x: 0, y: 0 },
-        //     extent: ctx.surface_resolution.clone(),
-        // }];
-        // let graphic_pipeline = pipeline.downcast::<Vulkan>().pipeline;
-        ctx.render_loop(|| {
-            // let present_index = match swapchain.aquire_next_image() {
-            //     Result::Ok(index) => index,
-            //     Err(err) => match err {
-            //         SwapchainError::OutOfDate => {
-            //             swapchain.recreate();
-            //             swapchain
-            //                 .aquire_next_image()
-            //                 .expect("Unable to acquire image")
-            //         }
-            //         _ => panic!("{}", err),
-            //     },
-            // };
+        loop {
             triangle_pass.execute(&context);
-            println!("swapchain {:?}", swapchain.resolution());
-            // let clear_values = [
-            //     vk::ClearValue {
-            //         color: vk::ClearColorValue {
-            //             float32: [0.0, 0.0, 0.0, 0.0],
-            //         },
-            //     },
-            //     vk::ClearValue {
-            //         depth_stencil: vk::ClearDepthStencilValue {
-            //             depth: 1.0,
-            //             stencil: 0,
-            //         },
-            //     },
-            // ];
-
-            // let render_pass_begin_info = vk::RenderPassBeginInfo {
-            //     s_type: vk::StructureType::RENDER_PASS_BEGIN_INFO,
-            //     p_next: ptr::null(),
-            //     render_pass: vkrenderpass,
-            //     framebuffer: framebuffers[present_index as usize],
-            //     render_area: vk::Rect2D {
-            //         offset: vk::Offset2D { x: 0, y: 0 },
-            //         extent: ctx.surface_resolution.clone(),
-            //     },
-            //     clear_value_count: clear_values.len() as u32,
-            //     p_clear_values: clear_values.as_ptr(),
-            // };
-            // record_submit_commandbuffer(
-            //     &ctx.device,
-            //     ctx.draw_command_buffer,
-            //     &ctx.present_queue.inner,
-            //     &[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT],
-            //     &[ctx.present_complete_semaphore],
-            //     &[ctx.rendering_complete_semaphore],
-            //     |device, draw_command_buffer| {
-            //         device.cmd_begin_render_pass(
-            //             draw_command_buffer,
-            //             &render_pass_begin_info,
-            //             vk::SubpassContents::INLINE,
-            //         );
-            //         device.cmd_bind_pipeline(
-            //             draw_command_buffer,
-            //             vk::PipelineBindPoint::GRAPHICS,
-            //             graphic_pipeline,
-            //         );
-            //         device.cmd_set_viewport(draw_command_buffer, 0, &viewports);
-            //         device.cmd_set_scissor(draw_command_buffer, 0, &scissors);
-            //         device.cmd_bind_vertex_buffers(
-            //             draw_command_buffer,
-            //             0,
-            //             &[vk_vertex.buffer],
-            //             &[0],
-            //         );
-            //         device.cmd_bind_index_buffer(
-            //             draw_command_buffer,
-            //             vk_index.buffer,
-            //             0,
-            //             vk::IndexType::UINT32,
-            //         );
-            //         device.cmd_draw_indexed(
-            //             draw_command_buffer,
-            //             index_buffer_data.len() as u32,
-            //             1,
-            //             0,
-            //             0,
-            //             1,
-            //         );
-            //         // Or draw without the index buffer
-            //         // device.cmd_draw(draw_command_buffer, 3, 1, 0, 0);
-            //         device.cmd_end_render_pass(draw_command_buffer);
-            //     },
-            // );
-            //swapchain.present(present_index);
             std::thread::sleep_ms(2000);
-        });
+        }
+        //ctx.render_loop(|| {
+        //    // let present_index = match swapchain.aquire_next_image() {
+        //    //     Result::Ok(index) => index,
+        //    //     Err(err) => match err {
+        //    //         SwapchainError::OutOfDate => {
+        //    //             swapchain.recreate();
+        //    //             swapchain
+        //    //                 .aquire_next_image()
+        //    //                 .expect("Unable to acquire image")
+        //    //         }
+        //    //         _ => panic!("{}", err),
+        //    //     },
+        //    // };
+        //    println!("---");
+        //    triangle_pass.execute(&context);
+        //    //swapchain.present(present_index);
+        //    std::thread::sleep_ms(2000);
+        //    println!("after wait");
+        //});
     }
 }

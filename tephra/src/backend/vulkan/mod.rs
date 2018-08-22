@@ -721,11 +721,12 @@ impl Context {
         }
     }
 }
-impl Drop for Context {
+
+impl Drop for InnerContext {
     fn drop(&mut self) {
         unsafe {
-            self.device.destroy_device(None);
-            self.instance.destroy_instance(None);
+            // self.device.destroy_device(None);
+            // self.instance.destroy_instance(None);
         }
     }
 }

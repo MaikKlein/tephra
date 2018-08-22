@@ -22,8 +22,8 @@ pub struct BufferData {
 impl Drop for BufferData {
     fn drop(&mut self) {
         unsafe {
-            // self.context.device.destroy_buffer(self.buffer, None);
-            // self.context.device.free_memory(self.memory, None);
+            self.context.device.destroy_buffer(self.buffer, None);
+            self.context.device.free_memory(self.memory, None);
         }
     }
 }
