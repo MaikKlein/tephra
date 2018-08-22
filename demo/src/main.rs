@@ -117,8 +117,12 @@ impl VertexInput for Vertex {
 //     compiled_fg.export_graphviz("graph.dot");
 // }
 
-pub fn triangle_pass(ctx: &context::Context, resolution: Resolution) -> Framegraph<Compiled> {
-    let mut fg = Framegraph::new();
+pub fn triangle_pass(
+    ctx: &context::Context,
+    blackboard: Blackboard,
+    resolution: Resolution,
+) -> Framegraph<Compiled> {
+    let mut fg = Framegraph::new(blackboard);
     pub struct TriangleData {
         pub color: Resource<Image>,
         pub depth: Resource<Image>,
@@ -141,57 +145,68 @@ pub fn triangle_pass(ctx: &context::Context, resolution: Resolution) -> Framegra
         },
         // TODO: Infer framebuffer layout based on data,
         |data| vec![data.color, data.depth],
-        |data, render, context| {
-            let index_buffer_data = [0u32, 1, 2];
-            let index_buffer = Buffer::from_slice(
-                &context,
-                Property::HostVisible,
-                BufferUsage::Index,
-                &index_buffer_data,
-            ).expect("index buffer");
-
-            let vertices = [
-                Vertex {
-                    pos: [-1.0, 1.0, 0.0, 1.0],
-                    color: [0.0, 1.0, 0.0, 1.0],
-                },
-                Vertex {
-                    pos: [1.0, 1.0, 0.0, 1.0],
-                    color: [0.0, 0.0, 1.0, 1.0],
-                },
-                Vertex {
-                    pos: [0.0, -1.0, 0.0, 1.0],
-                    color: [1.0, 0.0, 0.0, 1.0],
-                },
-            ];
-
-            let vertex_buffer = Buffer::from_slice(
-                &context,
-                Property::HostVisible,
-                BufferUsage::Vertex,
-                &vertices,
-            ).expect("Failed to create vertex buffer");
-            // let vk_index = index_buffer.downcast::<Vulkan>();
-            // let vk_vertex = vertex_buffer.downcast::<Vulkan>();
-
-            let vertex_shader_module =
-                Shader::load(&context, "shader/triangle/vert.spv").expect("vertex");
-            let fragment_shader_module =
-                Shader::load(&context, "shader/triangle/frag.spv").expect("vertex");
-            let state = PipelineState::new()
-                .with_vertex_shader(&vertex_shader_module)
-                .with_fragment_shader(&fragment_shader_module);
-            render.draw_indexed(&state, &vertex_buffer, &index_buffer);
+        |data, blackboard, render, context| {
+            let r = blackboard.get::<RenderState>().expect("State");
+            render.draw_indexed(&r.state, &r.vertex_buffer, &r.index_buffer);
         },
     );
     fg.compile(ctx)
 }
-
+struct RenderState {
+    vertex_buffer: Buffer<Vertex>,
+    index_buffer: Buffer<u32>,
+    state: PipelineState,
+}
 fn main() {
     unsafe {
         let context = Context::new();
         let mut swapchain = Swapchain::new(&context);
-        let triangle_pass = triangle_pass(&context, swapchain.resolution());
+        let mut blackboard = Blackboard::new();
+        let index_buffer_data = [0u32, 1, 2];
+        let index_buffer = Buffer::from_slice(
+            &context,
+            Property::HostVisible,
+            BufferUsage::Index,
+            &index_buffer_data,
+        ).expect("index buffer");
+
+        let vertices = [
+            Vertex {
+                pos: [-1.0, 1.0, 0.0, 1.0],
+                color: [0.0, 1.0, 0.0, 1.0],
+            },
+            Vertex {
+                pos: [1.0, 1.0, 0.0, 1.0],
+                color: [0.0, 0.0, 1.0, 1.0],
+            },
+            Vertex {
+                pos: [0.0, -1.0, 0.0, 1.0],
+                color: [1.0, 0.0, 0.0, 1.0],
+            },
+        ];
+
+        let vertex_buffer = Buffer::from_slice(
+            &context,
+            Property::HostVisible,
+            BufferUsage::Vertex,
+            &vertices,
+        ).expect("Failed to create vertex buffer");
+
+        let vertex_shader_module =
+            Shader::load(&context, "shader/triangle/vert.spv").expect("vertex");
+        let fragment_shader_module =
+            Shader::load(&context, "shader/triangle/frag.spv").expect("vertex");
+        let state = PipelineState::new()
+            .with_vertex_shader(vertex_shader_module)
+            .with_fragment_shader(fragment_shader_module);
+        let renderstate = RenderState {
+            vertex_buffer,
+            index_buffer,
+            state,
+        };
+        blackboard.add(renderstate);
+
+        let triangle_pass = triangle_pass(&context, blackboard, swapchain.resolution());
         loop {
             triangle_pass.execute(&context);
             std::thread::sleep_ms(2000);

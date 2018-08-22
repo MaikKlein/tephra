@@ -1,3 +1,4 @@
+use anymap::AnyMap;
 use context::Context;
 use framegraph::render_task::{Execute, RenderTask};
 use image::{Image, ImageDesc};
@@ -11,6 +12,24 @@ use std::marker::PhantomData;
 use std::path::Path;
 use std::sync::Arc;
 pub mod render_task;
+
+pub struct Blackboard {
+    any_map: AnyMap,
+}
+impl Blackboard {
+    pub fn new() -> Blackboard {
+        Blackboard {
+            any_map: AnyMap::new(),
+        }
+    }
+    pub fn add<T: 'static>(&mut self, t: T) {
+        self.any_map.insert(t);
+    }
+
+    pub fn get<T: 'static>(&self) -> Option<&T> {
+        self.any_map.get::<T>()
+    }
+}
 
 pub enum ResourceData {
     Image,
@@ -148,6 +167,7 @@ pub struct Recording {
 }
 
 pub struct Framegraph<T = Recording> {
+    blackboard: Blackboard,
     state: T,
     graph: Graph<Node, &'static str>,
     resources: Vec<()>,
@@ -173,7 +193,7 @@ impl Framegraph<Compiled> {
 }
 
 impl Framegraph {
-    pub fn new() -> Self {
+    pub fn new(blackboard: Blackboard) -> Self {
         Framegraph {
             state: Recording {
                 image_data: HashMap::new(),
@@ -182,6 +202,7 @@ impl Framegraph {
             graph: Graph::new(),
             resources: Vec::new(),
             execute_fns: HashMap::new(),
+            blackboard,
         }
     }
     pub fn add_render_pass<Data, Pass, Setup>(
@@ -189,7 +210,7 @@ impl Framegraph {
         name: &'static str,
         setup: Setup,
         pass: Pass,
-        execute: fn(&Data, &Render, &Context),
+        execute: fn(&Data, &Blackboard, &Render, &Context),
     ) -> Arc<RenderTask<Data>>
     where
         Setup: Fn(&mut TaskBuilder) -> Data,
@@ -242,6 +263,7 @@ impl Framegraph {
             resources: self.resources,
             graph: self.graph,
             state,
+            blackboard: self.blackboard
         }
     }
 }
@@ -259,7 +281,7 @@ impl Framegraph<Compiled> {
                 let execute = self.execute_fns.get(&idx).expect("renderpass");
 
                 let render = self.state.render.get(&idx).expect("render");
-                execute.execute(render, ctx);
+                execute.execute(&self.blackboard, render, ctx);
             });
     }
     pub fn export_graphviz<P: AsRef<Path>>(&self, path: P) {

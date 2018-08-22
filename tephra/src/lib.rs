@@ -11,6 +11,7 @@ extern crate failure_derive;
 #[macro_use]
 extern crate downcast_rs as downcast;
 extern crate petgraph;
+extern crate anymap;
 
 pub mod swapchain;
 pub mod backend;

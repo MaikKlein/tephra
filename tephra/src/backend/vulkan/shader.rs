@@ -5,6 +5,7 @@ use super::Context;
 use shader::{CreateShader, GetShaderType, ShaderApi, ShaderError, Shader};
 use std::ops::Drop;
 use std::ptr;
+use std::sync::Arc;
 pub struct ShaderData {
     context: Context,
     pub shader_module: vk::ShaderModule,
@@ -41,7 +42,7 @@ impl CreateShader for Context {
                 shader_module,
             };
             let shader = Shader {
-                data: Box::new(shader_data)
+                data: Arc::new(shader_data)
             };
             Ok(shader)
         }

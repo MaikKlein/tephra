@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use backend::BackendApi;
 use context::Context;
 use std::fs::File;
@@ -40,8 +41,9 @@ pub trait ShaderApi: Downcast {
 }
 impl_downcast!(ShaderApi);
 
+#[derive(Clone)]
 pub struct Shader {
-    pub data: Box<dyn ShaderApi>
+    pub data: Arc<dyn ShaderApi>
 }
 
 impl Shader

@@ -177,9 +177,9 @@ fn create_pipeline(
     _vertex_input: &[VertexInputData],
     renderpass: vk::RenderPass,
 ) -> vk::Pipeline {
-    let vertex_shader = state.vertex_shader.expect("vertex");
+    let vertex_shader = state.vertex_shader.as_ref().expect("vertex");
     let vk_vertex = vertex_shader.downcast::<Vulkan>();
-    let fragment_shader = state.fragment_shader.expect("vertex");
+    let fragment_shader = state.fragment_shader.as_ref().expect("vertex");
     let vk_fragment = fragment_shader.downcast::<Vulkan>();
     unsafe {
         let layout_create_info = vk::PipelineLayoutCreateInfo {
