@@ -1,6 +1,6 @@
 use super::image::ImageData;
 use super::Context;
-use super::Vulkan;
+use super::{CommandBuffer, Vulkan};
 use ash::version::DeviceV1_0;
 use ash::vk;
 use image::{Image, ImageDesc, ImageLayout, Resolution};
@@ -14,6 +14,7 @@ pub struct SwapchainData {
     pub swapchain: vk::SwapchainKHR,
     pub resolution: Resolution,
 }
+
 impl Drop for SwapchainData {
     fn drop(&mut self) {
         unsafe {
@@ -25,6 +26,51 @@ impl Drop for SwapchainData {
 }
 
 impl SwapchainApi for SwapchainData {
+    fn copy_and_present(&self, image: &Image) {
+        let index = self.aquire_next_image().expect("acquire");
+        let present_image = &self.present_images()[index as usize];
+        let vkimage = present_image.downcast::<Vulkan>();
+        image.copy_image(present_image);
+        let command_buffer = CommandBuffer::record(&self.context, |command_buffer| {
+            let present_barrier = vk::ImageMemoryBarrier {
+                s_type: vk::StructureType::IMAGE_MEMORY_BARRIER,
+                p_next: ptr::null(),
+                src_access_mask: vk::AccessFlags::TRANSFER_WRITE,
+                dst_access_mask: vk::AccessFlags::MEMORY_READ,
+                old_layout: vk::ImageLayout::UNDEFINED,
+                new_layout: vk::ImageLayout::PRESENT_SRC_KHR,
+                src_queue_family_index: vk::QUEUE_FAMILY_IGNORED,
+                dst_queue_family_index: vk::QUEUE_FAMILY_IGNORED,
+                image: vkimage.image,
+                subresource_range: vk::ImageSubresourceRange {
+                    aspect_mask: vk::ImageAspectFlags::COLOR,
+                    base_mip_level: 0,
+                    level_count: 1,
+                    base_array_layer: 0,
+                    layer_count: 1,
+                },
+            };
+            unsafe {
+                self.context.device.cmd_pipeline_barrier(
+                    command_buffer,
+                    vk::PipelineStageFlags::TRANSFER,
+                    vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+                    vk::DependencyFlags::empty(),
+                    &[],
+                    &[],
+                    &[present_barrier],
+                );
+            }
+        });
+        self.context.present_queue.submit(
+            &self.context,
+            &[],
+            &[self.context.present_complete_semaphore],
+            &[self.context.present_complete_semaphore],
+            command_buffer,
+        );
+        self.present(index);
+    }
     fn recreate(&mut self) {
         let new_swapchain = create_swapchain(&self.context, Some(self.swapchain));
         *self = new_swapchain;
@@ -44,7 +90,8 @@ impl SwapchainApi for SwapchainData {
                     std::u64::MAX,
                     self.context.present_complete_semaphore,
                     vk::Fence::null(),
-                ).map_err(|err| match err {
+                )
+                .map_err(|err| match err {
                     vk::Result::ERROR_OUT_OF_DATE_KHR => SwapchainError::OutOfDate,
                     vk::Result::SUBOPTIMAL_KHR => SwapchainError::Suboptimal,
                     err => {
@@ -61,7 +108,7 @@ impl SwapchainApi for SwapchainData {
                 s_type: vk::StructureType::PRESENT_INFO_KHR,
                 p_next: ptr::null(),
                 wait_semaphore_count: 1,
-                p_wait_semaphores: &self.context.rendering_complete_semaphore,
+                p_wait_semaphores: &self.context.present_complete_semaphore,
                 swapchain_count: 1,
                 p_swapchains: &self.swapchain,
                 p_image_indices: &index,
@@ -125,7 +172,8 @@ unsafe fn get_swapchain_images(
             Image {
                 data: Box::new(data),
             }
-        }).collect()
+        })
+        .collect()
 }
 fn create_swapchain(ctx: &Context, old_swapchain: Option<vk::SwapchainKHR>) -> SwapchainData {
     unsafe {
@@ -141,7 +189,8 @@ fn create_swapchain(ctx: &Context, old_swapchain: Option<vk::SwapchainKHR>) -> S
                     color_space: sfmt.color_space,
                 },
                 _ => sfmt.clone(),
-            }).nth(0)
+            })
+            .nth(0)
             .expect("Unable to find suitable surface format.");
         let surface_capabilities = ctx
             .surface_loader
@@ -185,7 +234,7 @@ fn create_swapchain(ctx: &Context, old_swapchain: Option<vk::SwapchainKHR>) -> S
             image_color_space: surface_format.color_space,
             image_format: surface_format.format,
             image_extent: surface_resolution.clone(),
-            image_usage: vk::ImageUsageFlags::COLOR_ATTACHMENT,
+            image_usage: vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_DST,
             image_sharing_mode: vk::SharingMode::EXCLUSIVE,
             pre_transform: pre_transform,
             composite_alpha: vk::CompositeAlphaFlagsKHR::OPAQUE,
@@ -205,6 +254,13 @@ fn create_swapchain(ctx: &Context, old_swapchain: Option<vk::SwapchainKHR>) -> S
             height: surface_resolution.height,
         };
         let present_images = get_swapchain_images(ctx, swapchain, resolution);
+        // for image in &present_images {
+        //     let barrier = vk::ImageMemoryBarrier {
+        //         s_type: vk::StructureType::IMAGE_MEMORY_BARRIER,
+        //         p_next: ptr::null(),
+
+        //     };
+        // }
         SwapchainData {
             context: ctx.clone(),
             swapchain,

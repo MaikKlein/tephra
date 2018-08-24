@@ -1,3 +1,4 @@
+use buffer::Buffer;
 use std::ops::Deref;
 use backend::BackendApi;
 use context::Context;
@@ -17,10 +18,12 @@ pub struct Resolution {
 
 pub trait CreateImage {
     fn allocate(&self, desc: ImageDesc) -> Image;
+    fn from_buffer(&self, buffer: Buffer<u8>) -> Image;
 }
 
 pub trait ImageApi: Downcast {
     fn desc(&self) -> &ImageDesc;
+    fn copy_image(&self, target: &Image);
 }
 
 impl_downcast!(ImageApi);

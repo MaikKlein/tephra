@@ -4,7 +4,7 @@ use super::{CommandBuffer, Vulkan};
 use ash::version::DeviceV1_0;
 use ash::vk;
 use buffer::BufferApi;
-use framegraph::{ResourceMap, Compiled, Framegraph, Resource};
+use framegraph::{Compiled, Framegraph, Resource, ResourceMap};
 use image::Image;
 use pipeline::PipelineState;
 use render::{self, CreateRender, RenderApi};
@@ -97,14 +97,7 @@ impl RenderApi for Render {
                         0,
                         vk::IndexType::UINT32,
                     );
-                    device.cmd_draw_indexed(
-                        draw_command_buffer,
-                        len,
-                        1,
-                        0,
-                        0,
-                        1,
-                    );
+                    device.cmd_draw_indexed(draw_command_buffer, len, 1, 0, 0, 1);
                     // Or draw without the index buffer
                     // device.cmd_draw(draw_command_buffer, 3, 1, 0, 0);
                     device.cmd_end_render_pass(draw_command_buffer);
@@ -123,12 +116,8 @@ impl RenderApi for Render {
     }
 }
 
-impl CreateRender for Context
-{
-    fn create_render(
-        &self,
-        images: &[&Image],
-    ) -> render::Render {
+impl CreateRender for Context {
+    fn create_render(&self, images: &[&Image]) -> render::Render {
         let renderpass = create_renderpass(self, images);
         let framebuffer = create_framebuffer(self, renderpass, images);
         let render = Render {
@@ -149,9 +138,7 @@ fn create_framebuffer(
 ) -> vk::Framebuffer {
     let framebuffer_attachments: Vec<_> = image_resources
         .iter()
-        .map(|image| {
-            image.downcast::<Vulkan>().image_view
-        })
+        .map(|image| image.downcast::<Vulkan>().image_view)
         .collect();
     let frame_buffer_create_info = vk::FramebufferCreateInfo {
         s_type: vk::StructureType::FRAMEBUFFER_CREATE_INFO,
@@ -368,16 +355,13 @@ fn create_pipeline(
         graphics_pipelines[0]
     }
 }
-fn create_renderpass(
-    ctx: &Context,
-    _image_resources: &[&Image],
-) -> vk::RenderPass {
+fn create_renderpass(ctx: &Context, _image_resources: &[&Image]) -> vk::RenderPass {
     for image in _image_resources {
         println!("{:?}", image.desc());
     }
     let renderpass_attachments = [
         vk::AttachmentDescription {
-            format: ctx.surface_format.format,
+            format: vk::Format::R8G8B8A8_UNORM,
             flags: vk::AttachmentDescriptionFlags::empty(),
             samples: vk::SampleCountFlags::TYPE_1,
             load_op: vk::AttachmentLoadOp::CLEAR,

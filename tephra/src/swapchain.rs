@@ -22,6 +22,7 @@ pub trait SwapchainApi {
     fn aquire_next_image(&self) -> Result<u32, SwapchainError>;
     fn resolution(&self) -> Resolution;
     fn recreate(&mut self);
+    fn copy_and_present(&self, image: &Image);
 }
 
 pub struct Swapchain {

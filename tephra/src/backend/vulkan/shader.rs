@@ -1,8 +1,8 @@
+use super::Context;
 use super::Vulkan;
 use ash::version::DeviceV1_0;
 use ash::vk;
-use super::Context;
-use shader::{CreateShader, GetShaderType, ShaderApi, ShaderError, Shader};
+use shader::{CreateShader, GetShaderType, Shader, ShaderApi, ShaderError};
 use std::ops::Drop;
 use std::ptr;
 use std::sync::Arc;
@@ -20,8 +20,7 @@ impl Drop for ShaderData {
         }
     }
 }
-impl ShaderApi for ShaderData {
-}
+impl ShaderApi for ShaderData {}
 impl CreateShader for Context {
     fn load(&self, bytes: &[u8]) -> Result<Shader, ShaderError> {
         let context = self;
@@ -42,7 +41,7 @@ impl CreateShader for Context {
                 shader_module,
             };
             let shader = Shader {
-                data: Arc::new(shader_data)
+                data: Arc::new(shader_data),
             };
             Ok(shader)
         }

@@ -210,7 +210,7 @@ impl Framegraph {
         name: &'static str,
         setup: Setup,
         pass: Pass,
-        execute: fn(&Data, &Blackboard, &Render, &Context),
+        execute: fn(&Data, &Blackboard, &Render, &Framegraph<Compiled>),
     ) -> Arc<RenderTask<Data>>
     where
         Setup: Fn(&mut TaskBuilder) -> Data,
@@ -281,7 +281,7 @@ impl Framegraph<Compiled> {
                 let execute = self.execute_fns.get(&idx).expect("renderpass");
 
                 let render = self.state.render.get(&idx).expect("render");
-                execute.execute(&self.blackboard, render, ctx);
+                execute.execute(&self.blackboard, render, self);
             });
     }
     pub fn export_graphviz<P: AsRef<Path>>(&self, path: P) {

@@ -1,14 +1,15 @@
-use downcast::Downcast;
-use std::any::Any;
 use super::buffer;
+use super::Context;
 use super::{CommandBuffer, Vulkan};
 use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk;
-use super::Context;
+use buffer::Buffer;
+use downcast::Downcast;
 use image::{
-    ImageLayout, CreateImage, Image, ImageApi, RenderTarget, RenderTargetInfo, ImageDesc,
+    CreateImage, Image, ImageApi, ImageDesc, ImageLayout, RenderTarget, RenderTargetInfo,
     Resolution,
 };
+use std::any::Any;
 //use renderpass::{Pass, Renderpass};
 use std::ptr;
 // pub struct FramebufferData {}
@@ -23,27 +24,93 @@ impl ImageApi for ImageData {
     fn desc(&self) -> &ImageDesc {
         &self.desc
     }
+    fn copy_image(&self, target: &Image) {
+        let target = target.downcast::<Vulkan>();
+        let self_layout = get_image_layout(&self.desc);
+        let target_layout = get_image_layout(&target.desc);
+        let aspect_mask = get_aspect_mask(&target.desc);
+        let sub_resource_layer = vk::ImageSubresourceLayers {
+            aspect_mask,
+            mip_level: 0,
+            base_array_layer: 0,
+            layer_count: 1,
+        };
+        let image_copy = vk::ImageCopy {
+            src_subresource: sub_resource_layer,
+            dst_subresource: sub_resource_layer,
+            src_offset: vk::Offset3D::default(),
+            dst_offset: vk::Offset3D::default(),
+            extent: vk::Extent3D {
+                width: target.desc.resolution.width,
+                height: target.desc.resolution.height,
+                depth: 1,
+            },
+        };
+        let command_buffer = CommandBuffer::record(&self.context, |command_buffer| unsafe {
+            self.context.device.cmd_copy_image(
+                command_buffer,
+                self.image,
+                vk::ImageLayout::GENERAL,
+                //vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+                target.image,
+                vk::ImageLayout::GENERAL,
+                //vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                &[image_copy],
+            );
+        });
+        self.context.present_queue.submit(
+            &self.context,
+            &[vk::PipelineStageFlags::TRANSFER],
+            &[],
+            &[],
+            command_buffer,
+        );
+    }
+}
+
+fn get_image_layout(desc: &ImageDesc) -> vk::ImageLayout {
+    match desc.layout {
+        ImageLayout::Color => vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+        ImageLayout::Depth => vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+    }
+}
+fn get_aspect_mask(desc: &ImageDesc) -> vk::ImageAspectFlags {
+    match desc.layout {
+        ImageLayout::Color => vk::ImageAspectFlags::COLOR,
+        ImageLayout::Depth => vk::ImageAspectFlags::DEPTH,
+    }
 }
 impl CreateImage for Context {
+    fn from_buffer(&self, buffer: Buffer<u8>) -> Image {
+        unimplemented!()
+    }
     fn allocate(&self, desc: ImageDesc) -> Image {
         let aspect_mask = match desc.layout {
             ImageLayout::Color => vk::ImageAspectFlags::COLOR,
             ImageLayout::Depth => vk::ImageAspectFlags::DEPTH,
         };
         let format = match desc.layout {
-            ImageLayout::Color => vk::Format::B8G8R8A8_SRGB,
+            ImageLayout::Color => vk::Format::R8G8B8A8_UNORM,
             ImageLayout::Depth => vk::Format::D16_UNORM,
         };
         let usage = match desc.layout {
             ImageLayout::Color => vk::ImageUsageFlags::COLOR_ATTACHMENT,
             ImageLayout::Depth => vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
         };
+        //let usage = usage | vk::ImageUsageFlags::TRANSFER_SRC | vk::ImageUsageFlags::TRANSFER_DST;
 
         let access = match desc.layout {
-            ImageLayout::Color => vk::AccessFlags::empty(),
-            // ImageLayout::Color => vk::AccessFlags::COLOR_ATTACHMENT_READ | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
-            ImageLayout::Depth => vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_READ | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE
+            //ImageLayout::Color => vk::AccessFlags::empty(),
+            ImageLayout::Color => {
+                vk::AccessFlags::COLOR_ATTACHMENT_READ | vk::AccessFlags::COLOR_ATTACHMENT_WRITE
+            }
+            ImageLayout::Depth => {
+                vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_READ
+                    | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE
+            }
         };
+        let access = vk::AccessFlags::empty();
+        //let access = vk::AccessFlags::TRANSFER_READ | vk::AccessFlags::TRANSFER_WRITE;
         let target_layout = match desc.layout {
             ImageLayout::Color => vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
             ImageLayout::Depth => vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
@@ -79,11 +146,12 @@ impl CreateImage for Context {
                 .create_image(&depth_image_create_info, None)
                 .unwrap();
             let depth_image_memory_req = ctx.device.get_image_memory_requirements(depth_image);
-            let depth_image_memory_index = buffer::find_memorytype_index(
-                &depth_image_memory_req,
-                &device_memory_properties,
-                vk::MemoryPropertyFlags::DEVICE_LOCAL,
-            ).expect("Unable to find suitable memory index for depth image.");
+            let depth_image_memory_index =
+                buffer::find_memorytype_index(
+                    &depth_image_memory_req,
+                    &device_memory_properties,
+                    vk::MemoryPropertyFlags::DEVICE_LOCAL,
+                ).expect("Unable to find suitable memory index for depth image.");
 
             let depth_image_allocate_info = vk::MemoryAllocateInfo {
                 s_type: vk::StructureType::MEMORY_ALLOCATE_INFO,
@@ -119,8 +187,8 @@ impl CreateImage for Context {
                 };
                 ctx.device.cmd_pipeline_barrier(
                     command_buffer,
+                    vk::PipelineStageFlags::TOP_OF_PIPE,
                     vk::PipelineStageFlags::BOTTOM_OF_PIPE,
-                    vk::PipelineStageFlags::LATE_FRAGMENT_TESTS,
                     vk::DependencyFlags::empty(),
                     &[],
                     &[],
@@ -166,6 +234,7 @@ impl CreateImage for Context {
     }
 }
 
+fn set_image_layout(command_buffer: vk::CommandBuffer, image: &ImageData) {}
 // impl FramebufferApi for FramebufferData {
 // }
 // impl CreateFramebuffer for FramebufferData {

@@ -1,27 +1,27 @@
-use std::collections::HashMap;
-use ash::extensions::{DebugReport, Surface, Swapchain, XlibSurface};
+use ash::extensions::{DebugReport, DebugUtils, Surface, Swapchain, XlibSurface};
 use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0, V1_0};
 use ash::vk;
 use ash::{Device, Entry, Instance};
+use backend::BackendApi;
 use context;
+use context::ContextApi;
 use parking_lot::Mutex;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::ffi::{CStr, CString};
 use std::marker::PhantomData;
-use std::ops::{Deref, Drop };
+use std::ops::{Deref, Drop};
 use std::ptr;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;
 use thread_local_object::ThreadLocal;
-use context::ContextApi;
-use backend::BackendApi;
 pub mod buffer;
+pub mod image;
 pub mod pipeline;
+pub mod render;
 pub mod renderpass;
 pub mod shader;
-pub mod image;
 pub mod swapchain;
-pub mod render;
 
 #[derive(Copy, Clone)]
 pub struct Vulkan;
@@ -123,7 +123,8 @@ impl CommandPool {
                         .reset_command_buffer(
                             command_buffer,
                             vk::CommandBufferResetFlags::RELEASE_RESOURCES,
-                        ).expect("Reset command buffer failed.");
+                        )
+                        .expect("Reset command buffer failed.");
                 }
                 command_buffer
             });
@@ -190,7 +191,9 @@ impl Queue {
                 .device
                 .queue_submit(*queue, &[submit_info], submit_fence);
             // TODO: Future
-            context.device.wait_for_fences(&[submit_fence], true, u64::max_value());
+            context
+                .device
+                .wait_for_fences(&[submit_fence], true, u64::max_value());
         }
     }
 }
@@ -251,7 +254,7 @@ impl Drop for CommandBuffer {
 
 #[derive(Clone)]
 pub struct Context {
-    inner: Arc<InnerContext>
+    inner: Arc<InnerContext>,
 }
 
 impl Deref for Context {
@@ -272,11 +275,10 @@ pub struct InnerContext {
     //command_pool: CommandPool,
     pub surface_loader: Surface,
     pub swapchain_loader: Swapchain,
-    pub debug_report_loader: DebugReport,
+    //pub debug_report_loader: DebugReport,
     //pub window: winit::Window,
     //pub events_loop: RefCell<winit::EventsLoop>,
-    pub debug_call_back: vk::DebugReportCallbackEXT,
-
+    //pub debug_call_back: vk::DebugReportCallbackEXT,
     pub pdevice: vk::PhysicalDevice,
     pub device_memory_properties: vk::PhysicalDeviceMemoryProperties,
     pub queue_family_index: u32,
@@ -289,7 +291,6 @@ pub struct InnerContext {
     // pub swapchain: vk::SwapchainKHR,
     // pub present_images: Vec<vk::Image>,
     // pub present_image_views: Vec<vk::ImageView>,
-
     pub pool: vk::CommandPool,
     pub draw_command_buffer: vk::CommandBuffer,
     pub setup_command_buffer: vk::CommandBuffer,
@@ -302,8 +303,7 @@ pub struct InnerContext {
     pub rendering_complete_semaphore: vk::Semaphore,
     pub pipeline_cache: vk::PipelineCache,
 }
-impl ContextApi for Context {
-}
+impl ContextApi for Context {}
 impl Context {
     pub fn render_loop<F: FnMut()>(&self, mut f: F) {
         use winit::*;
@@ -336,6 +336,8 @@ impl Context {
                 .build(&events_loop)
                 .unwrap();
             let entry = Entry::new().unwrap();
+            let ext_props = entry.enumerate_instance_extension_properties();
+            println!("{:#?}", ext_props);
             let app_name = CString::new("VulkanTriangle").unwrap();
             let raw_name = app_name.as_ptr();
 
@@ -367,20 +369,35 @@ impl Context {
             let instance: Instance<V1_0> = entry
                 .create_instance(&create_info, None)
                 .expect("Instance creation error");
-            let debug_info = vk::DebugReportCallbackCreateInfoEXT {
-                s_type: vk::StructureType::DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT,
-                p_next: ptr::null(),
-                flags: vk::DebugReportFlagsEXT::ERROR
-                    | vk::DebugReportFlagsEXT::WARNING
-                    | vk::DebugReportFlagsEXT::PERFORMANCE_WARNING,
-                pfn_callback: vulkan_debug_callback,
-                p_user_data: ptr::null_mut(),
+            // let debug_info = vk::DebugReportCallbackCreateInfoEXT {
+            //     s_type: vk::StructureType::DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT,
+            //     p_next: ptr::null(),
+            //     flags: vk::DebugReportFlagsEXT::ERROR
+            //         | vk::DebugReportFlagsEXT::WARNING
+            //         | vk::DebugReportFlagsEXT::PERFORMANCE_WARNING,
+            //     pfn_callback: vulkan_debug_callback,
+            //     p_user_data: ptr::null_mut(),
+            // };
+            // let debug_report_loader =
+            //     DebugReport::new(&entry, &instance).expect("Unable to load debug report");
+            let debug_utils_loader = DebugUtils::new(&entry, &instance).expect("utils");
+            let messenger_create_info = vk::DebugUtilsMessengerCreateInfoEXT {
+                s_type: vk::StructureType::DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+                p_next: ::std::ptr::null(),
+                flags: vk::DebugUtilsMessengerCreateFlagsEXT::empty(),
+                p_user_data: ::std::ptr::null_mut(),
+                message_severity: vk::DebugUtilsMessageSeverityFlagsEXT::ERROR
+                    | vk::DebugUtilsMessageSeverityFlagsEXT::WARNING,
+                message_type: vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION
+                    | vk::DebugUtilsMessageTypeFlagsEXT::GENERAL,
+                pfn_user_callback: debug_utils_callback,
             };
-            let debug_report_loader =
-                DebugReport::new(&entry, &instance).expect("Unable to load debug report");
-            let debug_call_back = debug_report_loader
-                .create_debug_report_callback_ext(&debug_info, None)
-                .unwrap();
+
+            let messenger =
+                debug_utils_loader.create_debug_utils_messenger_ext(&messenger_create_info, None);
+            // let debug_call_back = debug_report_loader
+            //     .create_debug_report_callback_ext(&debug_info, None)
+            //     .unwrap();
             let surface = create_surface(&entry, &instance, &window).unwrap();
             let pdevices = instance
                 .enumerate_physical_devices()
@@ -396,8 +413,8 @@ impl Context {
                         .enumerate()
                         .filter_map(|(index, ref info)| {
                             let supports_graphic_and_surface =
-                                info.queue_flags.subset(vk::QueueFlags::GRAPHICS) && surface_loader
-                                    .get_physical_device_surface_support_khr(
+                                info.queue_flags.subset(vk::QueueFlags::GRAPHICS)
+                                    && surface_loader.get_physical_device_surface_support_khr(
                                         *pdevice,
                                         index as u32,
                                         surface,
@@ -406,8 +423,10 @@ impl Context {
                                 true => Some((*pdevice, index)),
                                 _ => None,
                             }
-                        }).nth(0)
-                }).filter_map(|v| v)
+                        })
+                        .nth(0)
+                })
+                .filter_map(|v| v)
                 .nth(0)
                 .expect("Couldn't find suitable device.");
             let queue_family_index = queue_family_index as u32;
@@ -454,7 +473,8 @@ impl Context {
                         color_space: sfmt.color_space,
                     },
                     _ => sfmt.clone(),
-                }).nth(0)
+                })
+                .nth(0)
                 .expect("Unable to find suitable surface format.");
             let surface_capabilities = surface_loader
                 .get_physical_device_surface_capabilities_khr(pdevice, surface)
@@ -586,11 +606,12 @@ impl Context {
             };
             let depth_image = device.create_image(&depth_image_create_info, None).unwrap();
             let depth_image_memory_req = device.get_image_memory_requirements(depth_image);
-            let depth_image_memory_index = buffer::find_memorytype_index(
-                &depth_image_memory_req,
-                &device_memory_properties,
-                vk::MemoryPropertyFlags::DEVICE_LOCAL,
-            ).expect("Unable to find suitable memory index for depth image.");
+            let depth_image_memory_index =
+                buffer::find_memorytype_index(
+                    &depth_image_memory_req,
+                    &device_memory_properties,
+                    vk::MemoryPropertyFlags::DEVICE_LOCAL,
+                ).expect("Unable to find suitable memory index for depth image.");
 
             let depth_image_allocate_info = vk::MemoryAllocateInfo {
                 s_type: vk::StructureType::MEMORY_ALLOCATE_INFO,
@@ -678,7 +699,9 @@ impl Context {
                 .create_semaphore(&semaphore_create_info, None)
                 .unwrap();
             let pipeline_cache_create_info = vk::PipelineCacheCreateInfo::default();
-            let pipeline_cache =  device.create_pipeline_cache(&pipeline_cache_create_info, None).expect("pipeline cache");
+            let pipeline_cache = device
+                .create_pipeline_cache(&pipeline_cache_create_info, None)
+                .expect("pipeline cache");
             let context = InnerContext {
                 command_pool: ThreadLocalCommandPool::new(queue_family_index),
                 entry,
@@ -706,13 +729,13 @@ impl Context {
                 present_complete_semaphore: present_complete_semaphore,
                 rendering_complete_semaphore: rendering_complete_semaphore,
                 surface: surface,
-                debug_call_back: debug_call_back,
-                debug_report_loader: debug_report_loader,
+                // debug_call_back: debug_call_back,
+                // debug_report_loader: debug_report_loader,
                 depth_image_memory: depth_image_memory,
                 pipeline_cache,
             };
             let context = Context {
-                inner: Arc::new(context)
+                inner: Arc::new(context),
             };
             context::Context {
                 // FIXME: Only one Arc
@@ -783,6 +806,7 @@ unsafe fn create_surface<E: EntryV1_0, I: InstanceV1_0>(
 #[cfg(all(unix, not(target_os = "android")))]
 fn extension_names() -> Vec<*const i8> {
     vec![
+        DebugUtils::name().as_ptr(),
         Surface::name().as_ptr(),
         XlibSurface::name().as_ptr(),
         DebugReport::name().as_ptr(),
@@ -813,7 +837,8 @@ pub fn record_submit_commandbuffer<D: DeviceV1_0, F: FnOnce(&D, vk::CommandBuffe
             .reset_command_buffer(
                 command_buffer,
                 vk::CommandBufferResetFlags::RELEASE_RESOURCES,
-            ).expect("Reset command buffer failed.");
+            )
+            .expect("Reset command buffer failed.");
         let command_buffer_begin_info = vk::CommandBufferBeginInfo {
             s_type: vk::StructureType::COMMAND_BUFFER_BEGIN_INFO,
             p_next: ptr::null(),
@@ -854,6 +879,20 @@ pub fn record_submit_commandbuffer<D: DeviceV1_0, F: FnOnce(&D, vk::CommandBuffe
             .expect("Wait for fence failed.");
         device.destroy_fence(submit_fence, None);
     }
+}
+unsafe extern "system" fn debug_utils_callback(
+    message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
+    message_type: vk::DebugUtilsMessageTypeFlagsEXT,
+    p_callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT,
+    p_user_data: *mut vk::c_void,
+) -> vk::Bool32 {
+    if !p_callback_data.is_null(){
+        let data = &*p_callback_data;
+        println!("Message ID: {:?}", CStr::from_ptr(data.p_message_id_name));
+        println!("Message: {:?}", CStr::from_ptr(data.p_message));
+        println!("");
+    }
+    0
 }
 unsafe extern "system" fn vulkan_debug_callback(
     _: vk::DebugReportFlagsEXT,
