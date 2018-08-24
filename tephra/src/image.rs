@@ -1,4 +1,3 @@
-use buffer::Buffer;
 use std::ops::Deref;
 use backend::BackendApi;
 use context::Context;

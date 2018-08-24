@@ -13,12 +13,12 @@ use downcast::Downcast;
 // }
 // impl_downcast!(PipelineApi);
 
-pub struct PipelineState {
-    pub vertex_shader: Option<Shader>,
-    pub fragment_shader: Option<Shader>,
+pub struct PipelineState<'a> {
+    pub vertex_shader: Option<&'a Shader>,
+    pub fragment_shader: Option<&'a Shader>,
 }
 
-impl PipelineState {
+impl<'a> PipelineState<'a> {
     pub fn new() -> Self {
         PipelineState {
             vertex_shader: None,
@@ -26,14 +26,14 @@ impl PipelineState {
         }
     }
 
-    pub fn with_vertex_shader(self, shader: Shader) -> Self {
+    pub fn with_vertex_shader(self, shader: &'a Shader) -> Self {
         PipelineState {
             vertex_shader: Some(shader),
             ..self
         }
     }
 
-    pub fn with_fragment_shader(self, shader: Shader) -> Self {
+    pub fn with_fragment_shader(self, shader: &'a Shader) -> Self {
         PipelineState {
             fragment_shader: Some(shader),
             ..self

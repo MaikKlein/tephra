@@ -22,6 +22,7 @@ pub mod render;
 pub mod renderpass;
 pub mod shader;
 pub mod swapchain;
+pub mod render;
 
 #[derive(Copy, Clone)]
 pub struct Vulkan;
@@ -699,9 +700,7 @@ impl Context {
                 .create_semaphore(&semaphore_create_info, None)
                 .unwrap();
             let pipeline_cache_create_info = vk::PipelineCacheCreateInfo::default();
-            let pipeline_cache = device
-                .create_pipeline_cache(&pipeline_cache_create_info, None)
-                .expect("pipeline cache");
+            let pipeline_cache =  device.create_pipeline_cache(&pipeline_cache_create_info, None).expect("pipeline cache");
             let context = InnerContext {
                 command_pool: ThreadLocalCommandPool::new(queue_family_index),
                 entry,

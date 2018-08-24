@@ -4,7 +4,7 @@ use ash::version::DeviceV1_0;
 use ash::vk;
 use buffer::{Buffer, BufferProperty};
 use image::{Image, RenderTargetInfo};
-use pipeline::PipelineState;
+use pipeline::{PipelineState};
 use renderpass::{VertexInput, VertexInputData};
 use std::marker::PhantomData;
 use std::ptr;

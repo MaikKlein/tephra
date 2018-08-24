@@ -6,10 +6,9 @@ use ash::vk;
 use buffer::Buffer;
 use downcast::Downcast;
 use image::{
-    CreateImage, Image, ImageApi, ImageDesc, ImageLayout, RenderTarget, RenderTargetInfo,
+    ImageLayout, CreateImage, Image, ImageApi, RenderTarget, RenderTargetInfo, ImageDesc,
     Resolution,
 };
-use std::any::Any;
 //use renderpass::{Pass, Renderpass};
 use std::ptr;
 // pub struct FramebufferData {}
@@ -90,27 +89,19 @@ impl CreateImage for Context {
             ImageLayout::Depth => vk::ImageAspectFlags::DEPTH,
         };
         let format = match desc.layout {
-            ImageLayout::Color => vk::Format::R8G8B8A8_UNORM,
+            ImageLayout::Color => vk::Format::B8G8R8A8_SRGB,
             ImageLayout::Depth => vk::Format::D16_UNORM,
         };
         let usage = match desc.layout {
             ImageLayout::Color => vk::ImageUsageFlags::COLOR_ATTACHMENT,
             ImageLayout::Depth => vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
         };
-        //let usage = usage | vk::ImageUsageFlags::TRANSFER_SRC | vk::ImageUsageFlags::TRANSFER_DST;
 
         let access = match desc.layout {
-            //ImageLayout::Color => vk::AccessFlags::empty(),
-            ImageLayout::Color => {
-                vk::AccessFlags::COLOR_ATTACHMENT_READ | vk::AccessFlags::COLOR_ATTACHMENT_WRITE
-            }
-            ImageLayout::Depth => {
-                vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_READ
-                    | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE
-            }
+            ImageLayout::Color => vk::AccessFlags::empty(),
+            // ImageLayout::Color => vk::AccessFlags::COLOR_ATTACHMENT_READ | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+            ImageLayout::Depth => vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_READ | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE
         };
-        let access = vk::AccessFlags::empty();
-        //let access = vk::AccessFlags::TRANSFER_READ | vk::AccessFlags::TRANSFER_WRITE;
         let target_layout = match desc.layout {
             ImageLayout::Color => vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
             ImageLayout::Depth => vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
@@ -234,7 +225,6 @@ impl CreateImage for Context {
     }
 }
 
-fn set_image_layout(command_buffer: vk::CommandBuffer, image: &ImageData) {}
 // impl FramebufferApi for FramebufferData {
 // }
 // impl CreateFramebuffer for FramebufferData {
