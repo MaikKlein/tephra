@@ -30,7 +30,7 @@ impl SwapchainApi for SwapchainData {
         let index = self.aquire_next_image().expect("acquire");
         let present_image = &self.present_images()[index as usize];
         let vkimage = present_image.downcast::<Vulkan>();
-        image.copy_image(present_image);
+        //image.copy_image(present_image);
         let command_buffer = CommandBuffer::record(&self.context, |command_buffer| {
             let present_barrier = vk::ImageMemoryBarrier {
                 s_type: vk::StructureType::IMAGE_MEMORY_BARRIER,

@@ -77,6 +77,11 @@ pub fn triangle_pass(
         |data, blackboard, render, context| {
             let r = blackboard.get::<TriangleState>().expect("state");
             render.draw_indexed(&r.state, &r.vertex_buffer, &r.index_buffer);
+            println!("{:?}",data.color.handle);
+            println!("{:?}",data.depth.handle);
+            let swapchain = blackboard.get::<Swapchain>().expect("swap");
+            let color_image = context.get_resource(data.color);
+            swapchain.copy_and_present(color_image);
         },
     );
     fg.compile(ctx)
@@ -91,7 +96,7 @@ fn main() {
         //gbuffer();
         let context = Context::new();
         let ctx = context.context.downcast_ref::<Context>().unwrap();
-        let mut swapchain = Swapchain::new(&context);
+        let swapchain = Swapchain::new(&context);
         let mut blackboard = Blackboard::new();
         let index_buffer_data = [0u32, 1, 2];
         let index_buffer = Buffer::from_slice(
@@ -134,14 +139,18 @@ fn main() {
             index_buffer,
             state,
         };
+        let res = swapchain.resolution();
         blackboard.add(triangle_state);
+        blackboard.add(swapchain);
         // render.draw_indexed(&state, &vertex_buffer, &index_buffer);
-        let triangle_pass = triangle_pass(&context, blackboard, swapchain.resolution());
-        ctx.render_loop(|| {
+        let triangle_pass = triangle_pass(&context, blackboard, res);
+        loop {
             triangle_pass.execute(&context);
-            println!("swapchain {:?}", swapchain.resolution());
-            //swapchain.present(present_index);
-            std::thread::sleep_ms(2000);
-        });
+        }
+        //ctx.render_loop(|| {
+        //    triangle_pass.execute(&context);
+        //    //swapchain.present(present_index);
+        //    //std::thread::sleep_ms(2000);
+        //});
     }
 }

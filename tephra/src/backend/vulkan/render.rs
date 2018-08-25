@@ -379,7 +379,7 @@ fn create_renderpass(ctx: &Context, _image_resources: &[&Image]) -> vk::RenderPa
             store_op: vk::AttachmentStoreOp::DONT_CARE,
             stencil_load_op: vk::AttachmentLoadOp::DONT_CARE,
             stencil_store_op: vk::AttachmentStoreOp::DONT_CARE,
-            initial_layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+            initial_layout: vk::ImageLayout::UNDEFINED,
             final_layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
         },
     ];
@@ -396,7 +396,7 @@ fn create_renderpass(ctx: &Context, _image_resources: &[&Image]) -> vk::RenderPa
         src_subpass: vk::SUBPASS_EXTERNAL,
         dst_subpass: Default::default(),
         src_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
-        src_access_mask: Default::default(),
+        src_access_mask: vk::AccessFlags::MEMORY_READ,
         dst_access_mask: vk::AccessFlags::COLOR_ATTACHMENT_READ
             | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
         dst_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,

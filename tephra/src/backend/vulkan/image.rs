@@ -6,7 +6,7 @@ use ash::vk;
 use buffer::Buffer;
 use downcast::Downcast;
 use image::{
-    ImageLayout, CreateImage, Image, ImageApi, RenderTarget, RenderTargetInfo, ImageDesc,
+    CreateImage, Image, ImageApi, ImageDesc, ImageLayout, RenderTarget, RenderTargetInfo,
     Resolution,
 };
 //use renderpass::{Pass, Renderpass};
@@ -49,10 +49,10 @@ impl ImageApi for ImageData {
             self.context.device.cmd_copy_image(
                 command_buffer,
                 self.image,
-                vk::ImageLayout::GENERAL,
+                vk::ImageLayout::UNDEFINED,
                 //vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
                 target.image,
-                vk::ImageLayout::GENERAL,
+                vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
                 //vk::ImageLayout::TRANSFER_DST_OPTIMAL,
                 &[image_copy],
             );
@@ -89,19 +89,26 @@ impl CreateImage for Context {
             ImageLayout::Depth => vk::ImageAspectFlags::DEPTH,
         };
         let format = match desc.layout {
-            ImageLayout::Color => vk::Format::B8G8R8A8_SRGB,
+            ImageLayout::Color => vk::Format::R8G8B8A8_UNORM,
             ImageLayout::Depth => vk::Format::D16_UNORM,
         };
         let usage = match desc.layout {
             ImageLayout::Color => vk::ImageUsageFlags::COLOR_ATTACHMENT,
             ImageLayout::Depth => vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
         };
+        //let usage = usage | vk::ImageUsageFlags::TRANSFER_SRC | vk::ImageUsageFlags::TRANSFER_DST;
 
         let access = match desc.layout {
-            ImageLayout::Color => vk::AccessFlags::empty(),
-            // ImageLayout::Color => vk::AccessFlags::COLOR_ATTACHMENT_READ | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
-            ImageLayout::Depth => vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_READ | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE
+            //ImageLayout::Color => vk::AccessFlags::empty(),
+            ImageLayout::Color => {
+                vk::AccessFlags::COLOR_ATTACHMENT_READ | vk::AccessFlags::COLOR_ATTACHMENT_WRITE
+            }
+            ImageLayout::Depth => {
+                vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_READ
+                    | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE
+            }
         };
+        let access = vk::AccessFlags::empty();
         let target_layout = match desc.layout {
             ImageLayout::Color => vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
             ImageLayout::Depth => vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
@@ -157,36 +164,36 @@ impl CreateImage for Context {
             ctx.device
                 .bind_image_memory(depth_image, depth_image_memory, 0)
                 .expect("Unable to bind depth image memory");
-            let command_buffer = CommandBuffer::record(ctx, |command_buffer| {
-                let layout_transition_barrier = vk::ImageMemoryBarrier {
-                    s_type: vk::StructureType::IMAGE_MEMORY_BARRIER,
-                    p_next: ptr::null(),
-                    src_access_mask: Default::default(),
-                    dst_access_mask: access,
-                    old_layout: vk::ImageLayout::UNDEFINED,
-                    new_layout: target_layout,
-                    src_queue_family_index: vk::QUEUE_FAMILY_IGNORED,
-                    dst_queue_family_index: vk::QUEUE_FAMILY_IGNORED,
-                    image: depth_image,
-                    subresource_range: vk::ImageSubresourceRange {
-                        aspect_mask,
-                        base_mip_level: 0,
-                        level_count: 1,
-                        base_array_layer: 0,
-                        layer_count: 1,
-                    },
-                };
-                ctx.device.cmd_pipeline_barrier(
-                    command_buffer,
-                    vk::PipelineStageFlags::TOP_OF_PIPE,
-                    vk::PipelineStageFlags::BOTTOM_OF_PIPE,
-                    vk::DependencyFlags::empty(),
-                    &[],
-                    &[],
-                    &[layout_transition_barrier],
-                );
-            });
-            ctx.present_queue.submit(ctx, &[], &[], &[], command_buffer);
+            // let command_buffer = CommandBuffer::record(ctx, |command_buffer| {
+            //     let layout_transition_barrier = vk::ImageMemoryBarrier {
+            //         s_type: vk::StructureType::IMAGE_MEMORY_BARRIER,
+            //         p_next: ptr::null(),
+            //         src_access_mask: Default::default(),
+            //         dst_access_mask: access,
+            //         old_layout: vk::ImageLayout::UNDEFINED,
+            //         new_layout: target_layout,
+            //         src_queue_family_index: vk::QUEUE_FAMILY_IGNORED,
+            //         dst_queue_family_index: vk::QUEUE_FAMILY_IGNORED,
+            //         image: depth_image,
+            //         subresource_range: vk::ImageSubresourceRange {
+            //             aspect_mask,
+            //             base_mip_level: 0,
+            //             level_count: 1,
+            //             base_array_layer: 0,
+            //             layer_count: 1,
+            //         },
+            //     };
+            //     ctx.device.cmd_pipeline_barrier(
+            //         command_buffer,
+            //         vk::PipelineStageFlags::TOP_OF_PIPE,
+            //         vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+            //         vk::DependencyFlags::empty(),
+            //         &[],
+            //         &[],
+            //         &[layout_transition_barrier],
+            //     );
+            // });
+            // ctx.present_queue.submit(ctx, &[], &[], &[], command_buffer);
             let depth_image_view_info = vk::ImageViewCreateInfo {
                 s_type: vk::StructureType::IMAGE_VIEW_CREATE_INFO,
                 p_next: ptr::null(),

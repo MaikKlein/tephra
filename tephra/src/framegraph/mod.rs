@@ -39,9 +39,9 @@ pub enum ResourceData {
 #[derive(Debug)]
 pub struct Resource<T> {
     _m: PhantomData<T>,
-    handle: Handle,
-    id: usize,
-    name: &'static str,
+    pub handle: Handle,
+    pub id: usize,
+    pub name: &'static str,
 }
 impl<T> Copy for Resource<T> {}
 impl<T> Clone for Resource<T> {
