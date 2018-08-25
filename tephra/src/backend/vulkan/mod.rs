@@ -401,9 +401,11 @@ impl Context {
                 flags: vk::DebugUtilsMessengerCreateFlagsEXT::empty(),
                 p_user_data: ::std::ptr::null_mut(),
                 message_severity: vk::DebugUtilsMessageSeverityFlagsEXT::ERROR
-                    | vk::DebugUtilsMessageSeverityFlagsEXT::WARNING,
+                    | vk::DebugUtilsMessageSeverityFlagsEXT::WARNING
+                    ,
                 message_type: vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION
-                    | vk::DebugUtilsMessageTypeFlagsEXT::GENERAL,
+                    | vk::DebugUtilsMessageTypeFlagsEXT::GENERAL
+                    | vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE,
                 pfn_user_callback: debug_utils_callback,
             };
 

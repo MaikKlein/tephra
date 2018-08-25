@@ -299,8 +299,8 @@ fn create_pipeline(
         };
         let color_blend_attachment_states = [vk::PipelineColorBlendAttachmentState {
             blend_enable: 0,
-            src_color_blend_factor: vk::BlendFactor::SRC_COLOR,
-            dst_color_blend_factor: vk::BlendFactor::ONE_MINUS_DST_COLOR,
+            src_color_blend_factor: vk::BlendFactor::ZERO,
+            dst_color_blend_factor: vk::BlendFactor::ZERO,
             color_blend_op: vk::BlendOp::ADD,
             src_alpha_blend_factor: vk::BlendFactor::ZERO,
             dst_alpha_blend_factor: vk::BlendFactor::ZERO,
@@ -395,11 +395,11 @@ fn create_renderpass(ctx: &Context, _image_resources: &[&Image]) -> vk::RenderPa
         dependency_flags: Default::default(),
         src_subpass: vk::SUBPASS_EXTERNAL,
         dst_subpass: Default::default(),
-        src_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
-        src_access_mask: vk::AccessFlags::MEMORY_READ,
+        src_stage_mask: vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+        dst_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+        src_access_mask: vk::AccessFlags::empty(),
         dst_access_mask: vk::AccessFlags::COLOR_ATTACHMENT_READ
             | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
-        dst_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
     };
     let subpass = vk::SubpassDescription {
         color_attachment_count: 1,

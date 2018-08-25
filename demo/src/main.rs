@@ -2,18 +2,11 @@ extern crate ash;
 extern crate tephra;
 pub use tephra::winit;
 
-pub use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0, V1_0};
-use ash::vk;
-use std::default::Default;
-use std::marker::PhantomData;
-use std::ptr;
-use tephra::failure::Fail;
-
 use tephra::backend::vulkan::{self, Context};
 use tephra::backend::BackendApi;
 use tephra::buffer::{Buffer, BufferUsage, Property};
 use tephra::context;
-use tephra::framegraph::*;
+use tephra::framegraph::{Blackboard, Compiled, Framegraph, Resource};
 use tephra::image::{Image, ImageDesc, ImageLayout, RenderTarget, RenderTargetInfo, Resolution};
 use tephra::pipeline::PipelineState;
 use tephra::renderpass::{VertexInput, VertexInputData, VertexType};
@@ -27,7 +20,7 @@ pub struct Vertex {
     pub color: [f32; 4],
 }
 
-// TODO: Impl custom derive
+// TODO: Impl custom derive to automically generate the this
 impl VertexInput for Vertex {
     fn vertex_input_data() -> Vec<VertexInputData> {
         vec![
@@ -40,12 +33,13 @@ impl VertexInput for Vertex {
             VertexInputData {
                 binding: 0,
                 location: 1,
-                offset: 4 * 32,
+                offset: 4 * 4,
                 vertex_type: VertexType::F32(4),
             },
         ]
     }
 }
+
 pub fn triangle_pass(
     ctx: &context::Context,
     blackboard: Blackboard,
@@ -72,85 +66,76 @@ pub fn triangle_pass(
                 depth: builder.create_image("Depth", depth_desc),
             }
         },
-        // TODO: Infer framebuffer layout based on data,
+        // TODO: Infer framebuffer layout based on data/shader,
         |data| vec![data.color, data.depth],
         |data, blackboard, render, context| {
             let r = blackboard.get::<TriangleState>().expect("state");
             render.draw_indexed(&r.state, &r.vertex_buffer, &r.index_buffer);
-            println!("{:?}",data.color.handle);
-            println!("{:?}",data.depth.handle);
             let swapchain = blackboard.get::<Swapchain>().expect("swap");
             let color_image = context.get_resource(data.color);
             swapchain.copy_and_present(color_image);
         },
     );
+    // Compiles the graph, allocates and optimizes resources
     fg.compile(ctx)
 }
+// Just state for the triangle pass
 struct TriangleState {
     vertex_buffer: Buffer<Vertex>,
     index_buffer: Buffer<u32>,
     state: PipelineState,
 }
 fn main() {
-    unsafe {
-        //gbuffer();
-        let context = Context::new();
-        let ctx = context.context.downcast_ref::<Context>().unwrap();
-        let swapchain = Swapchain::new(&context);
-        let mut blackboard = Blackboard::new();
-        let index_buffer_data = [0u32, 1, 2];
-        let index_buffer = Buffer::from_slice(
-            &context,
-            Property::HostVisible,
-            BufferUsage::Index,
-            &index_buffer_data,
-        ).expect("index buffer");
-        let vertices = [
-            Vertex {
-                pos: [-1.0, 1.0, 0.0, 1.0],
-                color: [0.0, 1.0, 0.0, 1.0],
-            },
-            Vertex {
-                pos: [1.0, 1.0, 0.0, 1.0],
-                color: [0.0, 0.0, 1.0, 1.0],
-            },
-            Vertex {
-                pos: [0.0, -1.0, 0.0, 1.0],
-                color: [1.0, 0.0, 0.0, 1.0],
-            },
-        ];
+    let context = Context::new();
+    let swapchain = Swapchain::new(&context);
+    // Temporary abstraction to get data into the framegraph
+    let mut blackboard = Blackboard::new();
+    let index_buffer_data = [0u32, 1, 2];
+    let index_buffer = Buffer::from_slice(
+        &context,
+        Property::HostVisible,
+        BufferUsage::Index,
+        &index_buffer_data,
+    ).expect("index buffer");
+    let vertices = [
+        Vertex {
+            pos: [-1.0, 1.0, 0.0, 1.0],
+            color: [0.0, 1.0, 0.0, 1.0],
+        },
+        Vertex {
+            pos: [1.0, 1.0, 0.0, 1.0],
+            color: [0.0, 0.0, 1.0, 1.0],
+        },
+        Vertex {
+            pos: [0.0, -1.0, 0.0, 1.0],
+            color: [1.0, 0.0, 0.0, 1.0],
+        },
+    ];
 
-        let vertex_buffer = Buffer::from_slice(
-            &context,
-            Property::HostVisible,
-            BufferUsage::Vertex,
-            &vertices,
-        ).expect("Failed to create vertex buffer");
+    let vertex_buffer = Buffer::from_slice(
+        &context,
+        Property::HostVisible,
+        BufferUsage::Vertex,
+        &vertices,
+    ).expect("Failed to create vertex buffer");
 
-        let vertex_shader_module =
-            Shader::load(&context, "shader/triangle/vert.spv").expect("vertex");
-        let fragment_shader_module =
-            Shader::load(&context, "shader/triangle/frag.spv").expect("vertex");
-        let state = PipelineState::new()
-            .with_vertex_shader(vertex_shader_module)
-            .with_fragment_shader(fragment_shader_module);
-        let triangle_state = TriangleState{
-            vertex_buffer,
-            index_buffer,
-            state,
-        };
-        let res = swapchain.resolution();
-        blackboard.add(triangle_state);
-        blackboard.add(swapchain);
-        // render.draw_indexed(&state, &vertex_buffer, &index_buffer);
-        let triangle_pass = triangle_pass(&context, blackboard, res);
-        loop {
-            triangle_pass.execute(&context);
-        }
-        //ctx.render_loop(|| {
-        //    triangle_pass.execute(&context);
-        //    //swapchain.present(present_index);
-        //    //std::thread::sleep_ms(2000);
-        //});
+    let vertex_shader_module = Shader::load(&context, "shader/triangle/vert.spv").expect("vertex");
+    let fragment_shader_module =
+        Shader::load(&context, "shader/triangle/frag.spv").expect("vertex");
+    let state = PipelineState::new()
+        .with_vertex_shader(vertex_shader_module)
+        .with_fragment_shader(fragment_shader_module);
+    let triangle_state = TriangleState {
+        vertex_buffer,
+        index_buffer,
+        state,
+    };
+    let res = swapchain.resolution();
+    blackboard.add(triangle_state);
+    blackboard.add(swapchain);
+    let triangle_pass = triangle_pass(&context, blackboard, res);
+    loop {
+        // Execute the graph every frame
+        triangle_pass.execute(&context);
     }
 }

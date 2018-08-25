@@ -115,10 +115,8 @@ impl ImageApi for ImageData {
                 self.context.device.cmd_copy_image(
                     command_buffer,
                     self.image,
-                    //vk::ImageLayout::GENERAL,
                     vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
                     target.image,
-                    //vk::ImageLayout::GENERAL,
                     vk::ImageLayout::TRANSFER_DST_OPTIMAL,
                     &[image_copy],
                 );
@@ -135,7 +133,7 @@ impl ImageApi for ImageData {
                 s_type: vk::StructureType::IMAGE_MEMORY_BARRIER,
                 p_next: ptr::null(),
                 src_access_mask: vk::AccessFlags::empty(),
-                dst_access_mask: vk::AccessFlags::empty(),
+                dst_access_mask: vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
                 old_layout: vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
                 new_layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
                 src_queue_family_index: vk::QUEUE_FAMILY_IGNORED,
@@ -153,7 +151,7 @@ impl ImageApi for ImageData {
                 ctx.device.cmd_pipeline_barrier(
                     command_buffer,
                     vk::PipelineStageFlags::TOP_OF_PIPE,
-                    vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+                    vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
                     vk::DependencyFlags::empty(),
                     &[],
                     &[],
@@ -229,16 +227,16 @@ impl CreateImage for Context {
         };
         let usage = usage | vk::ImageUsageFlags::TRANSFER_SRC | vk::ImageUsageFlags::TRANSFER_DST;
 
-        let access = match desc.layout {
-            //ImageLayout::Color => vk::AccessFlags::empty(),
-            ImageLayout::Color => {
-                vk::AccessFlags::COLOR_ATTACHMENT_READ | vk::AccessFlags::COLOR_ATTACHMENT_WRITE
-            }
-            ImageLayout::Depth => {
-                vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_READ
-                    | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE
-            }
-        };
+        //let access = match desc.layout {
+        //    //ImageLayout::Color => vk::AccessFlags::empty(),
+        //    ImageLayout::Color => {
+        //        vk::AccessFlags::COLOR_ATTACHMENT_READ | vk::AccessFlags::COLOR_ATTACHMENT_WRITE
+        //    }
+        //    ImageLayout::Depth => {
+        //        vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_READ
+        //            | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE
+        //    }
+        //};
         let access = vk::AccessFlags::empty();
         let target_layout = match desc.layout {
             ImageLayout::Color => vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
