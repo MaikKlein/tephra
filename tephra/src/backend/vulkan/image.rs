@@ -24,6 +24,7 @@ impl ImageApi for ImageData {
         &self.desc
     }
     fn copy_image(&self, target: &Image) {
+        let ctx = &self.context;
         let target = target.downcast::<Vulkan>();
         let self_layout = get_image_layout(&self.desc);
         let target_layout = get_image_layout(&target.desc);
@@ -45,18 +46,82 @@ impl ImageApi for ImageData {
                 depth: 1,
             },
         };
-        let command_buffer = CommandBuffer::record(&self.context, |command_buffer| unsafe {
-            self.context.device.cmd_copy_image(
-                command_buffer,
-                self.image,
-                vk::ImageLayout::UNDEFINED,
-                //vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
-                target.image,
-                vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-                //vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-                &[image_copy],
-            );
+        let command_buffer = CommandBuffer::record(ctx, "DST", |command_buffer| {
+            let layout_transition_barrier = vk::ImageMemoryBarrier {
+                s_type: vk::StructureType::IMAGE_MEMORY_BARRIER,
+                p_next: ptr::null(),
+                src_access_mask: vk::AccessFlags::empty(),
+                dst_access_mask: vk::AccessFlags::empty(),
+                old_layout: vk::ImageLayout::PRESENT_SRC_KHR,
+                new_layout: vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                src_queue_family_index: vk::QUEUE_FAMILY_IGNORED,
+                dst_queue_family_index: vk::QUEUE_FAMILY_IGNORED,
+                image: target.image,
+                subresource_range: vk::ImageSubresourceRange {
+                    aspect_mask,
+                    base_mip_level: 0,
+                    level_count: 1,
+                    base_array_layer: 0,
+                    layer_count: 1,
+                },
+            };
+            unsafe {
+                ctx.device.cmd_pipeline_barrier(
+                    command_buffer,
+                    vk::PipelineStageFlags::TOP_OF_PIPE,
+                    vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+                    vk::DependencyFlags::empty(),
+                    &[],
+                    &[],
+                    &[layout_transition_barrier],
+                );
+            }
         });
+        let command_buffer = CommandBuffer::record(ctx, "ToSrcOptimal", |command_buffer| {
+            let layout_transition_barrier = vk::ImageMemoryBarrier {
+                s_type: vk::StructureType::IMAGE_MEMORY_BARRIER,
+                p_next: ptr::null(),
+                src_access_mask: vk::AccessFlags::empty(),
+                dst_access_mask: vk::AccessFlags::empty(),
+                old_layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+                new_layout: vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+                src_queue_family_index: vk::QUEUE_FAMILY_IGNORED,
+                dst_queue_family_index: vk::QUEUE_FAMILY_IGNORED,
+                image: self.image,
+                subresource_range: vk::ImageSubresourceRange {
+                    aspect_mask,
+                    base_mip_level: 0,
+                    level_count: 1,
+                    base_array_layer: 0,
+                    layer_count: 1,
+                },
+            };
+            unsafe {
+                ctx.device.cmd_pipeline_barrier(
+                    command_buffer,
+                    vk::PipelineStageFlags::TOP_OF_PIPE,
+                    vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+                    vk::DependencyFlags::empty(),
+                    &[],
+                    &[],
+                    &[layout_transition_barrier],
+                );
+            }
+        });
+        ctx.present_queue.submit(ctx, &[], &[], &[], command_buffer);
+        let command_buffer =
+            CommandBuffer::record(&self.context, "ImageCopy", |command_buffer| unsafe {
+                self.context.device.cmd_copy_image(
+                    command_buffer,
+                    self.image,
+                    //vk::ImageLayout::GENERAL,
+                    vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+                    target.image,
+                    //vk::ImageLayout::GENERAL,
+                    vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                    &[image_copy],
+                );
+            });
         self.context.present_queue.submit(
             &self.context,
             &[vk::PipelineStageFlags::TRANSFER],
@@ -64,6 +129,71 @@ impl ImageApi for ImageData {
             &[],
             command_buffer,
         );
+        let command_buffer = CommandBuffer::record(ctx, "FromSrc", |command_buffer| {
+            let layout_transition_barrier = vk::ImageMemoryBarrier {
+                s_type: vk::StructureType::IMAGE_MEMORY_BARRIER,
+                p_next: ptr::null(),
+                src_access_mask: vk::AccessFlags::empty(),
+                dst_access_mask: vk::AccessFlags::empty(),
+                old_layout: vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+                new_layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+                src_queue_family_index: vk::QUEUE_FAMILY_IGNORED,
+                dst_queue_family_index: vk::QUEUE_FAMILY_IGNORED,
+                image: self.image,
+                subresource_range: vk::ImageSubresourceRange {
+                    aspect_mask,
+                    base_mip_level: 0,
+                    level_count: 1,
+                    base_array_layer: 0,
+                    layer_count: 1,
+                },
+            };
+            unsafe {
+                ctx.device.cmd_pipeline_barrier(
+                    command_buffer,
+                    vk::PipelineStageFlags::TOP_OF_PIPE,
+                    vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+                    vk::DependencyFlags::empty(),
+                    &[],
+                    &[],
+                    &[layout_transition_barrier],
+                );
+            }
+        });
+        ctx.present_queue.submit(ctx, &[], &[], &[], command_buffer);
+        let command_buffer =
+            CommandBuffer::record(ctx, "ToPresentFromImageCopy", |command_buffer| {
+                let layout_transition_barrier = vk::ImageMemoryBarrier {
+                    s_type: vk::StructureType::IMAGE_MEMORY_BARRIER,
+                    p_next: ptr::null(),
+                    src_access_mask: vk::AccessFlags::empty(),
+                    dst_access_mask: vk::AccessFlags::empty(),
+                    old_layout: vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                    new_layout: vk::ImageLayout::PRESENT_SRC_KHR,
+                    src_queue_family_index: vk::QUEUE_FAMILY_IGNORED,
+                    dst_queue_family_index: vk::QUEUE_FAMILY_IGNORED,
+                    image: target.image,
+                    subresource_range: vk::ImageSubresourceRange {
+                        aspect_mask,
+                        base_mip_level: 0,
+                        level_count: 1,
+                        base_array_layer: 0,
+                        layer_count: 1,
+                    },
+                };
+                unsafe {
+                    ctx.device.cmd_pipeline_barrier(
+                        command_buffer,
+                        vk::PipelineStageFlags::TOP_OF_PIPE,
+                        vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+                        vk::DependencyFlags::empty(),
+                        &[],
+                        &[],
+                        &[layout_transition_barrier],
+                    );
+                }
+            });
+        ctx.present_queue.submit(ctx, &[], &[], &[], command_buffer);
     }
 }
 
@@ -96,7 +226,7 @@ impl CreateImage for Context {
             ImageLayout::Color => vk::ImageUsageFlags::COLOR_ATTACHMENT,
             ImageLayout::Depth => vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
         };
-        //let usage = usage | vk::ImageUsageFlags::TRANSFER_SRC | vk::ImageUsageFlags::TRANSFER_DST;
+        let usage = usage | vk::ImageUsageFlags::TRANSFER_SRC | vk::ImageUsageFlags::TRANSFER_DST;
 
         let access = match desc.layout {
             //ImageLayout::Color => vk::AccessFlags::empty(),
@@ -164,36 +294,36 @@ impl CreateImage for Context {
             ctx.device
                 .bind_image_memory(depth_image, depth_image_memory, 0)
                 .expect("Unable to bind depth image memory");
-            // let command_buffer = CommandBuffer::record(ctx, |command_buffer| {
-            //     let layout_transition_barrier = vk::ImageMemoryBarrier {
-            //         s_type: vk::StructureType::IMAGE_MEMORY_BARRIER,
-            //         p_next: ptr::null(),
-            //         src_access_mask: Default::default(),
-            //         dst_access_mask: access,
-            //         old_layout: vk::ImageLayout::UNDEFINED,
-            //         new_layout: target_layout,
-            //         src_queue_family_index: vk::QUEUE_FAMILY_IGNORED,
-            //         dst_queue_family_index: vk::QUEUE_FAMILY_IGNORED,
-            //         image: depth_image,
-            //         subresource_range: vk::ImageSubresourceRange {
-            //             aspect_mask,
-            //             base_mip_level: 0,
-            //             level_count: 1,
-            //             base_array_layer: 0,
-            //             layer_count: 1,
-            //         },
-            //     };
-            //     ctx.device.cmd_pipeline_barrier(
-            //         command_buffer,
-            //         vk::PipelineStageFlags::TOP_OF_PIPE,
-            //         vk::PipelineStageFlags::BOTTOM_OF_PIPE,
-            //         vk::DependencyFlags::empty(),
-            //         &[],
-            //         &[],
-            //         &[layout_transition_barrier],
-            //     );
-            // });
-            // ctx.present_queue.submit(ctx, &[], &[], &[], command_buffer);
+            let command_buffer = CommandBuffer::record(ctx, "ImageAllocate", |command_buffer| {
+                let layout_transition_barrier = vk::ImageMemoryBarrier {
+                    s_type: vk::StructureType::IMAGE_MEMORY_BARRIER,
+                    p_next: ptr::null(),
+                    src_access_mask: Default::default(),
+                    dst_access_mask: access,
+                    old_layout: vk::ImageLayout::UNDEFINED,
+                    new_layout: target_layout,
+                    src_queue_family_index: vk::QUEUE_FAMILY_IGNORED,
+                    dst_queue_family_index: vk::QUEUE_FAMILY_IGNORED,
+                    image: depth_image,
+                    subresource_range: vk::ImageSubresourceRange {
+                        aspect_mask,
+                        base_mip_level: 0,
+                        level_count: 1,
+                        base_array_layer: 0,
+                        layer_count: 1,
+                    },
+                };
+                ctx.device.cmd_pipeline_barrier(
+                    command_buffer,
+                    vk::PipelineStageFlags::TOP_OF_PIPE,
+                    vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+                    vk::DependencyFlags::empty(),
+                    &[],
+                    &[],
+                    &[layout_transition_barrier],
+                );
+            });
+            ctx.present_queue.submit(ctx, &[], &[], &[], command_buffer);
             let depth_image_view_info = vk::ImageViewCreateInfo {
                 s_type: vk::StructureType::IMAGE_VIEW_CREATE_INFO,
                 p_next: ptr::null(),

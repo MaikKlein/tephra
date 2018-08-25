@@ -58,7 +58,7 @@ impl RenderApi for Render {
                     },
                 },
             ];
-            let command_buffer = CommandBuffer::record(ctx, |draw_command_buffer| {
+            let command_buffer = CommandBuffer::record(ctx, "RenderPass", |draw_command_buffer| {
                 let device = &ctx.device;
                 unsafe {
                     let render_pass_begin_info = vk::RenderPassBeginInfo {

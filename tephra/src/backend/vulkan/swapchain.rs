@@ -30,45 +30,7 @@ impl SwapchainApi for SwapchainData {
         let index = self.aquire_next_image().expect("acquire");
         let present_image = &self.present_images()[index as usize];
         let vkimage = present_image.downcast::<Vulkan>();
-        //image.copy_image(present_image);
-        let command_buffer = CommandBuffer::record(&self.context, |command_buffer| {
-            let present_barrier = vk::ImageMemoryBarrier {
-                s_type: vk::StructureType::IMAGE_MEMORY_BARRIER,
-                p_next: ptr::null(),
-                src_access_mask: vk::AccessFlags::TRANSFER_WRITE,
-                dst_access_mask: vk::AccessFlags::MEMORY_READ,
-                old_layout: vk::ImageLayout::UNDEFINED,
-                new_layout: vk::ImageLayout::PRESENT_SRC_KHR,
-                src_queue_family_index: vk::QUEUE_FAMILY_IGNORED,
-                dst_queue_family_index: vk::QUEUE_FAMILY_IGNORED,
-                image: vkimage.image,
-                subresource_range: vk::ImageSubresourceRange {
-                    aspect_mask: vk::ImageAspectFlags::COLOR,
-                    base_mip_level: 0,
-                    level_count: 1,
-                    base_array_layer: 0,
-                    layer_count: 1,
-                },
-            };
-            unsafe {
-                self.context.device.cmd_pipeline_barrier(
-                    command_buffer,
-                    vk::PipelineStageFlags::TRANSFER,
-                    vk::PipelineStageFlags::BOTTOM_OF_PIPE,
-                    vk::DependencyFlags::empty(),
-                    &[],
-                    &[],
-                    &[present_barrier],
-                );
-            }
-        });
-        self.context.present_queue.submit(
-            &self.context,
-            &[],
-            &[self.context.present_complete_semaphore],
-            &[self.context.present_complete_semaphore],
-            command_buffer,
-        );
+        image.copy_image(present_image);
         self.present(index);
     }
     fn recreate(&mut self) {
@@ -254,6 +216,41 @@ fn create_swapchain(ctx: &Context, old_swapchain: Option<vk::SwapchainKHR>) -> S
             height: surface_resolution.height,
         };
         let present_images = get_swapchain_images(ctx, swapchain, resolution);
+        for image in &present_images {
+            let vkimage = image.downcast::<Vulkan>();
+            let command_buffer = CommandBuffer::record(ctx, "SwapchainBarrier", |command_buffer| {
+                let present_barrier = vk::ImageMemoryBarrier {
+                    s_type: vk::StructureType::IMAGE_MEMORY_BARRIER,
+                    p_next: ptr::null(),
+                    src_access_mask: vk::AccessFlags::empty(),
+                    dst_access_mask: vk::AccessFlags::empty(),
+                    old_layout: vk::ImageLayout::UNDEFINED,
+                    new_layout: vk::ImageLayout::PRESENT_SRC_KHR,
+                    src_queue_family_index: vk::QUEUE_FAMILY_IGNORED,
+                    dst_queue_family_index: vk::QUEUE_FAMILY_IGNORED,
+                    image: vkimage.image,
+                    subresource_range: vk::ImageSubresourceRange {
+                        aspect_mask: vk::ImageAspectFlags::COLOR,
+                        base_mip_level: 0,
+                        level_count: 1,
+                        base_array_layer: 0,
+                        layer_count: 1,
+                    },
+                };
+                unsafe {
+                    ctx.device.cmd_pipeline_barrier(
+                        command_buffer,
+                        vk::PipelineStageFlags::TRANSFER,
+                        vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+                        vk::DependencyFlags::empty(),
+                        &[],
+                        &[],
+                        &[present_barrier],
+                    );
+                }
+            });
+            ctx.present_queue.submit(ctx, &[], &[], &[], command_buffer);
+        }
         // for image in &present_images {
         //     let barrier = vk::ImageMemoryBarrier {
         //         s_type: vk::StructureType::IMAGE_MEMORY_BARRIER,

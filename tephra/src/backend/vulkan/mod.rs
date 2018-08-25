@@ -212,7 +212,7 @@ pub struct CommandBuffer {
 }
 
 impl CommandBuffer {
-    pub fn record<F>(context: &Context, f: F) -> Self
+    pub fn record<F>(context: &Context, name: &str, f: F) -> Self
     where
         F: Fn(vk::CommandBuffer),
     {
@@ -227,7 +227,19 @@ impl CommandBuffer {
             p_inheritance_info: ptr::null(),
             flags: vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT,
         };
+        use ash::vk::Handle;
+        let cname = CString::new(name).unwrap();
+
+        let name_info = vk::DebugUtilsObjectNameInfoEXT {
+            object_type: vk::ObjectType::COMMAND_BUFFER,
+            object_handle: command_buffer.as_raw(),
+            p_object_name: cname.as_ptr(),
+            ..Default::default()
+        };
         unsafe {
+            context
+                .debug_utils_loader
+                .debug_utils_set_object_name_ext(context.device.handle(), &name_info);
             context
                 .device
                 .begin_command_buffer(command_buffer, &command_buffer_begin_info)
@@ -275,6 +287,8 @@ pub struct InnerContext {
     //command_pool: CommandPool,
     pub surface_loader: Surface,
     pub swapchain_loader: Swapchain,
+    pub debug_utils_loader: DebugUtils,
+    pub debug_utils_messenger: vk::DebugUtilsMessengerEXT,
     //pub debug_report_loader: DebugReport,
     //pub window: winit::Window,
     //pub events_loop: RefCell<winit::EventsLoop>,
@@ -393,8 +407,9 @@ impl Context {
                 pfn_user_callback: debug_utils_callback,
             };
 
-            let messenger =
-                debug_utils_loader.create_debug_utils_messenger_ext(&messenger_create_info, None);
+            let debug_utils_messenger = debug_utils_loader
+                .create_debug_utils_messenger_ext(&messenger_create_info, None)
+                .expect("messenger");
             // let debug_call_back = debug_report_loader
             //     .create_debug_report_callback_ext(&debug_info, None)
             //     .unwrap();
@@ -699,7 +714,9 @@ impl Context {
                 .create_semaphore(&semaphore_create_info, None)
                 .unwrap();
             let pipeline_cache_create_info = vk::PipelineCacheCreateInfo::default();
-            let pipeline_cache =  device.create_pipeline_cache(&pipeline_cache_create_info, None).expect("pipeline cache");
+            let pipeline_cache = device
+                .create_pipeline_cache(&pipeline_cache_create_info, None)
+                .expect("pipeline cache");
             let context = InnerContext {
                 command_pool: ThreadLocalCommandPool::new(queue_family_index),
                 entry,
@@ -731,6 +748,8 @@ impl Context {
                 // debug_report_loader: debug_report_loader,
                 depth_image_memory: depth_image_memory,
                 pipeline_cache,
+                debug_utils_loader,
+                debug_utils_messenger,
             };
             let context = Context {
                 inner: Arc::new(context),
@@ -884,8 +903,17 @@ unsafe extern "system" fn debug_utils_callback(
     p_callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT,
     p_user_data: *mut vk::c_void,
 ) -> vk::Bool32 {
-    if !p_callback_data.is_null(){
+    if !p_callback_data.is_null() {
         let data = &*p_callback_data;
+        for i in 0..data.object_count {
+            let obj = data.p_objects.offset(i as isize).read();
+            println!(
+                "Object: [{}] {} 0x{:x}",
+                obj.object_type,
+                CStr::from_ptr(obj.p_object_name).to_str().unwrap(),
+                obj.object_handle
+            );
+        }
         println!("Message ID: {:?}", CStr::from_ptr(data.p_message_id_name));
         println!("Message: {:?}", CStr::from_ptr(data.p_message));
         println!("");
