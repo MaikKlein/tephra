@@ -77,6 +77,7 @@ impl ImageApi for ImageData {
                 );
             }
         });
+        ctx.present_queue.submit(ctx, &[], &[], &[], command_buffer);
         let command_buffer = CommandBuffer::record(ctx, "ToSrcOptimal", |command_buffer| {
             let layout_transition_barrier = vk::ImageMemoryBarrier {
                 s_type: vk::StructureType::IMAGE_MEMORY_BARRIER,
