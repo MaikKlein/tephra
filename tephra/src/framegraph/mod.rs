@@ -1,7 +1,7 @@
 use anymap::AnyMap;
 use context::Context;
 use framegraph::render_task::{Execute, RenderTask};
-use image::{Image, ImageDesc};
+use image::{Image, ImageDesc, Resolution};
 use petgraph::{self, Graph};
 use render::Render;
 use std::clone::Clone;
@@ -211,7 +211,7 @@ impl Framegraph {
         setup: Setup,
         pass: Pass,
         execute: fn(&Data, &Blackboard, &Render, &Framegraph<Compiled>),
-    ) -> Arc<RenderTask<Data>>
+    ) -> render_task::ARenderTask<Data>
     where
         Setup: Fn(&mut TaskBuilder) -> Data,
         Pass: Fn(&Data) -> Vec<Resource<Image>>,
@@ -235,7 +235,7 @@ impl Framegraph {
             .insert(pass_handle, image_resources);
         task
     }
-    pub fn compile(self, ctx: &Context) -> Framegraph<Compiled> {
+    pub fn compile(self, resolution: Resolution, ctx: &Context) -> Framegraph<Compiled> {
         let images: HashMap<_, _> = self
             .state
             .image_data
@@ -254,7 +254,7 @@ impl Framegraph {
                     .iter()
                     .map(|&resource| images.get(&resource.handle).expect("resource"))
                     .collect();
-                (handle, Render::new(ctx, &images))
+                (handle, Render::new(ctx, resolution, &images))
             })
             .collect();
         let state = Compiled { images, render };
@@ -263,7 +263,7 @@ impl Framegraph {
             resources: self.resources,
             graph: self.graph,
             state,
-            blackboard: self.blackboard
+            blackboard: self.blackboard,
         }
     }
 }

@@ -1,4 +1,3 @@
-use pipeline::PipelineState;
 use ash::vk;
 use backend::BackendApi;
 use buffer::{Buffer, BufferProperty};
@@ -6,20 +5,39 @@ use context::Context;
 use downcast::Downcast;
 use image::RenderTarget;
 use image::RenderTargetInfo;
+use pipeline::PipelineState;
 use std::marker::PhantomData;
 use std::ops::Deref;
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub enum VertexType {
     F32(usize),
 }
+impl VertexType {
+    pub fn size(self) -> usize {
+        match self {
+            VertexType::F32(n) => std::mem::size_of::<f32>() * n,
+        }
+    }
+}
 
+#[derive(Debug, Copy, Clone)]
 pub struct VertexInputData {
     pub vertex_type: VertexType,
     pub binding: u32,
     pub location: u32,
     pub offset: u32,
 }
+pub trait VertexTypeData {
+    fn vertex_type() -> VertexType;
+}
+
+impl VertexTypeData for [f32; 4] {
+    fn vertex_type() -> VertexType {
+        VertexType::F32(4)
+    }
+}
+
 pub trait VertexInput {
     fn vertex_input_data() -> Vec<VertexInputData>;
 }
@@ -64,7 +82,6 @@ pub trait VertexInput {
 //         CreateRenderpass::new(context.context.as_ref(), &P::Input::vertex_input_data())
 //     }
 // }
-
 
 // impl<P> Renderpass<P>
 // where

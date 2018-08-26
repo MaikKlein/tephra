@@ -1,12 +1,12 @@
-use context::Context;
 use buffer::{Buffer, BufferApi};
-use framegraph::{ResourceMap, Compiled, Framegraph, Resource};
-use image::Image;
+use context::Context;
+use framegraph::{Compiled, Framegraph, Resource, ResourceMap};
+use image::{Image, Resolution};
 use pipeline::PipelineState;
 use renderpass::{VertexInput, VertexInputData};
 use std::mem::size_of;
 pub trait CreateRender {
-    fn create_render(&self, images: &[&Image]) -> Render;
+    fn create_render(&self, resolution: Resolution, images: &[&Image]) -> Render;
 }
 
 pub trait RenderApi {
@@ -43,7 +43,7 @@ pub struct Render {
 }
 
 impl Render {
-    pub fn new(ctx: &Context, images: &[&Image]) -> Render {
-        ctx.create_render(images)
+    pub fn new(ctx: &Context, resolution: Resolution, images: &[&Image]) -> Render {
+        ctx.create_render(resolution, images)
     }
 }

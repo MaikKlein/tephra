@@ -319,26 +319,26 @@ pub struct InnerContext {
 }
 impl ContextApi for Context {}
 impl Context {
-    pub fn render_loop<F: FnMut()>(&self, mut f: F) {
-        use winit::*;
-        self.events_loop.borrow_mut().run_forever(|event| {
-            f();
-            match event {
-                Event::WindowEvent { event, .. } => match event {
-                    WindowEvent::KeyboardInput { input, .. } => {
-                        if let Some(VirtualKeyCode::Escape) = input.virtual_keycode {
-                            ControlFlow::Break
-                        } else {
-                            ControlFlow::Continue
-                        }
-                    }
-                    WindowEvent::Closed => winit::ControlFlow::Break,
-                    _ => ControlFlow::Continue,
-                },
-                _ => ControlFlow::Continue,
-            }
-        });
-    }
+    // pub fn render_loop<F: FnMut()>(&self, mut f: F) {
+    //     use winit::*;
+    //     self.events_loop.borrow_mut().run_forever(|event| {
+    //         f();
+    //         match event {
+    //             Event::WindowEvent { event, .. } => match event {
+    //                 WindowEvent::KeyboardInput { input, .. } => {
+    //                     if let Some(VirtualKeyCode::Escape) = input.virtual_keycode {
+    //                         ControlFlow::Break
+    //                     } else {
+    //                         ControlFlow::Continue
+    //                     }
+    //                 }
+    //                 WindowEvent::Closed => winit::ControlFlow::Break,
+    //                 _ => ControlFlow::Continue,
+    //             },
+    //             _ => ControlFlow::Continue,
+    //         }
+    //     });
+    // }
     pub fn new() -> context::Context {
         unsafe {
             let window_width = 1000;
@@ -346,7 +346,7 @@ impl Context {
             let events_loop = winit::EventsLoop::new();
             let window = winit::WindowBuilder::new()
                 .with_title("Ash - Example")
-                .with_dimensions(window_width, window_height)
+                .with_dimensions((window_width, window_height).into())
                 .build(&events_loop)
                 .unwrap();
             let entry = Entry::new().unwrap();
@@ -401,8 +401,7 @@ impl Context {
                 flags: vk::DebugUtilsMessengerCreateFlagsEXT::empty(),
                 p_user_data: ::std::ptr::null_mut(),
                 message_severity: vk::DebugUtilsMessageSeverityFlagsEXT::ERROR
-                    | vk::DebugUtilsMessageSeverityFlagsEXT::WARNING
-                    ,
+                    | vk::DebugUtilsMessageSeverityFlagsEXT::WARNING,
                 message_type: vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION
                     | vk::DebugUtilsMessageTypeFlagsEXT::GENERAL
                     | vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE,

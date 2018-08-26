@@ -6,5 +6,6 @@ authors = ["maik"]
 [dependencies]
 
 tephra = {path = "../tephra"}
+tephra-derive = {path = "../tephra-derive"}
 ash = {git = "https://github.com/MaikKlein/ash.git", branch="generator"}
 

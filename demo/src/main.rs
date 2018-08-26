@@ -1,12 +1,15 @@
 extern crate ash;
 extern crate tephra;
+#[macro_use]
+extern crate tephra_derive;
 pub use tephra::winit;
 
 use tephra::backend::vulkan::{self, Context};
 use tephra::backend::BackendApi;
 use tephra::buffer::{Buffer, BufferUsage, Property};
 use tephra::context;
-use tephra::framegraph::{Blackboard, Compiled, Framegraph, Resource};
+use tephra::framegraph::render_task::ARenderTask;
+use tephra::framegraph::{Blackboard, Compiled, Framegraph, Recording, Resource};
 use tephra::image::{Image, ImageDesc, ImageLayout, RenderTarget, RenderTargetInfo, Resolution};
 use tephra::pipeline::PipelineState;
 use tephra::renderpass::{VertexInput, VertexInputData, VertexType};
@@ -15,42 +18,21 @@ use tephra::swapchain::{Swapchain, SwapchainError};
 
 #[derive(Clone, Debug, Copy)]
 #[repr(C)]
+#[derive(VertexInput)]
 pub struct Vertex {
     pub pos: [f32; 4],
     pub color: [f32; 4],
 }
 
-// TODO: Impl custom derive to automically generate the this
-impl VertexInput for Vertex {
-    fn vertex_input_data() -> Vec<VertexInputData> {
-        vec![
-            VertexInputData {
-                binding: 0,
-                location: 0,
-                offset: 0,
-                vertex_type: VertexType::F32(4),
-            },
-            VertexInputData {
-                binding: 0,
-                location: 1,
-                offset: 4 * 4,
-                vertex_type: VertexType::F32(4),
-            },
-        ]
-    }
+pub struct TriangleData {
+    pub color: Resource<Image>,
+    pub depth: Resource<Image>,
 }
-
-pub fn triangle_pass(
-    ctx: &context::Context,
-    blackboard: Blackboard,
+pub fn add_triangle_pass(
+    fg: &mut Framegraph<Recording>,
     resolution: Resolution,
-) -> Framegraph<Compiled> {
-    let mut fg = Framegraph::new(blackboard);
-    pub struct TriangleData {
-        pub color: Resource<Image>,
-        pub depth: Resource<Image>,
-    }
-    let triangle_pass = fg.add_render_pass(
+) -> ARenderTask<TriangleData> {
+    fg.add_render_pass(
         "Triangle Pass",
         |builder| {
             let color_desc = ImageDesc {
@@ -75,9 +57,37 @@ pub fn triangle_pass(
             let color_image = context.get_resource(data.color);
             swapchain.copy_and_present(color_image);
         },
+    )
+}
+
+pub fn add_present_pass(fg: &mut Framegraph<Recording>, color: Resource<Image>) {
+    struct PresentData {
+        color: Resource<Image>,
+    }
+    fg.add_render_pass(
+        "Present Pass",
+        |builder| PresentData {
+            color: builder.read(color),
+        },
+        |data| vec![],
+        |data, blackboard, render, context| {
+            let swapchain = blackboard.get::<Swapchain>().expect("swap");
+            let color_image = context.get_resource(data.color);
+            swapchain.copy_and_present(color_image);
+        },
     );
+}
+
+pub fn render_pass(
+    ctx: &context::Context,
+    blackboard: Blackboard,
+    resolution: Resolution,
+) -> Framegraph<Compiled> {
+    let mut fg = Framegraph::new(blackboard);
+    let triangle_data = add_triangle_pass(&mut fg, resolution);
+    //add_present_pass(&mut fg, triangle_data.color);
     // Compiles the graph, allocates and optimizes resources
-    fg.compile(ctx)
+    fg.compile(resolution, ctx)
 }
 // Just state for the triangle pass
 struct TriangleState {
@@ -133,9 +143,9 @@ fn main() {
     let res = swapchain.resolution();
     blackboard.add(triangle_state);
     blackboard.add(swapchain);
-    let triangle_pass = triangle_pass(&context, blackboard, res);
+    let render_pass = render_pass(&context, blackboard, res);
     loop {
         // Execute the graph every frame
-        triangle_pass.execute(&context);
+        render_pass.execute(&context);
     }
 }

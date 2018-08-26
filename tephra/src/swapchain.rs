@@ -40,6 +40,7 @@ impl Swapchain {
     pub fn new(ctx: &Context) -> Swapchain {
         CreateSwapchain::new(ctx.context.as_ref())
     }
+
     pub fn recreate(&mut self) {
         use std::ops::DerefMut;
         SwapchainApi::recreate(self.data.deref_mut());
