@@ -1,6 +1,6 @@
 use buffer::{Buffer, BufferApi};
 use context::Context;
-use framegraph::{Compiled, Framegraph, Resource, ResourceMap};
+use framegraph::{Compiled, Framegraph, Resource};
 use image::{Image, Resolution};
 use pipeline::PipelineState;
 use renderpass::{VertexInput, VertexInputData};

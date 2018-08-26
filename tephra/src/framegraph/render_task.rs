@@ -2,8 +2,8 @@ use super::Blackboard;
 use context::Context;
 use framegraph::{Compiled, Framegraph};
 use render::Render;
-use std::sync::Arc;
 use std::ops::Deref;
+use std::sync::Arc;
 
 pub type ARenderTask<T> = Arc<RenderTask<T>>;
 pub struct RenderTask<T> {
@@ -17,7 +17,6 @@ impl<T> Deref for RenderTask<T> {
         &self.data
     }
 }
-
 
 pub trait Execute {
     fn execute(&self, blackboard: &Blackboard, render: &Render, ctx: &Framegraph<Compiled>);

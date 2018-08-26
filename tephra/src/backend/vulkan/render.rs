@@ -4,7 +4,7 @@ use super::{CommandBuffer, Vulkan};
 use ash::version::DeviceV1_0;
 use ash::vk;
 use buffer::BufferApi;
-use framegraph::{Compiled, Framegraph, Resource, ResourceMap};
+use framegraph::{Compiled, Framegraph, Resource};
 use image::{Image, ImageLayout, Resolution};
 use pipeline::PipelineState;
 use render::{self, CreateRender, RenderApi};
@@ -129,7 +129,6 @@ impl CreateRender for Context {
             surface_resolution: resolution,
             ctx,
         };
-        println!("asd");
         render::Render {
             inner: Box::new(render),
         }

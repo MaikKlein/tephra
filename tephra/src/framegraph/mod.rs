@@ -66,110 +66,95 @@ impl<T> Resource<T> {
 }
 
 type Handle = petgraph::graph::NodeIndex;
+
 pub struct TaskBuilder<'graph> {
     pass_handle: Handle,
     framegraph: &'graph mut Framegraph<Recording>,
 }
 impl<'graph> TaskBuilder<'graph> {
     pub fn create_image(&mut self, name: &'static str, desc: ImageDesc) -> Resource<Image> {
-        let node_resource = Node::Resource(NodeResource {
-            id: 0,
-            version: 0,
-            name,
-        });
-        let node = self.framegraph.graph.add_node(node_resource);
-        self.framegraph
-            .graph
-            .add_edge(self.pass_handle, node, "Create");
-        self.framegraph.state.image_data.insert(node, desc);
-        Resource::new(name, 0, node)
+        self.framegraph.state.image_data.push(desc);
+        let id = self.framegraph.state.image_data.len() - 1;
+        Resource::new(name, id, self.pass_handle)
     }
 
     pub fn write<T>(&mut self, resource: Resource<T>) -> Resource<T> {
-        let prev_resource = self.framegraph.graph[resource.handle]
-            .to_resource()
-            .expect("Should be a Resource");
-        let node_resource = Node::Resource(NodeResource {
-            id: resource.id,
-            version: prev_resource.version + 1,
-            name: resource.name,
-        });
-        let node = self.framegraph.graph.add_node(node_resource);
+        let access = Access {
+            resource: resource.id,
+            resource_access: ResourceAccess::Write,
+            ty: ResourceType::Image,
+        };
         self.framegraph
             .graph
-            .add_edge(resource.handle, self.pass_handle, "Read");
-        self.framegraph
-            .graph
-            .add_edge(self.pass_handle, node, "Write");
-        Resource::new(resource.name, resource.id, node)
+            .add_edge(resource.handle, self.pass_handle, access);
+        Resource::new(resource.name, resource.id, self.pass_handle)
     }
 
     pub fn read<T>(&mut self, resource: Resource<T>) -> Resource<T> {
+        let access = Access {
+            resource: resource.id,
+            resource_access: ResourceAccess::Read,
+            ty: ResourceType::Image,
+        };
         self.framegraph
             .graph
-            .add_edge(resource.handle, self.pass_handle, "Read");
+            .add_edge(resource.handle, self.pass_handle, access);
         resource
     }
 }
 
 #[derive(Debug, Copy, Clone)]
-pub struct NodeResource {
-    name: &'static str,
-    id: usize,
-    version: u32,
-}
-
-#[derive(Debug, Copy, Clone)]
-pub struct NodeRenderpass {
+pub struct Pass {
     name: &'static str,
 }
 
 #[derive(Debug, Copy, Clone)]
-pub enum Node {
-    Renderpass(NodeRenderpass),
-    Resource(NodeResource),
+pub enum ResourceAccess {
+    Create,
+    Read,
+    Write,
 }
-impl Node {
-    pub fn to_resource(self) -> Option<NodeResource> {
-        match self {
-            Node::Resource(r) => Some(r),
-            _ => None,
-        }
-    }
-    pub fn to_renderpass(self) -> Option<NodeRenderpass> {
-        match self {
-            Node::Renderpass(r) => Some(r),
-            _ => None,
-        }
-    }
+
+#[derive(Debug, Copy, Clone)]
+pub enum ResourceType {
+    //Buffer,
+    Image,
 }
-impl fmt::Display for Node {
+
+#[derive(Debug, Copy, Clone)]
+pub struct Access {
+    resource: usize,
+    resource_access: ResourceAccess,
+    ty: ResourceType,
+}
+
+impl fmt::Display for Pass {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:#?}", self)
     }
 }
-type TaskIndex = usize;
-#[derive(Debug)]
-struct TaskData {
-    task_index: TaskIndex,
-    inputs: Vec<TaskIndex>,
+impl fmt::Display for Access {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:#?}", self)
+    }
 }
+
 type ExecuteFn = Box<dyn Fn(&Context)>;
+
 pub struct Compiled {
-    images: HashMap<Handle, Image>,
+    images: HashMap<usize, Image>,
     render: HashMap<Handle, Render>,
 }
 
-pub type ResourceMap = HashMap<Handle, Vec<Resource<Image>>>;
 pub struct Recording {
-    image_data: HashMap<Handle, ImageDesc>,
-    image_resource_map: ResourceMap,
+    image_data: Vec<ImageDesc>,
+    image_resource_map: HashMap<Handle, Vec<Resource<Image>>>,
 }
 
 pub struct Framegraph<T = Recording> {
     blackboard: Blackboard,
     state: T,
-    graph: Graph<Node, &'static str>,
+    graph: Graph<Pass, Access>,
     resources: Vec<()>,
     execute_fns: HashMap<Handle, Arc<dyn Execute>>,
 }
@@ -179,7 +164,7 @@ pub trait GetResource<T> {
 
 impl GetResource<Image> for Framegraph<Compiled> {
     fn get_resource(&self, resource: Resource<Image>) -> &Image {
-        self.state.images.get(&resource.handle).expect("get image")
+        self.state.images.get(&resource.id).expect("get image")
     }
 }
 
@@ -196,7 +181,7 @@ impl Framegraph {
     pub fn new(blackboard: Blackboard) -> Self {
         Framegraph {
             state: Recording {
-                image_data: HashMap::new(),
+                image_data: Vec::new(),
                 image_resource_map: HashMap::new(),
             },
             graph: Graph::new(),
@@ -205,21 +190,21 @@ impl Framegraph {
             blackboard,
         }
     }
-    pub fn add_render_pass<Data, Pass, Setup>(
+    pub fn add_render_pass<Data, P, Setup>(
         &mut self,
         name: &'static str,
         setup: Setup,
-        pass: Pass,
+        pass: P,
         execute: fn(&Data, &Blackboard, &Render, &Framegraph<Compiled>),
     ) -> render_task::ARenderTask<Data>
     where
         Setup: Fn(&mut TaskBuilder) -> Data,
-        Pass: Fn(&Data) -> Vec<Resource<Image>>,
+        P: Fn(&Data) -> Vec<Resource<Image>>,
         Data: 'static,
     {
         let (pass_handle, image_resources, task) = {
-            let renderpass = NodeRenderpass { name };
-            let pass_handle = self.graph.add_node(Node::Renderpass(renderpass));
+            let renderpass = Pass { name };
+            let pass_handle = self.graph.add_node(renderpass);
             let mut builder = TaskBuilder {
                 pass_handle,
                 framegraph: self,
@@ -240,9 +225,10 @@ impl Framegraph {
             .state
             .image_data
             .iter()
-            .map(|(&node, image_desc)| {
+            .enumerate()
+            .map(|(id, image_desc)| {
                 let image = Image::allocate(ctx, image_desc.clone());
-                (node, image)
+                (id, image)
             })
             .collect();
         let render: HashMap<_, _> = self
@@ -252,7 +238,7 @@ impl Framegraph {
             .map(|(&handle, image_resources)| {
                 let images: Vec<&Image> = image_resources
                     .iter()
-                    .map(|&resource| images.get(&resource.handle).expect("resource"))
+                    .map(|&resource| images.get(&resource.id).expect("resource"))
                     .collect();
                 (handle, Render::new(ctx, resolution, &images))
             })
@@ -269,14 +255,14 @@ impl Framegraph {
 }
 
 impl Framegraph<Compiled> {
+    fn submission_order(&self) -> impl Iterator<Item=usize> {
+        (0..1)
+    }
+
     pub fn execute(&self, ctx: &Context) {
         use petgraph::visit::{Bfs, Walker};
         let bfs = Bfs::new(&self.graph, Handle::new(0));
         bfs.iter(&self.graph)
-            .filter(|&idx| match self.graph[idx] {
-                Node::Renderpass(_) => true,
-                _ => false,
-            })
             .for_each(|idx| {
                 let execute = self.execute_fns.get(&idx).expect("renderpass");
 
