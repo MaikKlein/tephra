@@ -4,17 +4,15 @@ extern crate tephra;
 extern crate tephra_derive;
 pub use tephra::winit;
 
-use tephra::backend::vulkan::{self, Context};
-use tephra::backend::BackendApi;
+use tephra::backend::vulkan::Context;
 use tephra::buffer::{Buffer, BufferUsage, Property};
 use tephra::context;
 use tephra::framegraph::render_task::ARenderTask;
 use tephra::framegraph::{Blackboard, Compiled, Framegraph, Recording, Resource};
-use tephra::image::{Image, ImageDesc, ImageLayout, RenderTarget, RenderTargetInfo, Resolution};
+use tephra::image::{Image, ImageDesc, ImageLayout, Resolution};
 use tephra::pipeline::PipelineState;
-use tephra::renderpass::{VertexInput, VertexInputData, VertexType};
 use tephra::shader::Shader;
-use tephra::swapchain::{Swapchain, SwapchainError};
+use tephra::swapchain::Swapchain;
 
 #[derive(Clone, Debug, Copy)]
 #[repr(C)]
@@ -69,8 +67,8 @@ pub fn add_present_pass(fg: &mut Framegraph<Recording>, color: Resource<Image>) 
         |builder| PresentData {
             color: builder.read(color),
         },
-        |data| vec![],
-        |data, blackboard, render, context| {
+        |_data| vec![],
+        |data, blackboard, _render, context| {
             let swapchain = blackboard.get::<Swapchain>().expect("swap");
             let color_image = context.get_resource(data.color);
             swapchain.copy_and_present(color_image);
@@ -84,7 +82,7 @@ pub fn render_pass(
     resolution: Resolution,
 ) -> Framegraph<Compiled> {
     let mut fg = Framegraph::new(blackboard);
-    let triangle_data = add_triangle_pass(&mut fg, resolution);
+    let _triangle_data = add_triangle_pass(&mut fg, resolution);
     //add_present_pass(&mut fg, triangle_data.color);
     // Compiles the graph, allocates and optimizes resources
     fg.compile(resolution, ctx)
@@ -146,6 +144,6 @@ fn main() {
     let render_pass = render_pass(&context, blackboard, res);
     loop {
         // Execute the graph every frame
-        render_pass.execute(&context);
+        render_pass.execute();
     }
 }

@@ -7,7 +7,6 @@ use context;
 use context::ContextApi;
 use parking_lot::Mutex;
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::ffi::{CStr, CString};
 use std::marker::PhantomData;
 use std::ops::{Deref, Drop};
@@ -15,6 +14,7 @@ use std::ptr;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;
 use thread_local_object::ThreadLocal;
+use winit;
 pub mod buffer;
 pub mod image;
 pub mod pipeline;
@@ -189,11 +189,11 @@ impl Queue {
             };
             context
                 .device
-                .queue_submit(*queue, &[submit_info], submit_fence);
+                .queue_submit(*queue, &[submit_info], submit_fence).expect("Unable to submit");
             // TODO: Future
             context
                 .device
-                .wait_for_fences(&[submit_fence], true, u64::max_value());
+                .wait_for_fences(&[submit_fence], true, u64::max_value()).expect("Unable to wait");
         }
     }
 }
@@ -239,7 +239,7 @@ impl CommandBuffer {
         unsafe {
             context
                 .debug_utils_loader
-                .debug_utils_set_object_name_ext(context.device.handle(), &name_info);
+                .debug_utils_set_object_name_ext(context.device.handle(), &name_info).expect("util name");
             context
                 .device
                 .begin_command_buffer(command_buffer, &command_buffer_begin_info)
@@ -260,7 +260,7 @@ impl CommandBuffer {
 impl Drop for CommandBuffer {
     fn drop(&mut self) {
         // Reclaim the command buffer by sending it to the correct pool
-        self.sender.send(self.inner);
+        self.sender.send(self.inner).expect("unable to send");
     }
 }
 
@@ -495,35 +495,13 @@ impl Context {
             let surface_capabilities = surface_loader
                 .get_physical_device_surface_capabilities_khr(pdevice, surface)
                 .unwrap();
-            let mut desired_image_count = surface_capabilities.min_image_count + 1;
-            if surface_capabilities.max_image_count > 0
-                && desired_image_count > surface_capabilities.max_image_count
-            {
-                desired_image_count = surface_capabilities.max_image_count;
-            }
             let surface_resolution = match surface_capabilities.current_extent.width {
-                std::u32::MAX => vk::Extent2D {
+                ::std::u32::MAX => vk::Extent2D {
                     width: window_width,
                     height: window_height,
                 },
                 _ => surface_capabilities.current_extent,
             };
-            let pre_transform = if surface_capabilities
-                .supported_transforms
-                .subset(vk::SurfaceTransformFlagsKHR::IDENTITY)
-            {
-                vk::SurfaceTransformFlagsKHR::IDENTITY
-            } else {
-                surface_capabilities.current_transform
-            };
-            let present_modes = surface_loader
-                .get_physical_device_surface_present_modes_khr(pdevice, surface)
-                .unwrap();
-            let present_mode = present_modes
-                .iter()
-                .cloned()
-                .find(|&mode| mode == vk::PresentModeKHR::MAILBOX)
-                .unwrap_or(vk::PresentModeKHR::FIFO);
             let swapchain_loader =
                 Swapchain::new(&instance, &device).expect("Unable to load swapchain");
             // let swapchain_create_info = vk::SwapchainCreateInfoKHR {
@@ -765,10 +743,10 @@ impl Context {
 
 impl Drop for InnerContext {
     fn drop(&mut self) {
-        unsafe {
-            // self.device.destroy_device(None);
-            // self.instance.destroy_instance(None);
-        }
+        // unsafe {
+        //     // self.device.destroy_device(None);
+        //     // self.instance.destroy_instance(None);
+        // }
     }
 }
 // impl Context {
@@ -893,16 +871,16 @@ pub fn record_submit_commandbuffer<D: DeviceV1_0, F: FnOnce(&D, vk::CommandBuffe
             .queue_submit(submit_queue, &[submit_info], submit_fence)
             .expect("queue submit failed.");
         device
-            .wait_for_fences(&[submit_fence], true, std::u64::MAX)
+            .wait_for_fences(&[submit_fence], true, ::std::u64::MAX)
             .expect("Wait for fence failed.");
         device.destroy_fence(submit_fence, None);
     }
 }
 unsafe extern "system" fn debug_utils_callback(
-    message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
-    message_type: vk::DebugUtilsMessageTypeFlagsEXT,
+    _message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
+    _message_type: vk::DebugUtilsMessageTypeFlagsEXT,
     p_callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT,
-    p_user_data: *mut vk::c_void,
+    _p_user_data: *mut vk::c_void,
 ) -> vk::Bool32 {
     if !p_callback_data.is_null() {
         let data = &*p_callback_data;
@@ -921,16 +899,16 @@ unsafe extern "system" fn debug_utils_callback(
     }
     0
 }
-unsafe extern "system" fn vulkan_debug_callback(
-    _: vk::DebugReportFlagsEXT,
-    _: vk::DebugReportObjectTypeEXT,
-    _: vk::uint64_t,
-    _: vk::size_t,
-    _: vk::int32_t,
-    _: *const vk::c_char,
-    p_message: *const vk::c_char,
-    _: *mut vk::c_void,
-) -> u32 {
-    println!("{:?}", CStr::from_ptr(p_message));
-    1
-}
+// unsafe extern "system" fn vulkan_debug_callback(
+//     _: vk::DebugReportFlagsEXT,
+//     _: vk::DebugReportObjectTypeEXT,
+//     _: vk::uint64_t,
+//     _: vk::size_t,
+//     _: vk::int32_t,
+//     _: *const vk::c_char,
+//     p_message: *const vk::c_char,
+//     _: *mut vk::c_void,
+// ) -> u32 {
+//     println!("{:?}", CStr::from_ptr(p_message));
+//     1
+// }

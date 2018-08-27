@@ -1,13 +1,4 @@
-use ash::vk;
-use backend::BackendApi;
-use buffer::{Buffer, BufferProperty};
-use context::Context;
-use downcast::Downcast;
-use image::RenderTarget;
-use image::RenderTargetInfo;
-use pipeline::PipelineState;
-use std::marker::PhantomData;
-use std::ops::Deref;
+use std::mem::size_of;
 
 #[derive(Debug, Copy, Clone)]
 pub enum VertexType {
@@ -16,7 +7,7 @@ pub enum VertexType {
 impl VertexType {
     pub fn size(self) -> usize {
         match self {
-            VertexType::F32(n) => std::mem::size_of::<f32>() * n,
+            VertexType::F32(n) => size_of::<f32>() * n,
         }
     }
 }

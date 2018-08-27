@@ -4,10 +4,8 @@ use super::{CommandBuffer, Vulkan};
 use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk;
 use buffer::Buffer;
-use downcast::Downcast;
 use image::{
-    CreateImage, Image, ImageApi, ImageDesc, ImageLayout, RenderTarget, RenderTargetInfo,
-    Resolution,
+    CreateImage, Image, ImageApi, ImageDesc, ImageLayout,
 };
 //use renderpass::{Pass, Renderpass};
 use std::ptr;
@@ -26,8 +24,8 @@ impl ImageApi for ImageData {
     fn copy_image(&self, target: &Image) {
         let ctx = &self.context;
         let target = target.downcast::<Vulkan>();
-        let self_layout = get_image_layout(&self.desc);
-        let target_layout = get_image_layout(&target.desc);
+        let _self_layout = get_image_layout(&self.desc);
+        let _target_layout = get_image_layout(&target.desc);
         let aspect_mask = get_aspect_mask(&target.desc);
         let sub_resource_layer = vk::ImageSubresourceLayers {
             aspect_mask,
@@ -209,7 +207,7 @@ fn get_aspect_mask(desc: &ImageDesc) -> vk::ImageAspectFlags {
     }
 }
 impl CreateImage for Context {
-    fn from_buffer(&self, buffer: Buffer<u8>) -> Image {
+    fn from_buffer(&self, _buffer: Buffer<u8>) -> Image {
         unimplemented!()
     }
     fn allocate(&self, desc: ImageDesc) -> Image {

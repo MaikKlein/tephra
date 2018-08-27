@@ -1,4 +1,4 @@
-#![feature(rust_2018_preview)]
+//#![feature(rust_2018_preview)]
 extern crate parking_lot;
 extern crate thread_local_object;
 #[macro_use]

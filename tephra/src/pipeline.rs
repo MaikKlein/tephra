@@ -1,9 +1,5 @@
-use backend::BackendApi;
-use context::Context;
 //use renderpass::{Pass, Renderpass};
 use shader::Shader;
-use std::marker::PhantomData;
-use downcast::Downcast;
 
 // pub trait CreatePipeline {
 //     fn from_pipeline_builder(&self, pipline_builder: PipelineState) -> Pipeline;

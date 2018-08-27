@@ -3,7 +3,6 @@ use backend::BackendApi;
 use context::Context;
 use std::fs::File;
 use std::io::{self, Read};
-use std::marker::PhantomData;
 use std::path::Path;
 
 use downcast::Downcast;

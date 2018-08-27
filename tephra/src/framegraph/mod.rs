@@ -31,11 +31,6 @@ impl Blackboard {
     }
 }
 
-pub enum ResourceData {
-    Image,
-    Buffer,
-}
-
 #[derive(Debug)]
 pub struct Resource<T> {
     _m: PhantomData<T>,
@@ -104,8 +99,14 @@ impl<'graph> TaskBuilder<'graph> {
 }
 
 #[derive(Debug, Copy, Clone)]
+pub enum PassType {
+    Graphics,
+    Compute,
+}
+#[derive(Debug, Copy, Clone)]
 pub struct Pass {
     name: &'static str,
+    ty: PassType,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -138,8 +139,6 @@ impl fmt::Display for Access {
         write!(f, "{:#?}", self)
     }
 }
-
-type ExecuteFn = Box<dyn Fn(&Context)>;
 
 pub struct Compiled {
     images: HashMap<usize, Image>,
@@ -190,6 +189,20 @@ impl Framegraph {
             blackboard,
         }
     }
+    // pub fn add_compute_pass<Data, P, Setup>(
+    //     &mut self,
+    //     name: &'static str,
+    //     setup: Setup,
+    //     pass: P,
+    //     execute: fn(&Data, &Blackboard, &Render, &Framegraph<Compiled>),
+    // ) -> render_task::ARenderTask<Data> {
+    // where
+    //     Setup: Fn(&mut TaskBuilder) -> Data,
+    //     P: Fn(&Data) -> Vec<Resource<Image>>,
+    //     Data: 'static,
+    // {
+    //     unimplemented!()
+    // }
     pub fn add_render_pass<Data, P, Setup>(
         &mut self,
         name: &'static str,
@@ -203,7 +216,10 @@ impl Framegraph {
         Data: 'static,
     {
         let (pass_handle, image_resources, task) = {
-            let renderpass = Pass { name };
+            let renderpass = Pass {
+                name,
+                ty: PassType::Graphics,
+            };
             let pass_handle = self.graph.add_node(renderpass);
             let mut builder = TaskBuilder {
                 pass_handle,
@@ -255,20 +271,19 @@ impl Framegraph {
 }
 
 impl Framegraph<Compiled> {
-    fn submission_order(&self) -> impl Iterator<Item=usize> {
-        (0..1)
-    }
+    // fn submission_order(&self) -> impl Iterator<Item=Handle> {
+    //     (0..1)
+    // }
 
-    pub fn execute(&self, ctx: &Context) {
+    pub fn execute(&self) {
         use petgraph::visit::{Bfs, Walker};
         let bfs = Bfs::new(&self.graph, Handle::new(0));
-        bfs.iter(&self.graph)
-            .for_each(|idx| {
-                let execute = self.execute_fns.get(&idx).expect("renderpass");
+        bfs.iter(&self.graph).for_each(|idx| {
+            let execute = self.execute_fns.get(&idx).expect("renderpass");
 
-                let render = self.state.render.get(&idx).expect("render");
-                execute.execute(&self.blackboard, render, self);
-            });
+            let render = self.state.render.get(&idx).expect("render");
+            execute.execute(&self.blackboard, render, self);
+        });
     }
     pub fn export_graphviz<P: AsRef<Path>>(&self, path: P) {
         use std::io::Write;

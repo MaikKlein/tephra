@@ -1,8 +1,7 @@
 use super::Context;
-use super::Vulkan;
 use ash::version::DeviceV1_0;
 use ash::vk;
-use shader::{CreateShader, GetShaderType, Shader, ShaderApi, ShaderError};
+use shader::{CreateShader, Shader, ShaderApi, ShaderError};
 use std::ops::Drop;
 use std::ptr;
 use std::sync::Arc;

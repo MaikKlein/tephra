@@ -1,6 +1,7 @@
 use super::image::ImageData;
 use super::Context;
 use super::{CommandBuffer, Vulkan};
+use ash::extensions;
 use ash::version::DeviceV1_0;
 use ash::vk;
 use image::{Image, ImageDesc, ImageLayout, Resolution};
@@ -29,7 +30,6 @@ impl SwapchainApi for SwapchainData {
     fn copy_and_present(&self, image: &Image) {
         let index = self.aquire_next_image().expect("acquire");
         let present_image = &self.present_images()[index as usize];
-        let vkimage = present_image.downcast::<Vulkan>();
         image.copy_image(present_image);
         self.present(index);
     }
@@ -49,7 +49,7 @@ impl SwapchainApi for SwapchainData {
                 .swapchain_loader
                 .acquire_next_image_khr(
                     self.swapchain,
-                    std::u64::MAX,
+                    ::std::u64::MAX,
                     self.context.present_complete_semaphore,
                     vk::Fence::null(),
                 )
@@ -165,7 +165,7 @@ fn create_swapchain(ctx: &Context, old_swapchain: Option<vk::SwapchainKHR>) -> S
             desired_image_count = surface_capabilities.max_image_count;
         }
         let surface_resolution = match surface_capabilities.current_extent.width {
-            std::u32::MAX => ctx.surface_resolution,
+            ::std::u32::MAX => ctx.surface_resolution,
             _ => surface_capabilities.current_extent,
         };
         let pre_transform = if surface_capabilities
@@ -185,7 +185,7 @@ fn create_swapchain(ctx: &Context, old_swapchain: Option<vk::SwapchainKHR>) -> S
             .cloned()
             .find(|&mode| mode == vk::PresentModeKHR::MAILBOX)
             .unwrap_or(vk::PresentModeKHR::FIFO);
-        let swapchain_loader = ash::extensions::Swapchain::new(&ctx.instance, &ctx.device)
+        let swapchain_loader = extensions::Swapchain::new(&ctx.instance, &ctx.device)
             .expect("Unable to load swapchain");
         let swapchain_create_info = vk::SwapchainCreateInfoKHR {
             s_type: vk::StructureType::SWAPCHAIN_CREATE_INFO_KHR,
@@ -237,17 +237,15 @@ fn create_swapchain(ctx: &Context, old_swapchain: Option<vk::SwapchainKHR>) -> S
                         layer_count: 1,
                     },
                 };
-                unsafe {
-                    ctx.device.cmd_pipeline_barrier(
-                        command_buffer,
-                        vk::PipelineStageFlags::TRANSFER,
-                        vk::PipelineStageFlags::BOTTOM_OF_PIPE,
-                        vk::DependencyFlags::empty(),
-                        &[],
-                        &[],
-                        &[present_barrier],
-                    );
-                }
+                ctx.device.cmd_pipeline_barrier(
+                    command_buffer,
+                    vk::PipelineStageFlags::TRANSFER,
+                    vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+                    vk::DependencyFlags::empty(),
+                    &[],
+                    &[],
+                    &[present_barrier],
+                );
             });
             ctx.present_queue.submit(ctx, &[], &[], &[], command_buffer);
         }

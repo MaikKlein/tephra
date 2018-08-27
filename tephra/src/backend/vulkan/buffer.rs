@@ -1,14 +1,10 @@
-use super::CommandBuffer;
 use super::Context;
-use super::Vulkan;
 use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk;
 use buffer::{
-    BufferApi, BufferError, BufferProperty, BufferUsage, CreateBuffer, DeviceLocal, HostVisible,
+    BufferApi, BufferError, BufferUsage, CreateBuffer,
     MappingError, Property,
 };
-use std::marker::PhantomData;
-use std::mem::size_of;
 use std::ptr;
 
 /// Vulkan specifc data
@@ -21,10 +17,10 @@ pub struct BufferData {
 
 impl Drop for BufferData {
     fn drop(&mut self) {
-        unsafe {
-            // self.context.device.destroy_buffer(self.buffer, None);
-            // self.context.device.free_memory(self.memory, None);
-        }
+        // unsafe {
+        //     // self.context.device.destroy_buffer(self.buffer, None);
+        //     // self.context.device.free_memory(self.memory, None);
+        // }
     }
 }
 

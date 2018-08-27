@@ -1,4 +1,3 @@
-use backend::BackendApi;
 use context::Context;
 use image::{Image, Resolution};
 use std::ops::Deref;

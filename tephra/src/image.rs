@@ -4,7 +4,6 @@ use backend::BackendApi;
 use context::Context;
 use downcast::Downcast;
 //use renderpass::{Pass, Renderpass};
-use std::any::Any;
 #[derive(Debug, Copy, Clone)]
 pub enum ImageLayout {
     Color,
