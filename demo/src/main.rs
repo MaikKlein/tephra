@@ -11,7 +11,7 @@ use tephra::framegraph::render_task::ARenderTask;
 use tephra::framegraph::{Blackboard, Compiled, Framegraph, Recording, Resource};
 use tephra::image::{Image, ImageDesc, ImageLayout, Resolution};
 use tephra::pipeline::PipelineState;
-use tephra::shader::Shader;
+use tephra::shader::ShaderModule;
 use tephra::swapchain::Swapchain;
 
 #[derive(Clone, Debug, Copy)]
@@ -127,9 +127,10 @@ fn main() {
         &vertices,
     ).expect("Failed to create vertex buffer");
 
-    let vertex_shader_module = Shader::load(&context, "shader/triangle/vert.spv").expect("vertex");
+    let vertex_shader_module =
+        ShaderModule::load(&context, "shader/triangle/vert.spv").expect("vertex");
     let fragment_shader_module =
-        Shader::load(&context, "shader/triangle/frag.spv").expect("vertex");
+        ShaderModule::load(&context, "shader/triangle/frag.spv").expect("vertex");
     let state = PipelineState::new()
         .with_vertex_shader(vertex_shader_module)
         .with_fragment_shader(fragment_shader_module);
@@ -147,3 +148,4 @@ fn main() {
         render_pass.execute();
     }
 }
+

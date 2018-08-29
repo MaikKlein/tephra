@@ -12,6 +12,8 @@ use std::marker::PhantomData;
 use std::path::Path;
 use std::sync::Arc;
 pub mod render_task;
+pub mod task_builder;
+use self::task_builder::TaskBuilder;
 
 pub struct Blackboard {
     any_map: AnyMap,
@@ -61,42 +63,6 @@ impl<T> Resource<T> {
 }
 
 type Handle = petgraph::graph::NodeIndex;
-
-pub struct TaskBuilder<'graph> {
-    pass_handle: Handle,
-    framegraph: &'graph mut Framegraph<Recording>,
-}
-impl<'graph> TaskBuilder<'graph> {
-    pub fn create_image(&mut self, name: &'static str, desc: ImageDesc) -> Resource<Image> {
-        self.framegraph.state.image_data.push(desc);
-        let id = self.framegraph.state.image_data.len() - 1;
-        Resource::new(name, id, self.pass_handle)
-    }
-
-    pub fn write<T>(&mut self, resource: Resource<T>) -> Resource<T> {
-        let access = Access {
-            resource: resource.id,
-            resource_access: ResourceAccess::Write,
-            ty: ResourceType::Image,
-        };
-        self.framegraph
-            .graph
-            .add_edge(resource.handle, self.pass_handle, access);
-        Resource::new(resource.name, resource.id, self.pass_handle)
-    }
-
-    pub fn read<T>(&mut self, resource: Resource<T>) -> Resource<T> {
-        let access = Access {
-            resource: resource.id,
-            resource_access: ResourceAccess::Read,
-            ty: ResourceType::Image,
-        };
-        self.framegraph
-            .graph
-            .add_edge(resource.handle, self.pass_handle, access);
-        resource
-    }
-}
 
 #[derive(Debug, Copy, Clone)]
 pub enum PassType {

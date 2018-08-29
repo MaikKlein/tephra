@@ -189,11 +189,13 @@ impl Queue {
             };
             context
                 .device
-                .queue_submit(*queue, &[submit_info], submit_fence).expect("Unable to submit");
+                .queue_submit(*queue, &[submit_info], submit_fence)
+                .expect("Unable to submit");
             // TODO: Future
             context
                 .device
-                .wait_for_fences(&[submit_fence], true, u64::max_value()).expect("Unable to wait");
+                .wait_for_fences(&[submit_fence], true, u64::max_value())
+                .expect("Unable to wait");
         }
     }
 }
@@ -239,7 +241,8 @@ impl CommandBuffer {
         unsafe {
             context
                 .debug_utils_loader
-                .debug_utils_set_object_name_ext(context.device.handle(), &name_info).expect("util name");
+                .debug_utils_set_object_name_ext(context.device.handle(), &name_info)
+                .expect("util name");
             context
                 .device
                 .begin_command_buffer(command_buffer, &command_buffer_begin_info)
@@ -350,8 +353,6 @@ impl Context {
                 .build(&events_loop)
                 .unwrap();
             let entry = Entry::new().unwrap();
-            let ext_props = entry.enumerate_instance_extension_properties();
-            println!("{:#?}", ext_props);
             let app_name = CString::new("VulkanTriangle").unwrap();
             let raw_name = app_name.as_ptr();
 
@@ -488,7 +489,7 @@ impl Context {
                         format: vk::Format::B8G8R8_UNORM,
                         color_space: sfmt.color_space,
                     },
-                    _ => sfmt.clone(),
+                    _ => *sfmt,
                 })
                 .nth(0)
                 .expect("Unable to find suitable surface format.");

@@ -1,5 +1,5 @@
 //use renderpass::{Pass, Renderpass};
-use shader::Shader;
+use shader::ShaderModule;
 
 // pub trait CreatePipeline {
 //     fn from_pipeline_builder(&self, pipline_builder: PipelineState) -> Pipeline;
@@ -10,8 +10,8 @@ use shader::Shader;
 // impl_downcast!(PipelineApi);
 
 pub struct PipelineState {
-    pub vertex_shader: Option<Shader>,
-    pub fragment_shader: Option<Shader>,
+    pub vertex_shader: Option<ShaderModule>,
+    pub fragment_shader: Option<ShaderModule>,
 }
 
 impl PipelineState {
@@ -22,14 +22,14 @@ impl PipelineState {
         }
     }
 
-    pub fn with_vertex_shader(self, shader: Shader) -> Self {
+    pub fn with_vertex_shader(self, shader: ShaderModule) -> Self {
         PipelineState {
             vertex_shader: Some(shader),
             ..self
         }
     }
 
-    pub fn with_fragment_shader(self, shader: Shader) -> Self {
+    pub fn with_fragment_shader(self, shader: ShaderModule) -> Self {
         PipelineState {
             fragment_shader: Some(shader),
             ..self

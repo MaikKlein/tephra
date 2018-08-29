@@ -4,9 +4,7 @@ use super::{CommandBuffer, Vulkan};
 use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk;
 use buffer::Buffer;
-use image::{
-    CreateImage, Image, ImageApi, ImageDesc, ImageLayout,
-};
+use image::{CreateImage, Image, ImageApi, ImageDesc, ImageLayout};
 //use renderpass::{Pass, Renderpass};
 use std::ptr;
 // pub struct FramebufferData {}

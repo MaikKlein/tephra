@@ -1,7 +1,7 @@
 use super::Context;
 use ash::version::DeviceV1_0;
 use ash::vk;
-use shader::{CreateShader, Shader, ShaderApi, ShaderError};
+use shader::{CreateShader, ShaderModule, ShaderApi, ShaderError};
 use std::ops::Drop;
 use std::ptr;
 use std::sync::Arc;
@@ -21,7 +21,7 @@ impl Drop for ShaderData {
 }
 impl ShaderApi for ShaderData {}
 impl CreateShader for Context {
-    fn load(&self, bytes: &[u8]) -> Result<Shader, ShaderError> {
+    fn load(&self, bytes: &[u8]) -> Result<ShaderModule, ShaderError> {
         let context = self;
         unsafe {
             let shader_info = vk::ShaderModuleCreateInfo {
@@ -39,7 +39,7 @@ impl CreateShader for Context {
                 context: context.clone(),
                 shader_module,
             };
-            let shader = Shader {
+            let shader = ShaderModule {
                 data: Arc::new(shader_data),
             };
             Ok(shader)

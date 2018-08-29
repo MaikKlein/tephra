@@ -1,15 +1,15 @@
-use std::sync::Arc;
 use backend::BackendApi;
 use context::Context;
 use std::fs::File;
 use std::io::{self, Read};
 use std::path::Path;
+use std::sync::Arc;
+use reflect;
 
 use downcast::Downcast;
 
-pub trait CreateShader
-{
-    fn load(&self, bytes: &[u8]) -> Result<Shader, ShaderError>;
+pub trait CreateShader {
+    fn load(&self, bytes: &[u8]) -> Result<ShaderModule, ShaderError>;
 }
 
 pub enum ShaderType {
@@ -36,24 +36,24 @@ impl GetShaderType for Fragment {
     }
 }
 
-pub trait ShaderApi: Downcast {
-}
+pub trait ShaderApi: Downcast {}
 impl_downcast!(ShaderApi);
 
 #[derive(Clone)]
-pub struct Shader {
-    pub data: Arc<dyn ShaderApi>
+pub struct ShaderModule {
+    pub data: Arc<dyn ShaderApi>,
 }
-
-impl Shader
-{
-    pub fn load<P: AsRef<Path>>(context: &Context, p: P) -> Result<Shader, ShaderError> {
+impl ShaderModule {
+    pub fn load<P: AsRef<Path>>(context: &Context, p: P) -> Result<ShaderModule, ShaderError> {
         let file = File::open(p.as_ref()).map_err(ShaderError::IoError)?;
         let bytes: Vec<_> = file.bytes().filter_map(Result::ok).collect();
+        reflect::reflect(&bytes);
         CreateShader::load(context.context.as_ref(), &bytes)
     }
     pub fn downcast<B: BackendApi>(&self) -> &B::Shader {
-        self.data.downcast_ref::<B::Shader>().expect("Downcast Shader Vulkan")
+        self.data
+            .downcast_ref::<B::Shader>()
+            .expect("Downcast Shader Vulkan")
     }
 }
 

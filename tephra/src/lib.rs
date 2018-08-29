@@ -1,4 +1,6 @@
-//#![feature(rust_2018_preview)]
+#![feature(rust_2018_preview)]
+extern crate spirv_headers;
+extern crate rspirv;
 extern crate parking_lot;
 extern crate thread_local_object;
 #[macro_use]
@@ -22,6 +24,7 @@ pub mod renderpass;
 pub mod shader;
 pub mod framegraph;
 pub mod render;
+pub mod reflect;
 
 #[derive(Copy, Clone, Default, Debug)]
 pub struct Viewport {

@@ -1,10 +1,7 @@
 use super::Context;
 use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk;
-use buffer::{
-    BufferApi, BufferError, BufferUsage, CreateBuffer,
-    MappingError, Property,
-};
+use buffer::{BufferApi, BufferError, BufferUsage, CreateBuffer, MappingError, Property};
 use std::ptr;
 
 /// Vulkan specifc data

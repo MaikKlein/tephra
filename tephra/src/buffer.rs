@@ -120,7 +120,7 @@ impl<T: Copy> Buffer<T> {
         let mapping_ptr = buffer
             .buffer
             .map_memory()
-            .map_err(|err| BufferError::MappingError(err))?;
+            .map_err(BufferError::MappingError)?;
         let slice = unsafe { from_raw_parts_mut::<T>(mapping_ptr as *mut T, data.len()) };
         slice.copy_from_slice(data);
         buffer.buffer.unmap_memory();

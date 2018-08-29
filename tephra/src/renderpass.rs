@@ -1,5 +1,16 @@
 use std::mem::size_of;
 
+// pub trait Descriptor{
+//     fn get_descriptor_data(&self) -> DescriptorData;
+// }
+// pub enum DescriptorType {
+//     Uniform,
+//     Sampler
+// }
+// pub struct DescriptorData<'a> {
+//     pub binding: u32,
+//     pub ty: DescriptorType,
+// }
 #[derive(Debug, Copy, Clone)]
 pub enum VertexType {
     F32(usize),
