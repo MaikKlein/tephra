@@ -22,6 +22,7 @@ pub mod render;
 pub mod renderpass;
 pub mod shader;
 pub mod swapchain;
+pub mod commandbuffer;
 
 #[derive(Copy, Clone)]
 pub struct Vulkan;

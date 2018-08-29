@@ -1,4 +1,3 @@
-use anymap::AnyMap;
 use context::Context;
 use framegraph::render_task::{Execute, RenderTask};
 use image::{Image, ImageDesc, Resolution};
@@ -11,27 +10,11 @@ use std::fs::File;
 use std::marker::PhantomData;
 use std::path::Path;
 use std::sync::Arc;
+pub mod blackboard;
 pub mod render_task;
 pub mod task_builder;
+pub use self::blackboard::Blackboard;
 use self::task_builder::TaskBuilder;
-
-pub struct Blackboard {
-    any_map: AnyMap,
-}
-impl Blackboard {
-    pub fn new() -> Blackboard {
-        Blackboard {
-            any_map: AnyMap::new(),
-        }
-    }
-    pub fn add<T: 'static>(&mut self, t: T) {
-        self.any_map.insert(t);
-    }
-
-    pub fn get<T: 'static>(&self) -> Option<&T> {
-        self.any_map.get::<T>()
-    }
-}
 
 #[derive(Debug)]
 pub struct Resource<T> {
@@ -41,6 +24,7 @@ pub struct Resource<T> {
     pub name: &'static str,
 }
 impl<T> Copy for Resource<T> {}
+
 impl<T> Clone for Resource<T> {
     fn clone(&self) -> Self {
         Resource {
@@ -113,7 +97,7 @@ pub struct Compiled {
 
 pub struct Recording {
     image_data: Vec<ImageDesc>,
-    image_resource_map: HashMap<Handle, Vec<Resource<Image>>>,
+    frame_buffer_layout: HashMap<Handle, Vec<Resource<Image>>>,
 }
 
 pub struct Framegraph<T = Recording> {
@@ -147,7 +131,7 @@ impl Framegraph {
         Framegraph {
             state: Recording {
                 image_data: Vec::new(),
-                image_resource_map: HashMap::new(),
+                frame_buffer_layout: HashMap::new(),
             },
             graph: Graph::new(),
             resources: Vec::new(),
@@ -198,7 +182,7 @@ impl Framegraph {
         };
         self.execute_fns.insert(pass_handle, task.clone());
         self.state
-            .image_resource_map
+            .frame_buffer_layout
             .insert(pass_handle, image_resources);
         task
     }
@@ -215,7 +199,7 @@ impl Framegraph {
             .collect();
         let render: HashMap<_, _> = self
             .state
-            .image_resource_map
+            .frame_buffer_layout
             .iter()
             .map(|(&handle, image_resources)| {
                 let images: Vec<&Image> = image_resources

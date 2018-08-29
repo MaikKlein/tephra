@@ -1,4 +1,4 @@
-use super::Blackboard;
+use framegraph::blackboard::Blackboard;
 use framegraph::{Compiled, Framegraph};
 use render::Render;
 use std::ops::Deref;

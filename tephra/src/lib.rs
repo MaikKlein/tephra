@@ -25,6 +25,7 @@ pub mod shader;
 pub mod framegraph;
 pub mod render;
 pub mod reflect;
+pub mod commandbuffer;
 
 #[derive(Copy, Clone, Default, Debug)]
 pub struct Viewport {
