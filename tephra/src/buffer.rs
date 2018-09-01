@@ -81,17 +81,19 @@ impl BufferProperty for DeviceLocal {
         Property::DeviceLocal
     }
 }
+pub type GenericBuffer = Box<dyn BufferApi>;
 
 pub struct Buffer<T> {
     _m: PhantomData<T>,
     pub buffer: Box<dyn BufferApi>,
 }
-impl<T: Copy> Buffer<T> {
+impl BufferApi {
     pub fn downcast<B: BackendApi>(&self) -> &B::Buffer {
-        self.buffer
-            .downcast_ref::<B::Buffer>()
+        self.downcast_ref::<B::Buffer>()
             .expect("Downcast Buffer Vulkan")
     }
+}
+impl<T: Copy> Buffer<T> {
     pub fn len(&self) -> u32 {
         (self.buffer.size() / size_of::<T>() as u64) as u32
     }

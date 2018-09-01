@@ -12,7 +12,7 @@ impl Blackboard {
         self.any_map.insert(t);
     }
 
-    pub fn get<T: 'static>(&self) -> Option<&T> {
+    pub fn get<'a, T: 'static>(&self) -> Option<&T> {
         self.any_map.get::<T>()
     }
 }

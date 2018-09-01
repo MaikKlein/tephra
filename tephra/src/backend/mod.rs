@@ -5,6 +5,7 @@ use buffer::BufferApi;
 //use pipeline::PipelineApi;
 use image::{ImageApi};
 use swapchain::SwapchainApi;
+use render::RenderApi;
 
 pub trait BackendApi
 where
@@ -13,10 +14,7 @@ where
     type Context: Clone;
     type Shader: ShaderApi;
     type Buffer: BufferApi;
-    //type Renderpass: RenderpassApi;
-    //type Pipeline: PipelineApi;
-    //type Render;
-    //type Framebuffer: FramebufferApi;
+    type Render: RenderApi;
     type Image: ImageApi;
     type Swapchain: SwapchainApi;
 }

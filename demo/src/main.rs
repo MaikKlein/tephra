@@ -5,10 +5,10 @@ extern crate tephra_derive;
 pub use tephra::winit;
 
 use tephra::backend::vulkan::Context;
-use tephra::buffer::{Buffer, BufferUsage, Property};
+use tephra::buffer::{Buffer, BufferUsage, GenericBuffer, Property};
 use tephra::context;
 use tephra::framegraph::render_task::ARenderTask;
-use tephra::framegraph::{Blackboard, Compiled, Framegraph, Recording, Resource};
+use tephra::framegraph::{Blackboard, Compiled, Framegraph, GetResource, Recording, Resource};
 use tephra::image::{Image, ImageDesc, ImageLayout, Resolution};
 use tephra::pipeline::PipelineState;
 use tephra::shader::ShaderModule;
@@ -48,59 +48,55 @@ pub fn add_triangle_pass(
         },
         // TODO: Infer framebuffer layout based on data/shader,
         |data| vec![data.color, data.depth],
-        |data, blackboard, render, context| {
-            let r = blackboard.get::<TriangleState>().expect("state");
-            render.draw_indexed(&r.state, &r.vertex_buffer, &r.index_buffer);
-            let swapchain = blackboard.get::<Swapchain>().expect("swap");
+        |data, cmds, context| {
+            {
+                let r = context.blackboard.get::<TriangleState>().expect("state");
+                // render.draw_indexed(&r.state, &r.vertex_buffer, &r.index_buffer, &r.descriptors);
+                cmds.bind_vertex(r.vertex_buffer);
+                cmds.bind_index(r.index_buffer);
+                // TODO: terrible, don't clone
+                cmds.bind_pipeline::<Vertex>(r.state.clone());
+                cmds.draw_index(3);
+            }
+            let swapchain = context.blackboard.get::<Swapchain>().expect("swap");
             let color_image = context.get_resource(data.color);
             swapchain.copy_and_present(color_image);
         },
     )
 }
 
-pub fn add_present_pass(fg: &mut Framegraph<Recording>, color: Resource<Image>) {
-    struct PresentData {
-        color: Resource<Image>,
-    }
-    fg.add_render_pass(
-        "Present Pass",
-        |builder| PresentData {
-            color: builder.read(color),
-        },
-        |_data| vec![],
-        |data, blackboard, _render, context| {
-            let swapchain = blackboard.get::<Swapchain>().expect("swap");
-            let color_image = context.get_resource(data.color);
-            swapchain.copy_and_present(color_image);
-        },
-    );
-}
+// pub fn add_present_pass(fg: &mut Framegraph<Recording>, color: Resource<Image>) {
+//     struct PresentData {
+//         color: Resource<Image>,
+//     }
+//     fg.add_render_pass(
+//         "Present Pass",
+//         |builder| PresentData {
+//             color: builder.read(color),
+//         },
+//         |_data| vec![],
+//         |data, blackboard, _render, context| {
+//             let swapchain = blackboard.get::<Swapchain>().expect("swap");
+//             let color_image = context.get_resource(data.color);
+//             swapchain.copy_and_present(color_image);
+//         },
+//     );
+// }
 
-pub fn render_pass(
-    ctx: &context::Context,
-    blackboard: Blackboard,
-    resolution: Resolution,
-) -> Framegraph<Compiled> {
-    let mut fg = Framegraph::new(blackboard);
-    let _triangle_data = add_triangle_pass(&mut fg, resolution);
-    //add_present_pass(&mut fg, triangle_data.color);
-    // Compiles the graph, allocates and optimizes resources
-    fg.compile(resolution, ctx)
-}
-// Just state for the triangle pass
-struct TriangleState {
-    vertex_buffer: Buffer<Vertex>,
-    index_buffer: Buffer<u32>,
-    state: PipelineState,
-}
-fn main() {
-    let context = Context::new();
-    let swapchain = Swapchain::new(&context);
-    // Temporary abstraction to get data into the framegraph
+pub fn render_pass(ctx: &context::Context) -> Framegraph<Compiled> {
     let mut blackboard = Blackboard::new();
+    let swapchain = Swapchain::new(&ctx);
+    let resolution = swapchain.resolution();
+    let vertex_shader_module =
+        ShaderModule::load(&ctx, "shader/triangle/vert.spv").expect("vertex");
+    let fragment_shader_module =
+        ShaderModule::load(&ctx, "shader/triangle/frag.spv").expect("vertex");
+    let state = PipelineState::new()
+        .with_vertex_shader(vertex_shader_module)
+        .with_fragment_shader(fragment_shader_module);
     let index_buffer_data = [0u32, 1, 2];
     let index_buffer = Buffer::from_slice(
-        &context,
+        &ctx,
         Property::HostVisible,
         BufferUsage::Index,
         &index_buffer_data,
@@ -120,32 +116,38 @@ fn main() {
         },
     ];
 
-    let vertex_buffer = Buffer::from_slice(
-        &context,
-        Property::HostVisible,
-        BufferUsage::Vertex,
-        &vertices,
-    ).expect("Failed to create vertex buffer");
+    let vertex_buffer =
+        Buffer::from_slice(&ctx, Property::HostVisible, BufferUsage::Vertex, &vertices)
+            .expect("Failed to create vertex buffer");
+    let mut fg = Framegraph::new(blackboard);
+    let vertex_buffer = fg.add_buffer(vertex_buffer);
+    let index_buffer = fg.add_buffer(index_buffer);
 
-    let vertex_shader_module =
-        ShaderModule::load(&context, "shader/triangle/vert.spv").expect("vertex");
-    let fragment_shader_module =
-        ShaderModule::load(&context, "shader/triangle/frag.spv").expect("vertex");
-    let state = PipelineState::new()
-        .with_vertex_shader(vertex_shader_module)
-        .with_fragment_shader(fragment_shader_module);
     let triangle_state = TriangleState {
         vertex_buffer,
         index_buffer,
         state,
+        descriptors: vec![1, 2, 3],
     };
-    let res = swapchain.resolution();
-    blackboard.add(triangle_state);
-    blackboard.add(swapchain);
-    let render_pass = render_pass(&context, blackboard, res);
+    fg.blackboard.add(triangle_state);
+    fg.blackboard.add(swapchain);
+    let _triangle_data = add_triangle_pass(&mut fg, resolution);
+    //add_present_pass(&mut fg, triangle_data.color);
+    // Compiles the graph, allocates and optimizes resources
+    fg.compile(resolution, ctx)
+}
+// Just state for the triangle pass
+struct TriangleState {
+    vertex_buffer: Resource<GenericBuffer>,
+    index_buffer: Resource<GenericBuffer>,
+    state: PipelineState,
+    descriptors: Vec<u32>,
+}
+fn main() {
+    let ctx = Context::new();
+    let render_pass = render_pass(&ctx);
     loop {
         // Execute the graph every frame
         render_pass.execute();
     }
 }
-

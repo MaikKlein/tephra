@@ -47,7 +47,6 @@ impl ShaderModule {
     pub fn load<P: AsRef<Path>>(context: &Context, p: P) -> Result<ShaderModule, ShaderError> {
         let file = File::open(p.as_ref()).map_err(ShaderError::IoError)?;
         let bytes: Vec<_> = file.bytes().filter_map(Result::ok).collect();
-        reflect::reflect(&bytes);
         CreateShader::load(context.context.as_ref(), &bytes)
     }
     pub fn downcast<B: BackendApi>(&self) -> &B::Shader {

@@ -1,9 +1,11 @@
+use framegraph::{Framegraph, Compiled};
 use super::buffer::BufferData;
 use super::Context;
 use super::{CommandBuffer, Vulkan};
 use ash::version::DeviceV1_0;
 use ash::vk;
 use buffer::BufferApi;
+use commandbuffer::GraphicsCmd;
 use image::{Image, ImageLayout, Resolution};
 use pipeline::PipelineState;
 use render::{self, CreateRender, RenderApi};
@@ -12,13 +14,124 @@ use std::ffi::CString;
 use std::ptr;
 
 pub struct Render {
-    ctx: Context,
-    framebuffer: vk::Framebuffer,
-    renderpass: vk::RenderPass,
+    pub ctx: Context,
+    pub framebuffer: vk::Framebuffer,
+    pub renderpass: vk::RenderPass,
     pub surface_resolution: Resolution,
 }
 
 impl RenderApi for Render {
+    fn execute_commands(&self, fg: &Framegraph<Compiled>, cmds: &[GraphicsCmd]) {
+        let viewports = [vk::Viewport {
+            x: 0.0,
+            y: 0.0,
+            width: self.ctx.surface_resolution.width as f32,
+            height: self.ctx.surface_resolution.height as f32,
+            min_depth: 0.0,
+            max_depth: 1.0,
+        }];
+        let scissors = [vk::Rect2D {
+            offset: vk::Offset2D { x: 0, y: 0 },
+            extent: self.ctx.surface_resolution.clone(),
+        }];
+        let clear_values = [
+            vk::ClearValue {
+                color: vk::ClearColorValue {
+                    float32: [0.0, 0.0, 0.0, 0.0],
+                },
+            },
+            vk::ClearValue {
+                depth_stencil: vk::ClearDepthStencilValue {
+                    depth: 1.0,
+                    stencil: 0,
+                },
+            },
+        ];
+        let mut pipelines = Vec::new();
+        let mut pipeline_layouts = Vec::new();
+        let command_buffer =
+            CommandBuffer::record(&self.ctx, "RenderPass", |draw_command_buffer| {
+                let device = &self.ctx.device;
+                unsafe {
+                    let render_pass_begin_info = vk::RenderPassBeginInfo {
+                        s_type: vk::StructureType::RENDER_PASS_BEGIN_INFO,
+                        p_next: ptr::null(),
+                        render_pass: self.renderpass,
+                        framebuffer: self.framebuffer,
+                        render_area: vk::Rect2D {
+                            offset: vk::Offset2D { x: 0, y: 0 },
+                            extent: self.ctx.surface_resolution.clone(),
+                        },
+                        clear_value_count: clear_values.len() as u32,
+                        p_clear_values: clear_values.as_ptr(),
+                    };
+                    device.cmd_begin_render_pass(
+                        draw_command_buffer,
+                        &render_pass_begin_info,
+                        vk::SubpassContents::INLINE,
+                    );
+                    device.cmd_set_viewport(draw_command_buffer, 0, &viewports);
+                    device.cmd_set_scissor(draw_command_buffer, 0, &scissors);
+                    for cmd in cmds {
+                        match cmd {
+                            GraphicsCmd::BindVertex(loc) => {
+                                let vk_vertex_buffer = fg.get_buffer(*loc).as_ref().downcast::<Vulkan>();
+
+                                device.cmd_bind_vertex_buffers(
+                                    draw_command_buffer,
+                                    0,
+                                    &[vk_vertex_buffer.buffer],
+                                    &[0],
+                                );
+                            }
+                            GraphicsCmd::BindIndex(loc) => {
+                                let vk_index_buffer = fg.get_buffer(*loc).as_ref().downcast::<Vulkan>();
+                                device.cmd_bind_index_buffer(
+                                    draw_command_buffer,
+                                    vk_index_buffer.buffer,
+                                    0,
+                                    vk::IndexType::UINT32,
+                                );
+                            }
+                            GraphicsCmd::BindPipeline {
+                                state,
+                                stride,
+                                ref vertex_input_data,
+                            } => {
+                                let layout = create_pipeline_layout(&self.ctx);
+                                let pipeline = create_pipeline(
+                                    &self.ctx,
+                                    state,
+                                    *stride,
+                                    vertex_input_data,
+                                    self.renderpass,
+                                    layout,
+                                );
+                                pipeline_layouts.push(layout);
+                                pipelines.push(pipeline);
+                                device.cmd_bind_pipeline(
+                                    draw_command_buffer,
+                                    vk::PipelineBindPoint::GRAPHICS,
+                                    pipeline,
+                                );
+                            }
+                            GraphicsCmd::DrawIndex { len } => {
+                                device.cmd_draw_indexed(draw_command_buffer, *len, 1, 0, 0, 1);
+                            }
+                        }
+                    }
+                    device.cmd_end_render_pass(draw_command_buffer);
+                }
+            });
+        self.ctx.present_queue.submit(
+            &self.ctx,
+            &[vk::PipelineStageFlags::BOTTOM_OF_PIPE],
+            // FIXME: Add proper sync points
+            &[],
+            &[],
+            command_buffer,
+        );
+    }
     fn draw_indexed(
         &self,
         state: &PipelineState,
@@ -30,8 +143,17 @@ impl RenderApi for Render {
     ) {
         let vk_vertex_buffer = vertex_buffer.downcast_ref::<BufferData>().expect("backend");
         let vk_index_buffer = index_buffer.downcast_ref::<BufferData>().expect("backend");
-        let pipeline =
-            unsafe { create_pipeline(&self.ctx, state, stride, vertex_input, self.renderpass) };
+        let pipeline_layout = unsafe { create_pipeline_layout(&self.ctx) };
+        let pipeline = unsafe {
+            create_pipeline(
+                &self.ctx,
+                state,
+                stride,
+                vertex_input,
+                self.renderpass,
+                pipeline_layout,
+            )
+        };
         let ctx = &self.ctx;
         let viewports = [vk::Viewport {
             x: 0.0,
@@ -162,17 +284,7 @@ fn create_framebuffer(
             .unwrap()
     }
 }
-unsafe fn create_pipeline(
-    ctx: &Context,
-    state: &PipelineState,
-    stride: u32,
-    _vertex_input: &[VertexInputData],
-    renderpass: vk::RenderPass,
-) -> vk::Pipeline {
-    let vertex_shader = state.vertex_shader.as_ref().expect("vertex");
-    let vk_vertex = vertex_shader.downcast::<Vulkan>();
-    let fragment_shader = state.fragment_shader.as_ref().expect("vertex");
-    let vk_fragment = fragment_shader.downcast::<Vulkan>();
+pub unsafe fn create_pipeline_layout(ctx: &Context) -> vk::PipelineLayout {
     let layout_create_info = vk::PipelineLayoutCreateInfo {
         s_type: vk::StructureType::PIPELINE_LAYOUT_CREATE_INFO,
         p_next: ptr::null(),
@@ -183,10 +295,22 @@ unsafe fn create_pipeline(
         p_push_constant_ranges: ptr::null(),
     };
 
-    let pipeline_layout = ctx
-        .device
+    ctx.device
         .create_pipeline_layout(&layout_create_info, None)
-        .unwrap();
+        .unwrap()
+}
+pub unsafe fn create_pipeline(
+    ctx: &Context,
+    state: &PipelineState,
+    stride: u32,
+    _vertex_input: &[VertexInputData],
+    renderpass: vk::RenderPass,
+    pipeline_layout: vk::PipelineLayout,
+) -> vk::Pipeline {
+    let vertex_shader = state.vertex_shader.as_ref().expect("vertex");
+    let vk_vertex = vertex_shader.downcast::<Vulkan>();
+    let fragment_shader = state.fragment_shader.as_ref().expect("vertex");
+    let vk_fragment = fragment_shader.downcast::<Vulkan>();
 
     let shader_entry_name = CString::new("main").unwrap();
     let shader_stage_create_infos = [

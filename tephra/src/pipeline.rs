@@ -9,6 +9,7 @@ use shader::ShaderModule;
 // }
 // impl_downcast!(PipelineApi);
 
+#[derive(Clone)]
 pub struct PipelineState {
     pub vertex_shader: Option<ShaderModule>,
     pub fragment_shader: Option<ShaderModule>,

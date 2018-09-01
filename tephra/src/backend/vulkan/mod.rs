@@ -35,6 +35,7 @@ impl BackendApi for Vulkan {
     // type Framebuffer = image::FramebufferData;
     type Image = image::ImageData;
     type Swapchain = swapchain::SwapchainData;
+    type Render = render::Render;
 }
 
 #[derive(Clone)]
@@ -215,9 +216,9 @@ pub struct CommandBuffer {
 }
 
 impl CommandBuffer {
-    pub fn record<F>(context: &Context, name: &str, f: F) -> Self
+    pub fn record<F>(context: &Context, name: &str, mut f: F) -> Self
     where
-        F: Fn(vk::CommandBuffer),
+        F: FnMut(vk::CommandBuffer),
     {
         let RecordCommandBuffer {
             inner: command_buffer,
