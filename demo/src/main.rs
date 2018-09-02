@@ -48,17 +48,17 @@ pub fn add_triangle_pass(
         },
         // TODO: Infer framebuffer layout based on data/shader,
         |data| vec![data.color, data.depth],
-        |data, cmds, context| {
+        |data, blackboard, cmds, context| {
             {
-                let r = context.blackboard.get::<TriangleState>().expect("state");
+                let r = blackboard.get::<TriangleState>().expect("state");
                 // render.draw_indexed(&r.state, &r.vertex_buffer, &r.index_buffer, &r.descriptors);
-                cmds.bind_vertex(r.vertex_buffer);
-                cmds.bind_index(r.index_buffer);
+                cmds.bind_vertex(&r.vertex_buffer);
+                cmds.bind_index(&r.index_buffer);
                 // TODO: terrible, don't clone
                 cmds.bind_pipeline::<Vertex>(r.state.clone());
                 cmds.draw_index(3);
             }
-            let swapchain = context.blackboard.get::<Swapchain>().expect("swap");
+            let swapchain = blackboard.get::<Swapchain>().expect("swap");
             let color_image = context.get_resource(data.color);
             swapchain.copy_and_present(color_image);
         },
@@ -83,7 +83,22 @@ pub fn add_triangle_pass(
 //     );
 // }
 
-pub fn render_pass(ctx: &context::Context) -> Framegraph<Compiled> {
+pub fn render_pass(ctx: &context::Context, resolution: Resolution) -> Framegraph<Compiled> {
+    let mut fg = Framegraph::new();
+    let _triangle_data = add_triangle_pass(&mut fg, resolution);
+    //add_present_pass(&mut fg, triangle_data.color);
+    // Compiles the graph, allocates and optimizes resources
+    fg.compile(resolution, ctx)
+}
+// Just state for the triangle pass
+struct TriangleState {
+    vertex_buffer: Buffer<Vertex>,
+    index_buffer: Buffer<u32>,
+    state: PipelineState,
+    descriptors: Vec<u32>,
+}
+fn main() {
+    let ctx = Context::new();
     let mut blackboard = Blackboard::new();
     let swapchain = Swapchain::new(&ctx);
     let resolution = swapchain.resolution();
@@ -119,9 +134,6 @@ pub fn render_pass(ctx: &context::Context) -> Framegraph<Compiled> {
     let vertex_buffer =
         Buffer::from_slice(&ctx, Property::HostVisible, BufferUsage::Vertex, &vertices)
             .expect("Failed to create vertex buffer");
-    let mut fg = Framegraph::new(blackboard);
-    let vertex_buffer = fg.add_buffer(vertex_buffer);
-    let index_buffer = fg.add_buffer(index_buffer);
 
     let triangle_state = TriangleState {
         vertex_buffer,
@@ -129,25 +141,11 @@ pub fn render_pass(ctx: &context::Context) -> Framegraph<Compiled> {
         state,
         descriptors: vec![1, 2, 3],
     };
-    fg.blackboard.add(triangle_state);
-    fg.blackboard.add(swapchain);
-    let _triangle_data = add_triangle_pass(&mut fg, resolution);
-    //add_present_pass(&mut fg, triangle_data.color);
-    // Compiles the graph, allocates and optimizes resources
-    fg.compile(resolution, ctx)
-}
-// Just state for the triangle pass
-struct TriangleState {
-    vertex_buffer: Resource<GenericBuffer>,
-    index_buffer: Resource<GenericBuffer>,
-    state: PipelineState,
-    descriptors: Vec<u32>,
-}
-fn main() {
-    let ctx = Context::new();
-    let render_pass = render_pass(&ctx);
+    blackboard.add(triangle_state);
+    blackboard.add(swapchain);
+    let render_pass = render_pass(&ctx, resolution);
     loop {
         // Execute the graph every frame
-        render_pass.execute();
+        render_pass.execute(&blackboard);
     }
 }

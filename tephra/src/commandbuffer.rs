@@ -21,9 +21,9 @@ pub struct Execute {
     pub inner: Box<dyn ExecuteApi>,
 }
 
-pub enum GraphicsCmd {
-    BindVertex(ResourceIndex),
-    BindIndex(ResourceIndex),
+pub enum GraphicsCmd<'a> {
+    BindVertex(&'a GenericBuffer),
+    BindIndex(&'a GenericBuffer),
     BindPipeline {
         state: PipelineState,
         stride: u32,
@@ -34,20 +34,20 @@ pub enum GraphicsCmd {
     },
 }
 
-pub struct GraphicsCommandbuffer {
-    pub(crate) cmds: Vec<GraphicsCmd>,
+pub struct GraphicsCommandbuffer<'a> {
+    pub(crate) cmds: Vec<GraphicsCmd<'a>>,
 }
 
-impl GraphicsCommandbuffer {
+impl<'a> GraphicsCommandbuffer<'a> {
     pub fn new() -> Self {
         GraphicsCommandbuffer { cmds: Vec::new() }
     }
-    pub fn bind_vertex(&mut self, buffer: Resource<GenericBuffer>) {
-        let cmd = GraphicsCmd::BindVertex(buffer.id);
+    pub fn bind_vertex<T>(&mut self, buffer: &'a Buffer<T>) {
+        let cmd = GraphicsCmd::BindVertex(&buffer.buffer);
         self.cmds.push(cmd);
     }
-    pub fn bind_index(&mut self, buffer: Resource<GenericBuffer>) {
-        let cmd = GraphicsCmd::BindIndex(buffer.id);
+    pub fn bind_index(&mut self, buffer: &'a Buffer<u32>) {
+        let cmd = GraphicsCmd::BindIndex(&buffer.buffer);
         self.cmds.push(cmd);
     }
     pub fn bind_pipeline<T: VertexInput>(&mut self, state: PipelineState) {

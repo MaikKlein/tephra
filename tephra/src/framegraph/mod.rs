@@ -115,7 +115,6 @@ pub struct Recording {
 }
 
 pub struct Framegraph<T = Recording> {
-    pub blackboard: Blackboard,
     state: T,
     graph: Graph<Pass, Access>,
     resources: Vec<ResourceType>,
@@ -161,7 +160,7 @@ impl Framegraph {
         let id = self.add_resource(ResourceType::Buffer(buffer.buffer));
         Resource::new(id, 0)
     }
-    pub fn new(blackboard: Blackboard) -> Self {
+    pub fn new() -> Self {
         Framegraph {
             state: Recording {
                 image_data: Vec::new(),
@@ -170,7 +169,6 @@ impl Framegraph {
             graph: Graph::new(),
             resources: Vec::new(),
             execute_fns: HashMap::new(),
-            blackboard,
             pass_map: HashMap::new(),
         }
     }
@@ -193,7 +191,7 @@ impl Framegraph {
         name: &'static str,
         setup: Setup,
         pass: P,
-        execute: fn(&Data, &mut GraphicsCommandbuffer, &Framegraph<Compiled>),
+        execute: render_task::ExecuteFn<Data>,
     ) -> render_task::ARenderTask<Data>
     where
         Setup: Fn(&mut TaskBuilder) -> Data,
@@ -249,7 +247,6 @@ impl Framegraph {
             resources: self.resources,
             graph: self.graph,
             state,
-            blackboard: self.blackboard,
             pass_map: self.pass_map,
         }
     }
@@ -260,7 +257,7 @@ impl Framegraph<Compiled> {
     //     (0..1)
     // }
 
-    pub fn execute(&self) {
+    pub fn execute(&self, blackboard: &Blackboard) {
         use petgraph::visit::{Bfs, Walker};
         let bfs = Bfs::new(&self.graph, Handle::new(0));
         bfs.iter(&self.graph).for_each(|idx| {
@@ -268,7 +265,7 @@ impl Framegraph<Compiled> {
 
             let render = self.state.render.get(&idx).expect("render");
             let mut cmds = GraphicsCommandbuffer::new();
-            execute.execute(&mut cmds, self);
+            execute.execute(blackboard, &mut cmds, self);
             render.execute_commands(self, &cmds.cmds);
         });
     }

@@ -10,17 +10,14 @@ pub trait Renderpass {
     type Input;
     fn setup(task_builder: &mut TaskBuilder) -> Self::Input;
     fn framebuffer(data: &Self::Input) -> Vec<Resource<Image>>;
-    fn execute(
-        data: &Self::Input,
-        cmds: &mut GraphicsCommandbuffer,
-        fg: &Framegraph<Compiled>,
-    );
+    fn execute(data: &Self::Input, cmds: &mut GraphicsCommandbuffer, fg: &Framegraph<Compiled>);
 }
-
+pub type ExecuteFn<T> =
+    for<'a> fn(&T, &'a Blackboard, &mut GraphicsCommandbuffer<'a>, &Framegraph<Compiled>);
 pub type ARenderTask<T> = Arc<RenderTask<T>>;
 pub struct RenderTask<T> {
     pub data: T,
-    pub execute: fn(&T, &mut GraphicsCommandbuffer, &Framegraph<Compiled>),
+    pub execute: ExecuteFn<T>,
 }
 
 impl<T> Deref for RenderTask<T> {
@@ -31,11 +28,21 @@ impl<T> Deref for RenderTask<T> {
 }
 
 pub trait Execute {
-    fn execute(&self, render: &mut GraphicsCommandbuffer, ctx: &Framegraph<Compiled>);
+    fn execute<'a>(
+        &self,
+        blackboard: &'a Blackboard,
+        render: &mut GraphicsCommandbuffer<'a>,
+        ctx: &Framegraph<Compiled>,
+    );
 }
 
 impl<T> Execute for RenderTask<T> {
-    fn execute(&self, render: &mut GraphicsCommandbuffer, ctx: &Framegraph<Compiled>) {
-        (self.execute)(&self.data, render, ctx)
+    fn execute<'a>(
+        &self,
+        blackboard: &'a Blackboard,
+        render: &mut GraphicsCommandbuffer<'a>,
+        ctx: &Framegraph<Compiled>,
+    ) {
+        (self.execute)(&self.data, blackboard, render, ctx)
     }
 }

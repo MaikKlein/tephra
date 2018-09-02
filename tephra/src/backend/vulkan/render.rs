@@ -74,8 +74,8 @@ impl RenderApi for Render {
                     device.cmd_set_scissor(draw_command_buffer, 0, &scissors);
                     for cmd in cmds {
                         match cmd {
-                            GraphicsCmd::BindVertex(loc) => {
-                                let vk_vertex_buffer = fg.get_buffer(*loc).as_ref().downcast::<Vulkan>();
+                            GraphicsCmd::BindVertex(buffer) => {
+                                let vk_vertex_buffer = buffer.as_ref().downcast::<Vulkan>();
 
                                 device.cmd_bind_vertex_buffers(
                                     draw_command_buffer,
@@ -84,8 +84,8 @@ impl RenderApi for Render {
                                     &[0],
                                 );
                             }
-                            GraphicsCmd::BindIndex(loc) => {
-                                let vk_index_buffer = fg.get_buffer(*loc).as_ref().downcast::<Vulkan>();
+                            GraphicsCmd::BindIndex(buffer) => {
+                                let vk_index_buffer = buffer.as_ref().downcast::<Vulkan>();
                                 device.cmd_bind_index_buffer(
                                     draw_command_buffer,
                                     vk_index_buffer.buffer,
