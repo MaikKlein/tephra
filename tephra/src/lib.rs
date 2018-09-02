@@ -26,6 +26,7 @@ pub mod framegraph;
 pub mod render;
 pub mod reflect;
 pub mod commandbuffer;
+pub mod descriptor;
 #[derive(Copy, Clone, Default, Debug)]
 pub struct Viewport {
     pub origin: (f32, f32),

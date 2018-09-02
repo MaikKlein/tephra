@@ -6,16 +6,17 @@ use render::Render;
 use std::ops::Deref;
 use std::sync::Arc;
 
-// pub trait Renderpass {
-//     type Framebuffer;
-//     fn setup(task_builder: &mut TaskBuilder) -> Self::Framebuffer;
-//     fn framebuffer(data: &Self::Framebuffer) -> Vec<Resource<Image>>;
-//     fn execute(
-//         data: &Self::Framebuffer,
-//         cmds: &mut GraphicsCommandbuffer,
-//         fg: &Framegraph<Compiled>,
-//     );
-// }
+pub trait Renderpass {
+    type Input;
+    fn setup(task_builder: &mut TaskBuilder) -> Self::Input;
+    fn framebuffer(data: &Self::Input) -> Vec<Resource<Image>>;
+    fn execute(
+        data: &Self::Input,
+        cmds: &mut GraphicsCommandbuffer,
+        fg: &Framegraph<Compiled>,
+    );
+}
+
 pub type ARenderTask<T> = Arc<RenderTask<T>>;
 pub struct RenderTask<T> {
     pub data: T,
