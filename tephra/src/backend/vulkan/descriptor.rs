@@ -55,7 +55,7 @@ impl CreatePool for Context {
                     DescriptorType::Uniform => vk::DescriptorType::UNIFORM_BUFFER,
                 };
                 vk::DescriptorSetLayoutBinding {
-                    binding: 0,
+                    binding: desc.binding,
                     descriptor_type: ty,
                     descriptor_count: 1,
                     stage_flags: vk::ShaderStageFlags::ALL,
@@ -74,15 +74,21 @@ impl CreatePool for Context {
                 .create_descriptor_set_layout(&descriptor_info, None)
                 .unwrap()
         }];
+        let mut pool_sizes = Vec::new();
         let buffer_size = vk::DescriptorPoolSize {
             ty: vk::DescriptorType::UNIFORM_BUFFER,
             descriptor_count: sizes.buffer,
         };
+        if buffer_size.descriptor_count > 0 {
+            pool_sizes.push(buffer_size);
+        }
         let image_size = vk::DescriptorPoolSize {
             ty: vk::DescriptorType::STORAGE_IMAGE,
             descriptor_count: sizes.images,
         };
-        let pool_sizes = [buffer_size, image_size];
+        if image_size.descriptor_count > 0 {
+            pool_sizes.push(image_size);
+        }
         let descriptor_pool_info = vk::DescriptorPoolCreateInfo {
             pool_size_count: pool_sizes.len() as u32,
             p_pool_sizes: pool_sizes.as_ptr(),
@@ -162,7 +168,7 @@ impl CreateDescriptor for Context {
 }
 
 impl DescriptorApi for Descriptor {
-    fn write(&mut self, data: Vec<Binding<DescriptorResource>>) {
+    fn write(&mut self, data: &[Binding<DescriptorResource>]) {
         let buffer_infos: Vec<_> = data
             .iter()
             .map(|resource| match resource.data {

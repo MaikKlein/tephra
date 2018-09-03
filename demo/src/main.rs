@@ -126,12 +126,20 @@ struct TriangleState {
 }
 fn main() {
     let ctx = Context::new();
-    let color = Buffer::from_slice(
-        &ctx,
-        Property::HostVisible,
-        BufferUsage::Uniform,
-        &[[1.0f32, 0.0, 0.0, 1.0]],
-    ).expect("color buffer");
+     let color = Buffer::from_slice(
+         &ctx,
+         Property::HostVisible,
+         BufferUsage::Uniform,
+         &[[1.0f32, 0.0, 0.0, 1.0]],
+     ).expect("color buffer");
+     let color_data = Color {
+         color,
+     };
+    let pool = Pool::new(&ctx);
+    let mut color_allocator = pool.allocate::<Color>();
+    let mut color_desc = color_allocator.allocate();
+    //color_desc.update(&color_data);
+
     let mut blackboard = Blackboard::new();
     let swapchain = Swapchain::new(&ctx);
     let resolution = swapchain.resolution();

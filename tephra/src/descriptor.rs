@@ -154,7 +154,7 @@ where
     }
 }
 pub trait DescriptorApi: Downcast {
-    fn write(&mut self, data: Vec<Binding<DescriptorResource>>);
+    fn write(&mut self, data: &[Binding<DescriptorResource>]);
 }
 impl_downcast!(DescriptorApi);
 
@@ -191,6 +191,14 @@ pub struct Binding<T> {
 pub struct Descriptor<'a, T: DescriptorInfo> {
     pub inner_descriptor: InnerDescriptor,
     _m: PhantomData<&'a T>,
+}
+impl<'a, T> Descriptor<'a, T>
+where
+    T: DescriptorInfo,
+{
+    pub fn update(&mut self, t: &'a T) {
+        self.inner_descriptor.inner.write(&t.descriptor_data());
+    }
 }
 
 impl<'a, T> Deref for Descriptor<'a, T>
