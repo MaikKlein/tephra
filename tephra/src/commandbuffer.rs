@@ -1,5 +1,6 @@
-use buffer::{GenericBuffer, Buffer, BufferApi};
-use framegraph::{ResourceIndex,  Resource };
+use buffer::{Buffer, BufferApi, GenericBuffer};
+use descriptor::{Descriptor, DescriptorInfo, InnerDescriptor};
+use framegraph::{Resource, ResourceIndex};
 use image::Image;
 use pipeline::PipelineState;
 use render::RenderApi;
@@ -24,8 +25,9 @@ pub struct Execute {
 pub enum GraphicsCmd<'a> {
     BindVertex(&'a GenericBuffer),
     BindIndex(&'a GenericBuffer),
+    BindDescriptor(InnerDescriptor),
     BindPipeline {
-        state: PipelineState,
+        state: &'a PipelineState,
         stride: u32,
         vertex_input_data: Vec<VertexInputData>,
     },
@@ -50,7 +52,7 @@ impl<'a> GraphicsCommandbuffer<'a> {
         let cmd = GraphicsCmd::BindIndex(&buffer.buffer);
         self.cmds.push(cmd);
     }
-    pub fn bind_pipeline<T: VertexInput>(&mut self, state: PipelineState) {
+    pub fn bind_pipeline<T: VertexInput>(&mut self, state: &'a PipelineState) {
         let cmd = GraphicsCmd::BindPipeline {
             state,
             stride: std::mem::size_of::<T>() as u32,
@@ -60,6 +62,14 @@ impl<'a> GraphicsCommandbuffer<'a> {
     }
     pub fn draw_index(&mut self, len: usize) {
         let cmd = GraphicsCmd::DrawIndex { len: len as u32 };
+        self.cmds.push(cmd);
+    }
+
+    pub fn bind_descriptor<T>(&mut self, descriptor: Descriptor<T>)
+    where
+        T: DescriptorInfo,
+    {
+        let cmd = GraphicsCmd::BindDescriptor(descriptor.inner_descriptor);
         self.cmds.push(cmd);
     }
 }

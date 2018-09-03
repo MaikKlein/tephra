@@ -7,12 +7,39 @@ pub use tephra::winit;
 use tephra::backend::vulkan::Context;
 use tephra::buffer::{Buffer, BufferUsage, GenericBuffer, Property};
 use tephra::context;
+use tephra::descriptor::{
+    Binding, Descriptor, DescriptorInfo, DescriptorResource, DescriptorSizes, DescriptorType, Pool,
+};
 use tephra::framegraph::render_task::ARenderTask;
 use tephra::framegraph::{Blackboard, Compiled, Framegraph, GetResource, Recording, Resource};
 use tephra::image::{Image, ImageDesc, ImageLayout, Resolution};
 use tephra::pipeline::PipelineState;
 use tephra::shader::ShaderModule;
 use tephra::swapchain::Swapchain;
+
+pub struct Color {
+    pub color: Buffer<[f32; 4]>,
+}
+impl DescriptorInfo for Color {
+    fn descriptor_data(&self) -> Vec<Binding<DescriptorResource>> {
+        vec![Binding {
+            binding: 0,
+            data: DescriptorResource::Uniform(&self.color.buffer),
+        }]
+    }
+    fn sizes() -> DescriptorSizes {
+        DescriptorSizes {
+            buffer: 1,
+            images: 0,
+        }
+    }
+    fn layout() -> Vec<Binding<DescriptorType>> {
+        vec![Binding {
+            binding: 0,
+            data: DescriptorType::Uniform,
+        }]
+    }
+}
 
 #[derive(Clone, Debug, Copy)]
 #[repr(C)]
@@ -55,7 +82,7 @@ pub fn add_triangle_pass(
                 cmds.bind_vertex(&r.vertex_buffer);
                 cmds.bind_index(&r.index_buffer);
                 // TODO: terrible, don't clone
-                cmds.bind_pipeline::<Vertex>(r.state.clone());
+                cmds.bind_pipeline::<Vertex>(&r.state);
                 cmds.draw_index(3);
             }
             let swapchain = blackboard.get::<Swapchain>().expect("swap");
@@ -99,6 +126,12 @@ struct TriangleState {
 }
 fn main() {
     let ctx = Context::new();
+    let color = Buffer::from_slice(
+        &ctx,
+        Property::HostVisible,
+        BufferUsage::Uniform,
+        &[[1.0f32, 0.0, 0.0, 1.0]],
+    ).expect("color buffer");
     let mut blackboard = Blackboard::new();
     let swapchain = Swapchain::new(&ctx);
     let resolution = swapchain.resolution();

@@ -23,14 +23,20 @@ impl PipelineState {
         }
     }
 
-    pub fn with_vertex_shader(self, shader: ShaderModule) -> Self {
+    pub fn with_vertex_shader(
+        self,
+        shader: ShaderModule,
+    ) -> Self {
         PipelineState {
             vertex_shader: Some(shader),
             ..self
         }
     }
 
-    pub fn with_fragment_shader(self, shader: ShaderModule) -> Self {
+    pub fn with_fragment_shader(
+        self,
+        shader: ShaderModule,
+    ) -> Self {
         PipelineState {
             fragment_shader: Some(shader),
             ..self

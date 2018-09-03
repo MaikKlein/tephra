@@ -10,10 +10,15 @@ macro_rules! extract {
     };
 }
 
-fn find_result_id<'a>(module: &'a Module, id: u32) -> Option<&'a Instruction> {
-    module.global_inst_iter().find(|inst| match inst.result_id {
-        Some(result_id) => result_id == id,
-        _ => false,
+fn find_result_id<'a>(
+    module: &'a Module,
+    id: u32,
+) -> Option<&'a Instruction> {
+    module.global_inst_iter().find(|inst| {
+        match inst.result_id {
+            Some(result_id) => result_id == id,
+            _ => false,
+        }
     })
 }
 fn filter_ids<'a>(
@@ -50,7 +55,10 @@ pub enum Type {
     Array(Box<Type>),
 }
 impl Type {
-    pub fn from_instruction(module: &Module, ty_inst: &Instruction) -> Type {
+    pub fn from_instruction(
+        module: &Module,
+        ty_inst: &Instruction,
+    ) -> Type {
         match ty_inst.class.opcode {
             spirv::Op::TypeFloat => {
                 let size = *extract!(&ty_inst.operands[0], Operand::LiteralInt32);
@@ -74,8 +82,7 @@ impl Type {
             spirv::Op::TypeArray => {
                 let type_id = *extract!(&ty_inst.operands[0], Operand::IdRef);
                 let size_id = *extract!(&ty_inst.operands[1], Operand::IdRef);
-                let size_inst =
-                    find_result_id(module, size_id).expect("Should have Inner Type");
+                let size_inst = find_result_id(module, size_id).expect("Should have Inner Type");
                 println!("{:?}", size_inst);
                 let inner_ty_inst =
                     find_result_id(module, type_id).expect("Should have Inner Type");
@@ -89,8 +96,7 @@ impl Type {
                         let id = *extract!(operand, Operand::IdRef);
                         let inst = find_result_id(module, id).expect("Unable to find type");
                         Type::from_instruction(module, inst)
-                    })
-                    .collect();
+                    }).collect();
                 Type::Struct(types)
             }
             r => unimplemented!("{:?}", r),
@@ -103,7 +109,10 @@ pub struct Variable {
     pub ty: Type,
 }
 impl Variable {
-    pub fn from_instruction(module: &Module, inst: &Instruction) -> Option<Self> {
+    pub fn from_instruction(
+        module: &Module,
+        inst: &Instruction,
+    ) -> Option<Self> {
         if inst.class.opcode != spirv::Op::Variable {
             return None;
         }
@@ -125,7 +134,10 @@ pub struct EntryPoint {
 }
 
 impl EntryPoint {
-    pub fn from_instruction(module: &Module, inst: &Instruction) -> Option<Self> {
+    pub fn from_instruction(
+        module: &Module,
+        inst: &Instruction,
+    ) -> Option<Self> {
         if inst.class.opcode != spirv::Op::EntryPoint {
             return None;
         }

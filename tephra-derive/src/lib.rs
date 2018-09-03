@@ -16,7 +16,10 @@ pub fn derive_vertex_inputsize(input: proc_macro::TokenStream) -> proc_macro::To
     derive.into()
 }
 
-fn gen_vertex_input(ident: &Ident, input: &DataStruct) -> TokenStream {
+fn gen_vertex_input(
+    ident: &Ident,
+    input: &DataStruct,
+) -> TokenStream {
     let tys = input.fields.iter().map(|field| &field.ty);
     quote!{
         impl tephra::renderpass::VertexInput for #ident {

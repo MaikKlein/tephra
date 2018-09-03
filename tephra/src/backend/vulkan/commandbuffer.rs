@@ -1,6 +1,6 @@
 use super::{Context, Vulkan};
 use ash::vk;
-use commandbuffer::{self, GraphicsCmd, Compute, CreateExecute, ExecuteApi, Graphics};
+use commandbuffer::{self, Compute, CreateExecute, ExecuteApi, Graphics, GraphicsCmd};
 use std::ptr;
 
 pub struct Commandbuffer {
@@ -13,7 +13,10 @@ pub struct Execute {
     ctx: Context,
 }
 impl ExecuteApi for Execute {
-    fn execute_commands(&self, cmds: &[GraphicsCmd]) {
+    fn execute_commands(
+        &self,
+        cmds: &[GraphicsCmd],
+    ) {
         let clear_values = [
             vk::ClearValue {
                 color: vk::ClearColorValue {

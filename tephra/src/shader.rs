@@ -1,15 +1,18 @@
 use backend::BackendApi;
 use context::Context;
+use reflect;
 use std::fs::File;
 use std::io::{self, Read};
 use std::path::Path;
 use std::sync::Arc;
-use reflect;
 
 use downcast::Downcast;
 
 pub trait CreateShader {
-    fn load(&self, bytes: &[u8]) -> Result<ShaderModule, ShaderError>;
+    fn load(
+        &self,
+        bytes: &[u8],
+    ) -> Result<ShaderModule, ShaderError>;
 }
 
 pub enum ShaderType {
@@ -44,7 +47,10 @@ pub struct ShaderModule {
     pub data: Arc<dyn ShaderApi>,
 }
 impl ShaderModule {
-    pub fn load<P: AsRef<Path>>(context: &Context, p: P) -> Result<ShaderModule, ShaderError> {
+    pub fn load<P: AsRef<Path>>(
+        context: &Context,
+        p: P,
+    ) -> Result<ShaderModule, ShaderError> {
         let file = File::open(p.as_ref()).map_err(ShaderError::IoError)?;
         let bytes: Vec<_> = file.bytes().filter_map(Result::ok).collect();
         CreateShader::load(context.context.as_ref(), &bytes)

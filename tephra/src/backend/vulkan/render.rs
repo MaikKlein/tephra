@@ -1,4 +1,3 @@
-use framegraph::{Framegraph, Compiled};
 use super::buffer::BufferData;
 use super::Context;
 use super::{CommandBuffer, Vulkan};
@@ -6,6 +5,7 @@ use ash::version::DeviceV1_0;
 use ash::vk;
 use buffer::BufferApi;
 use commandbuffer::GraphicsCmd;
+use framegraph::{Compiled, Framegraph};
 use image::{Image, ImageLayout, Resolution};
 use pipeline::PipelineState;
 use render::{self, CreateRender, RenderApi};
@@ -17,6 +17,7 @@ pub struct Render {
     pub ctx: Context,
     pub framebuffer: vk::Framebuffer,
     pub renderpass: vk::RenderPass,
+    pub pipeline_layout: vk::PipelineLayout,
     pub surface_resolution: Resolution,
 }
 
@@ -48,7 +49,6 @@ impl RenderApi for Render {
             },
         ];
         let mut pipelines = Vec::new();
-        let mut pipeline_layouts = Vec::new();
         let command_buffer =
             CommandBuffer::record(&self.ctx, "RenderPass", |draw_command_buffer| {
                 let device = &self.ctx.device;
@@ -74,6 +74,17 @@ impl RenderApi for Render {
                     device.cmd_set_scissor(draw_command_buffer, 0, &scissors);
                     for cmd in cmds {
                         match cmd {
+                            GraphicsCmd::BindDescriptor(descriptor) => {
+                                let vk_descriptor = descriptor.inner.as_ref().downcast::<Vulkan>();
+                                device.cmd_bind_descriptor_sets(
+                                    draw_command_buffer,
+                                    vk::PipelineBindPoint::GRAPHICS,
+                                    self.pipeline_layout,
+                                    0,
+                                    &[vk_descriptor.descriptor_set],
+                                    &[],
+                                );
+                            }
                             GraphicsCmd::BindVertex(buffer) => {
                                 let vk_vertex_buffer = buffer.as_ref().downcast::<Vulkan>();
 
@@ -98,16 +109,14 @@ impl RenderApi for Render {
                                 stride,
                                 ref vertex_input_data,
                             } => {
-                                let layout = create_pipeline_layout(&self.ctx);
                                 let pipeline = create_pipeline(
                                     &self.ctx,
                                     state,
                                     *stride,
                                     vertex_input_data,
                                     self.renderpass,
-                                    layout,
+                                    self.pipeline_layout,
                                 );
-                                pipeline_layouts.push(layout);
                                 pipelines.push(pipeline);
                                 device.cmd_bind_pipeline(
                                     draw_command_buffer,
@@ -143,7 +152,6 @@ impl RenderApi for Render {
     ) {
         let vk_vertex_buffer = vertex_buffer.downcast_ref::<BufferData>().expect("backend");
         let vk_index_buffer = index_buffer.downcast_ref::<BufferData>().expect("backend");
-        let pipeline_layout = unsafe { create_pipeline_layout(&self.ctx) };
         let pipeline = unsafe {
             create_pipeline(
                 &self.ctx,
@@ -151,7 +159,7 @@ impl RenderApi for Render {
                 stride,
                 vertex_input,
                 self.renderpass,
-                pipeline_layout,
+                self.pipeline_layout,
             )
         };
         let ctx = &self.ctx;
@@ -233,9 +241,6 @@ impl RenderApi for Render {
             &[],
             command_buffer,
         );
-        unsafe {
-            self.ctx.device.destroy_pipeline(pipeline, None);
-        }
     }
 }
 
@@ -244,10 +249,12 @@ impl CreateRender for Context {
         unsafe {
             let renderpass = create_renderpass(self, images);
             let framebuffer = create_framebuffer(self, renderpass, images);
+            let pipeline_layout = create_pipeline_layout(self);
             let ctx = self.clone();
             let render = Render {
                 renderpass,
                 framebuffer,
+                pipeline_layout,
                 surface_resolution: resolution,
                 ctx,
             };
@@ -478,8 +485,6 @@ pub unsafe fn create_pipeline(
         .device
         .create_graphics_pipelines(ctx.pipeline_cache, &[graphic_pipeline_info], None)
         .expect("Unable to create graphics pipeline");
-    ctx.device.destroy_pipeline_layout(pipeline_layout, None);
-
     graphics_pipelines[0]
 }
 unsafe fn create_renderpass(ctx: &Context, image_resources: &[&Image]) -> vk::RenderPass {

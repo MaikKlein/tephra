@@ -1,16 +1,20 @@
-use framegraph::{Framegraph, Compiled};
 use backend::BackendApi;
 use buffer::{Buffer, BufferApi};
 use commandbuffer::GraphicsCmd;
 use context::Context;
 use downcast::Downcast;
+use framegraph::{Compiled, Framegraph};
 use image::{Image, Resolution};
 use pipeline::PipelineState;
 use renderpass::{VertexInput, VertexInputData};
 use std::mem::size_of;
 use std::ops::Deref;
 pub trait CreateRender {
-    fn create_render(&self, resolution: Resolution, images: &[&Image]) -> Render;
+    fn create_render(
+        &self,
+        resolution: Resolution,
+        images: &[&Image],
+    ) -> Render;
 }
 
 pub trait RenderApi: Downcast {
@@ -23,7 +27,11 @@ pub trait RenderApi: Downcast {
         index_buffer: &BufferApi,
         len: u32,
     );
-    fn execute_commands(&self,fg: &Framegraph<Compiled>, cmds: &[GraphicsCmd]);
+    fn execute_commands(
+        &self,
+        fg: &Framegraph<Compiled>,
+        cmds: &[GraphicsCmd],
+    );
 }
 impl_downcast!(RenderApi);
 
@@ -64,7 +72,11 @@ impl RenderApi {
     }
 }
 impl Render {
-    pub fn new(ctx: &Context, resolution: Resolution, images: &[&Image]) -> Render {
+    pub fn new(
+        ctx: &Context,
+        resolution: Resolution,
+        images: &[&Image],
+    ) -> Render {
         ctx.create_render(resolution, images)
     }
 }

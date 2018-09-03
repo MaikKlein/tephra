@@ -10,7 +10,11 @@ pub trait Renderpass {
     type Input;
     fn setup(task_builder: &mut TaskBuilder) -> Self::Input;
     fn framebuffer(data: &Self::Input) -> Vec<Resource<Image>>;
-    fn execute(data: &Self::Input, cmds: &mut GraphicsCommandbuffer, fg: &Framegraph<Compiled>);
+    fn execute(
+        data: &Self::Input,
+        cmds: &mut GraphicsCommandbuffer,
+        fg: &Framegraph<Compiled>,
+    );
 }
 pub type ExecuteFn<T> =
     for<'a> fn(&T, &'a Blackboard, &mut GraphicsCommandbuffer<'a>, &Framegraph<Compiled>);

@@ -16,14 +16,14 @@ use std::sync::Arc;
 use thread_local_object::ThreadLocal;
 use winit;
 pub mod buffer;
+pub mod commandbuffer;
+pub mod descriptor;
 pub mod image;
 pub mod pipeline;
 pub mod render;
 pub mod renderpass;
 pub mod shader;
 pub mod swapchain;
-pub mod commandbuffer;
-pub mod descriptor;
 
 #[derive(Copy, Clone)]
 pub struct Vulkan;
@@ -37,6 +37,7 @@ impl BackendApi for Vulkan {
     type Image = image::ImageData;
     type Swapchain = swapchain::SwapchainData;
     type Render = render::Render;
+    type Descriptor = descriptor::Descriptor;
 }
 
 #[derive(Clone)]
@@ -53,7 +54,10 @@ impl ThreadLocalCommandPool {
         }
     }
 
-    fn get_command_buffer(&self, context: &Context) -> RecordCommandBuffer {
+    fn get_command_buffer(
+        &self,
+        context: &Context,
+    ) -> RecordCommandBuffer {
         let has_local_value = self.thread_local_command_pool.get(|value| value.is_some());
         if !has_local_value {
             let _ = self
@@ -77,7 +81,10 @@ pub struct CommandPool {
 }
 
 impl CommandPool {
-    fn new(context: &Context, queue_family_index: vk::uint32_t) -> Self {
+    fn new(
+        context: &Context,
+        queue_family_index: vk::uint32_t,
+    ) -> Self {
         let pool_create_info = vk::CommandPoolCreateInfo {
             s_type: vk::StructureType::COMMAND_POOL_CREATE_INFO,
             p_next: ptr::null(),
@@ -101,7 +108,11 @@ impl CommandPool {
         }
     }
 
-    fn allocate_command_buffers(&mut self, context: &Context, count: u32) {
+    fn allocate_command_buffers(
+        &mut self,
+        context: &Context,
+        count: u32,
+    ) {
         let alloc_info = vk::CommandBufferAllocateInfo {
             s_type: vk::StructureType::COMMAND_BUFFER_ALLOCATE_INFO,
             p_next: ptr::null(),
@@ -117,7 +128,10 @@ impl CommandPool {
             self.command_buffers.extend(v.into_iter());
         }
     }
-    pub fn get_command_buffer(&mut self, context: &Context) -> RecordCommandBuffer {
+    pub fn get_command_buffer(
+        &mut self,
+        context: &Context,
+    ) -> RecordCommandBuffer {
         {
             let reset_command_buffer_iter = self.receiver.try_iter().map(|command_buffer| {
                 unsafe {
@@ -126,8 +140,7 @@ impl CommandPool {
                         .reset_command_buffer(
                             command_buffer,
                             vk::CommandBufferResetFlags::RELEASE_RESOURCES,
-                        )
-                        .expect("Reset command buffer failed.");
+                        ).expect("Reset command buffer failed.");
                 }
                 command_buffer
             });
@@ -217,7 +230,11 @@ pub struct CommandBuffer {
 }
 
 impl CommandBuffer {
-    pub fn record<F>(context: &Context, name: &str, mut f: F) -> Self
+    pub fn record<F>(
+        context: &Context,
+        name: &str,
+        mut f: F,
+    ) -> Self
     where
         F: FnMut(vk::CommandBuffer),
     {
@@ -433,8 +450,8 @@ impl Context {
                         .enumerate()
                         .filter_map(|(index, ref info)| {
                             let supports_graphic_and_surface =
-                                info.queue_flags.subset(vk::QueueFlags::GRAPHICS)
-                                    && surface_loader.get_physical_device_surface_support_khr(
+                                info.queue_flags.subset(vk::QueueFlags::GRAPHICS) && surface_loader
+                                    .get_physical_device_surface_support_khr(
                                         *pdevice,
                                         index as u32,
                                         surface,
@@ -443,14 +460,15 @@ impl Context {
                                 true => Some((*pdevice, index)),
                                 _ => None,
                             }
-                        })
-                        .nth(0)
-                })
-                .filter_map(|v| v)
+                        }).nth(0)
+                }).filter_map(|v| v)
                 .nth(0)
                 .expect("Couldn't find suitable device.");
             println!("{:#?}", entry.enumerate_instance_extension_properties());
-            println!("{:#?}", instance.enumerate_device_extension_properties(pdevice));
+            println!(
+                "{:#?}",
+                instance.enumerate_device_extension_properties(pdevice)
+            );
             let queue_family_index = queue_family_index as u32;
             let device_extension_names_raw = [Swapchain::name().as_ptr()];
             let features = vk::PhysicalDeviceFeatures {
@@ -489,23 +507,28 @@ impl Context {
                 .unwrap();
             let surface_format = surface_formats
                 .iter()
-                .map(|sfmt| match sfmt.format {
-                    vk::Format::UNDEFINED => vk::SurfaceFormatKHR {
-                        format: vk::Format::B8G8R8_UNORM,
-                        color_space: sfmt.color_space,
-                    },
-                    _ => *sfmt,
-                })
-                .nth(0)
+                .map(|sfmt| {
+                    match sfmt.format {
+                        vk::Format::UNDEFINED => {
+                            vk::SurfaceFormatKHR {
+                                format: vk::Format::B8G8R8_UNORM,
+                                color_space: sfmt.color_space,
+                            }
+                        }
+                        _ => *sfmt,
+                    }
+                }).nth(0)
                 .expect("Unable to find suitable surface format.");
             let surface_capabilities = surface_loader
                 .get_physical_device_surface_capabilities_khr(pdevice, surface)
                 .unwrap();
             let surface_resolution = match surface_capabilities.current_extent.width {
-                ::std::u32::MAX => vk::Extent2D {
-                    width: window_width,
-                    height: window_height,
-                },
+                ::std::u32::MAX => {
+                    vk::Extent2D {
+                        width: window_width,
+                        height: window_height,
+                    }
+                }
                 _ => surface_capabilities.current_extent,
             };
             let swapchain_loader =
@@ -606,12 +629,11 @@ impl Context {
             };
             let depth_image = device.create_image(&depth_image_create_info, None).unwrap();
             let depth_image_memory_req = device.get_image_memory_requirements(depth_image);
-            let depth_image_memory_index =
-                buffer::find_memorytype_index(
-                    &depth_image_memory_req,
-                    &device_memory_properties,
-                    vk::MemoryPropertyFlags::DEVICE_LOCAL,
-                ).expect("Unable to find suitable memory index for depth image.");
+            let depth_image_memory_index = buffer::find_memorytype_index(
+                &depth_image_memory_req,
+                &device_memory_properties,
+                vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            ).expect("Unable to find suitable memory index for depth image.");
 
             let depth_image_allocate_info = vk::MemoryAllocateInfo {
                 s_type: vk::StructureType::MEMORY_ALLOCATE_INFO,
@@ -839,8 +861,7 @@ pub fn record_submit_commandbuffer<D: DeviceV1_0, F: FnOnce(&D, vk::CommandBuffe
             .reset_command_buffer(
                 command_buffer,
                 vk::CommandBufferResetFlags::RELEASE_RESOURCES,
-            )
-            .expect("Reset command buffer failed.");
+            ).expect("Reset command buffer failed.");
         let command_buffer_begin_info = vk::CommandBufferBeginInfo {
             s_type: vk::StructureType::COMMAND_BUFFER_BEGIN_INFO,
             p_next: ptr::null(),

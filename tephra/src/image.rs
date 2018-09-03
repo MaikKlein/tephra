@@ -1,8 +1,8 @@
-use buffer::Buffer;
-use std::ops::Deref;
 use backend::BackendApi;
+use buffer::Buffer;
 use context::Context;
 use downcast::Downcast;
+use std::ops::Deref;
 //use renderpass::{Pass, Renderpass};
 #[derive(Debug, Copy, Clone)]
 pub enum ImageLayout {
@@ -16,13 +16,22 @@ pub struct Resolution {
 }
 
 pub trait CreateImage {
-    fn allocate(&self, desc: ImageDesc) -> Image;
-    fn from_buffer(&self, buffer: Buffer<u8>) -> Image;
+    fn allocate(
+        &self,
+        desc: ImageDesc,
+    ) -> Image;
+    fn from_buffer(
+        &self,
+        buffer: Buffer<u8>,
+    ) -> Image;
 }
 
 pub trait ImageApi: Downcast {
     fn desc(&self) -> &ImageDesc;
-    fn copy_image(&self, target: &Image);
+    fn copy_image(
+        &self,
+        target: &Image,
+    );
 }
 
 impl_downcast!(ImageApi);
@@ -49,7 +58,10 @@ impl Image {
             .downcast_ref::<B::Image>()
             .expect("Downcast Image Vulkan")
     }
-    pub fn allocate(ctx: &Context, desc: ImageDesc) -> Image {
+    pub fn allocate(
+        ctx: &Context,
+        desc: ImageDesc,
+    ) -> Image {
         CreateImage::allocate(ctx.context.as_ref(), desc)
     }
 }
@@ -63,7 +75,10 @@ pub trait RenderTarget<'a> {
 }
 
 pub trait CreateFramebuffer {
-    fn new(&self, render_target: &RenderTargetInfo) -> Self;
+    fn new(
+        &self,
+        render_target: &RenderTargetInfo,
+    ) -> Self;
 }
 
 pub trait FramebufferApi: Downcast {}
