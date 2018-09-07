@@ -70,10 +70,10 @@ impl LinearPoolAllocator {
     }
 }
 
-pub struct Allocator<'a, T: 'static> {
-    allocator: MutexGuard<'a, LinearPoolAllocator>,
+pub struct Allocator<'pool, T: 'static> {
+    allocator: MutexGuard<'pool, LinearPoolAllocator>,
     current_allocations: usize,
-    _m: PhantomData<&'a T>,
+    _m: PhantomData<T>,
 }
 
 impl<'a, T> Drop for Allocator<'a, T> {
@@ -82,11 +82,11 @@ impl<'a, T> Drop for Allocator<'a, T> {
     }
 }
 
-impl<'a, T> Allocator<'a, T>
+impl<'pool, T> Allocator<'pool, T>
 where
     T: DescriptorInfo,
 {
-    pub fn allocate(&mut self) -> Descriptor<'a, T> {
+    pub fn allocate<'alloc>(&'alloc mut self) -> Descriptor<'alloc, T> {
         let allocator = &mut self.allocator;
         let allocator_index = self.current_allocations / allocator.block_size;
         // If we don't have enough space, we need to allocate a new pool

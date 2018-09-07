@@ -9,12 +9,14 @@ use tephra::buffer::{Buffer, BufferUsage, GenericBuffer, Property};
 use tephra::commandbuffer::GraphicsCommandbuffer;
 use tephra::context;
 use tephra::descriptor::{
-    Binding, Descriptor, DescriptorInfo, DescriptorResource, DescriptorSizes, DescriptorType, Pool,
+    Allocator, Binding, Descriptor, DescriptorInfo, DescriptorResource, DescriptorSizes,
+    DescriptorType, Pool,
 };
 use tephra::framegraph::render_task::ARenderTask;
 use tephra::framegraph::{Blackboard, Compiled, Framegraph, GetResource, Recording, Resource};
 use tephra::image::{Image, ImageDesc, ImageLayout, Resolution};
 use tephra::pipeline::PipelineState;
+use tephra::renderpass::VertexInput;
 use tephra::shader::ShaderModule;
 use tephra::swapchain::Swapchain;
 
@@ -80,7 +82,7 @@ pub fn add_triangle_pass(
             {
                 let r = blackboard.get::<TriangleState>().expect("state");
                 let shader = blackboard.get::<TriangleShader>().expect("shader");
-                shader.draw_index(&r.vertex_buffer, &r.index_buffer, &r.state, cmds);
+                shader.draw_index(&r.vertex_buffer, &r.index_buffer, &r.state, &r.color, cmds);
             }
             let swapchain = blackboard.get::<Swapchain>().expect("swap");
             let color_image = context.get_resource(data.color);
@@ -119,10 +121,59 @@ struct TriangleState {
     vertex_buffer: Buffer<Vertex>,
     index_buffer: Buffer<u32>,
     state: PipelineState,
-    descriptors: Vec<u32>,
+    color: Color,
 }
+use std::ops::Range;
+pub trait GraphicsShader {
+    type VertexInput: VertexInput;
+    type Descriptor: DescriptorInfo;
+    fn draw_indexed<'a>(
+        &self,
+        vertex_buffer: &'a Buffer<Self::VertexInput>,
+        index_buffer: &'a Buffer<u32>,
+        state: &'a PipelineState,
+        range: Range<usize>,
+        descriptors: &[Self::Descriptor],
+        cmds: &mut GraphicsCommandbuffer<'a>,
+    ) {
+        // let mut color_desc = allocator.allocate();
+        // color_desc.update(color);
+        cmds.bind_vertex(vertex_buffer);
+        cmds.bind_index(index_buffer);
+        //cmds.bind_descriptor(&color_desc);
+        cmds.bind_pipeline::<Self::VertexInput>(state);
+        cmds.draw_index(range.end);
+    }
+}
+
+pub struct Shader<S: GraphicsShader> {
+    pool: Pool<S::Descriptor>,
+    vertex_shader: ShaderModule,
+    fragment_shader: ShaderModule,
+}
+
+use std::path::Path;
+impl<S: GraphicsShader> Shader<S> {
+    pub fn new(
+        ctx: &tephra::context::Context,
+        vertex_shader: ShaderModule,
+        fragment_shader: ShaderModule,
+    ) -> Self {
+        Shader {
+            vertex_shader,
+            fragment_shader,
+            pool: Pool::<S::Descriptor>::new(ctx),
+        }
+    }
+}
+
 pub struct TriangleShader {
     color_pool: Pool<Color>,
+}
+
+impl GraphicsShader for TriangleShader {
+    type VertexInput = Vertex;
+    type Descriptor = Color;
 }
 
 impl TriangleShader {
@@ -133,10 +184,11 @@ impl TriangleShader {
     }
 
     pub fn draw_index<'a>(
-        &self,
+        &'a self,
         vertex_buffer: &'a Buffer<Vertex>,
         index_buffer: &'a Buffer<u32>,
         state: &'a PipelineState,
+        color: &'a Color,
         cmds: &mut GraphicsCommandbuffer<'a>,
     ) {
         cmds.bind_vertex(vertex_buffer);
@@ -148,17 +200,17 @@ impl TriangleShader {
 }
 fn main() {
     let ctx = Context::new();
-    let color = Buffer::from_slice(
+    let color_buffer = Buffer::from_slice(
         &ctx,
         Property::HostVisible,
         BufferUsage::Uniform,
         &[[1.0f32, 0.0, 0.0, 1.0]],
     ).expect("color buffer");
-    let color_data = Color { color };
-    let pool = Pool::<Color>::new(&ctx);
-    let mut color_allocator = pool.allocate();
-    let mut color_desc = color_allocator.allocate();
-    color_desc.update(&color_data);
+    let color = Color {
+        color: color_buffer,
+    };
+    // let pool = Pool::<Color>::new(&ctx);
+    // let mut color_allocator = pool.allocate();
 
     let mut blackboard = Blackboard::new();
     let swapchain = Swapchain::new(&ctx);
@@ -200,7 +252,7 @@ fn main() {
         vertex_buffer,
         index_buffer,
         state,
-        descriptors: vec![1, 2, 3],
+        color,
     };
     let triangle_shader = TriangleShader::new(&ctx);
     blackboard.add(triangle_shader);

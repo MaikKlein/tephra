@@ -25,7 +25,7 @@ pub struct Execute {
 pub enum GraphicsCmd<'a> {
     BindVertex(&'a GenericBuffer),
     BindIndex(&'a GenericBuffer),
-    BindDescriptor(InnerDescriptor),
+    BindDescriptor(&'a InnerDescriptor),
     BindPipeline {
         state: &'a PipelineState,
         stride: u32,
@@ -65,11 +65,11 @@ impl<'a> GraphicsCommandbuffer<'a> {
         self.cmds.push(cmd);
     }
 
-    pub fn bind_descriptor<T>(&mut self, descriptor: Descriptor<T>)
+    pub fn bind_descriptor<T>(&mut self, descriptor: &'a Descriptor<'a, T>)
     where
         T: DescriptorInfo,
     {
-        let cmd = GraphicsCmd::BindDescriptor(descriptor.inner_descriptor);
+        let cmd = GraphicsCmd::BindDescriptor(&descriptor.inner_descriptor);
         self.cmds.push(cmd);
     }
 }

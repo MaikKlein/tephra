@@ -22,7 +22,7 @@ pub struct Render {
 }
 
 impl RenderApi for Render {
-    fn execute_commands(&self, fg: &Framegraph<Compiled>, cmds: &[GraphicsCmd]) {
+    fn execute_commands(&self, _fg: &Framegraph<Compiled>, cmds: &[GraphicsCmd]) {
         let viewports = [vk::Viewport {
             x: 0.0,
             y: 0.0,
@@ -141,107 +141,107 @@ impl RenderApi for Render {
             command_buffer,
         );
     }
-    fn draw_indexed(
-        &self,
-        state: &PipelineState,
-        stride: u32,
-        vertex_input: &[VertexInputData],
-        vertex_buffer: &BufferApi,
-        index_buffer: &BufferApi,
-        len: u32,
-    ) {
-        let vk_vertex_buffer = vertex_buffer.downcast_ref::<BufferData>().expect("backend");
-        let vk_index_buffer = index_buffer.downcast_ref::<BufferData>().expect("backend");
-        let pipeline = unsafe {
-            create_pipeline(
-                &self.ctx,
-                state,
-                stride,
-                vertex_input,
-                self.renderpass,
-                self.pipeline_layout,
-            )
-        };
-        let ctx = &self.ctx;
-        let viewports = [vk::Viewport {
-            x: 0.0,
-            y: 0.0,
-            width: ctx.surface_resolution.width as f32,
-            height: ctx.surface_resolution.height as f32,
-            min_depth: 0.0,
-            max_depth: 1.0,
-        }];
-        let scissors = [vk::Rect2D {
-            offset: vk::Offset2D { x: 0, y: 0 },
-            extent: ctx.surface_resolution.clone(),
-        }];
-        let clear_values = [
-            vk::ClearValue {
-                color: vk::ClearColorValue {
-                    float32: [0.0, 0.0, 0.0, 0.0],
-                },
-            },
-            vk::ClearValue {
-                depth_stencil: vk::ClearDepthStencilValue {
-                    depth: 1.0,
-                    stencil: 0,
-                },
-            },
-        ];
-        let command_buffer = CommandBuffer::record(ctx, "RenderPass", |draw_command_buffer| {
-            let device = &ctx.device;
-            unsafe {
-                let render_pass_begin_info = vk::RenderPassBeginInfo {
-                    s_type: vk::StructureType::RENDER_PASS_BEGIN_INFO,
-                    p_next: ptr::null(),
-                    render_pass: self.renderpass,
-                    framebuffer: self.framebuffer,
-                    render_area: vk::Rect2D {
-                        offset: vk::Offset2D { x: 0, y: 0 },
-                        extent: ctx.surface_resolution.clone(),
-                    },
-                    clear_value_count: clear_values.len() as u32,
-                    p_clear_values: clear_values.as_ptr(),
-                };
-                device.cmd_begin_render_pass(
-                    draw_command_buffer,
-                    &render_pass_begin_info,
-                    vk::SubpassContents::INLINE,
-                );
-                device.cmd_bind_pipeline(
-                    draw_command_buffer,
-                    vk::PipelineBindPoint::GRAPHICS,
-                    pipeline,
-                );
-                device.cmd_set_viewport(draw_command_buffer, 0, &viewports);
-                device.cmd_set_scissor(draw_command_buffer, 0, &scissors);
-                device.cmd_bind_vertex_buffers(
-                    draw_command_buffer,
-                    0,
-                    &[vk_vertex_buffer.buffer],
-                    &[0],
-                );
-                device.cmd_bind_index_buffer(
-                    draw_command_buffer,
-                    vk_index_buffer.buffer,
-                    0,
-                    vk::IndexType::UINT32,
-                );
-                device.cmd_draw_indexed(draw_command_buffer, len, 1, 0, 0, 1);
-                // Or draw without the index buffer
-                // device.cmd_draw(draw_command_buffer, 3, 1, 0, 0);
-                device.cmd_end_render_pass(draw_command_buffer);
-            }
-        });
-        ctx.present_queue.submit(
-            ctx,
-            &[vk::PipelineStageFlags::BOTTOM_OF_PIPE],
-            // FIXME: Add proper sync points
-            &[],
-            &[],
-            command_buffer,
-        );
-    }
+    // fn draw_indexed(
+    //     &self,
+    //     state: &PipelineState,
+    //     stride: u32,
+    //     vertex_input: &[VertexInputData],
+    //     vertex_buffer: &BufferApi,
+    //     index_buffer: &BufferApi,
+    //     len: u32,
+    // ) {
+    //     let vk_vertex_buffer = vertex_buffer.downcast_ref::<BufferData>().expect("backend");
+    //     let vk_index_buffer = index_buffer.downcast_ref::<BufferData>().expect("backend");
+    //     let pipeline = unsafe {
+    //         create_pipeline(
+    //             &self.ctx,
+    //             state,
+    //             stride,
+    //             vertex_input,
+    //             self.renderpass,
+    //             self.pipeline_layout,
+    //         )
+    //     };
+    //     let ctx = &self.ctx;
+    //     let viewports = [vk::Viewport {
+    //         x: 0.0,
+    //         y: 0.0,
+    //         width: ctx.surface_resolution.width as f32,
+    //         height: ctx.surface_resolution.height as f32,
+    //         min_depth: 0.0,
+    //         max_depth: 1.0,
+    //     }];
+    //     let scissors = [vk::Rect2D {
+    //         offset: vk::Offset2D { x: 0, y: 0 },
+    //         extent: ctx.surface_resolution.clone(),
+    //     }];
+    //     let clear_values = [
+    //         vk::ClearValue {
+    //             color: vk::ClearColorValue {
+    //                 float32: [0.0, 0.0, 0.0, 0.0],
+    //             },
+    //         },
+    //         vk::ClearValue {
+    //             depth_stencil: vk::ClearDepthStencilValue {
+    //                 depth: 1.0,
+    //                 stencil: 0,
+    //             },
+    //         },
+    //     ];
+    //     let command_buffer = CommandBuffer::record(ctx, "RenderPass", |draw_command_buffer| {
+    //         let device = &ctx.device;
+    //         unsafe {
+    //             let render_pass_begin_info = vk::RenderPassBeginInfo {
+    //                 s_type: vk::StructureType::RENDER_PASS_BEGIN_INFO,
+    //                 p_next: ptr::null(),
+    //                 render_pass: self.renderpass,
+    //                 framebuffer: self.framebuffer,
+    //                 render_area: vk::Rect2D {
+    //                     offset: vk::Offset2D { x: 0, y: 0 },
+    //                     extent: ctx.surface_resolution.clone(),
+    //                 },
+    //                 clear_value_count: clear_values.len() as u32,
+    //                 p_clear_values: clear_values.as_ptr(),
+    //             };
+    //             device.cmd_begin_render_pass(
+    //                 draw_command_buffer,
+    //                 &render_pass_begin_info,
+    //                 vk::SubpassContents::INLINE,
+    //             );
+    //             device.cmd_bind_pipeline(
+    //                 draw_command_buffer,
+    //                 vk::PipelineBindPoint::GRAPHICS,
+    //                 pipeline,
+    //             );
+    //             device.cmd_set_viewport(draw_command_buffer, 0, &viewports);
+    //             device.cmd_set_scissor(draw_command_buffer, 0, &scissors);
+    //             device.cmd_bind_vertex_buffers(
+    //                 draw_command_buffer,
+    //                 0,
+    //                 &[vk_vertex_buffer.buffer],
+    //                 &[0],
+    //             );
+    //             device.cmd_bind_index_buffer(
+    //                 draw_command_buffer,
+    //                 vk_index_buffer.buffer,
+    //                 0,
+    //                 vk::IndexType::UINT32,
+    //             );
+    //             device.cmd_draw_indexed(draw_command_buffer, len, 1, 0, 0, 1);
+    //             // Or draw without the index buffer
+    //             // device.cmd_draw(draw_command_buffer, 3, 1, 0, 0);
+    //             device.cmd_end_render_pass(draw_command_buffer);
+    //         }
+    //     });
+    //     ctx.present_queue.submit(
+    //         ctx,
+    //         &[vk::PipelineStageFlags::BOTTOM_OF_PIPE],
+    //         // FIXME: Add proper sync points
+    //         &[],
+    //         &[],
+    //         command_buffer,
+    //     );
+    // }
 }
 
 impl CreateRender for Context {

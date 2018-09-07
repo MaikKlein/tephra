@@ -1,6 +1,8 @@
 use commandbuffer::GraphicsCommandbuffer;
 use framegraph::blackboard::Blackboard;
 use framegraph::{Compiled, Framegraph, Resource, TaskBuilder};
+use renderpass::VertexInput;
+use descriptor::DescriptorInfo;
 use image::Image;
 use render::Render;
 use std::ops::Deref;
@@ -8,6 +10,8 @@ use std::sync::Arc;
 
 pub trait Renderpass {
     type Input;
+    type Vertex: VertexInput;
+    type Descriptor: DescriptorInfo;
     fn setup(task_builder: &mut TaskBuilder) -> Self::Input;
     fn framebuffer(data: &Self::Input) -> Vec<Resource<Image>>;
     fn execute(
