@@ -6,6 +6,7 @@ pub use tephra::winit;
 
 use tephra::backend::vulkan::Context;
 use tephra::buffer::{Buffer, BufferUsage, GenericBuffer, Property};
+use tephra::commandbuffer::GraphicsCommandbuffer;
 use tephra::context;
 use tephra::descriptor::{
     Binding, Descriptor, DescriptorInfo, DescriptorResource, DescriptorSizes, DescriptorType, Pool,
@@ -78,12 +79,8 @@ pub fn add_triangle_pass(
         |data, blackboard, cmds, context| {
             {
                 let r = blackboard.get::<TriangleState>().expect("state");
-                // render.draw_indexed(&r.state, &r.vertex_buffer, &r.index_buffer, &r.descriptors);
-                cmds.bind_vertex(&r.vertex_buffer);
-                cmds.bind_index(&r.index_buffer);
-                // TODO: terrible, don't clone
-                cmds.bind_pipeline::<Vertex>(&r.state);
-                cmds.draw_index(3);
+                let shader = blackboard.get::<TriangleShader>().expect("shader");
+                shader.draw_index(&r.vertex_buffer, &r.index_buffer, &r.state, cmds);
             }
             let swapchain = blackboard.get::<Swapchain>().expect("swap");
             let color_image = context.get_resource(data.color);
@@ -124,21 +121,44 @@ struct TriangleState {
     state: PipelineState,
     descriptors: Vec<u32>,
 }
+pub struct TriangleShader {
+    color_pool: Pool<Color>,
+}
+
+impl TriangleShader {
+    pub fn new(ctx: &tephra::context::Context) -> Self {
+        TriangleShader {
+            color_pool: Pool::new(ctx),
+        }
+    }
+
+    pub fn draw_index<'a>(
+        &self,
+        vertex_buffer: &'a Buffer<Vertex>,
+        index_buffer: &'a Buffer<u32>,
+        state: &'a PipelineState,
+        cmds: &mut GraphicsCommandbuffer<'a>,
+    ) {
+        cmds.bind_vertex(vertex_buffer);
+        cmds.bind_index(index_buffer);
+        // TODO: terrible, don't clone
+        cmds.bind_pipeline::<Vertex>(state);
+        cmds.draw_index(3);
+    }
+}
 fn main() {
     let ctx = Context::new();
-     let color = Buffer::from_slice(
-         &ctx,
-         Property::HostVisible,
-         BufferUsage::Uniform,
-         &[[1.0f32, 0.0, 0.0, 1.0]],
-     ).expect("color buffer");
-     let color_data = Color {
-         color,
-     };
-    let pool = Pool::new(&ctx);
-    let mut color_allocator = pool.allocate::<Color>();
+    let color = Buffer::from_slice(
+        &ctx,
+        Property::HostVisible,
+        BufferUsage::Uniform,
+        &[[1.0f32, 0.0, 0.0, 1.0]],
+    ).expect("color buffer");
+    let color_data = Color { color };
+    let pool = Pool::<Color>::new(&ctx);
+    let mut color_allocator = pool.allocate();
     let mut color_desc = color_allocator.allocate();
-    //color_desc.update(&color_data);
+    color_desc.update(&color_data);
 
     let mut blackboard = Blackboard::new();
     let swapchain = Swapchain::new(&ctx);
@@ -182,6 +202,8 @@ fn main() {
         state,
         descriptors: vec![1, 2, 3],
     };
+    let triangle_shader = TriangleShader::new(&ctx);
+    blackboard.add(triangle_shader);
     blackboard.add(triangle_state);
     blackboard.add(swapchain);
     let render_pass = render_pass(&ctx, resolution);

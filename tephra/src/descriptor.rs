@@ -71,14 +71,14 @@ impl LinearPoolAllocator {
 }
 
 pub struct Allocator<'a, T: 'static> {
-    allocator: PoolAllocator,
+    allocator: MutexGuard<'a, LinearPoolAllocator>,
     current_allocations: usize,
     _m: PhantomData<&'a T>,
 }
 
 impl<'a, T> Drop for Allocator<'a, T> {
     fn drop(&mut self) {
-        self.allocator.lock().reset();
+        self.allocator.reset();
     }
 }
 
@@ -87,7 +87,7 @@ where
     T: DescriptorInfo,
 {
     pub fn allocate(&mut self) -> Descriptor<'a, T> {
-        let mut allocator = self.allocator.lock();
+        let allocator = &mut self.allocator;
         let allocator_index = self.current_allocations / allocator.block_size;
         // If we don't have enough space, we need to allocate a new pool
         if allocator_index >= allocator.pools.len() {
@@ -103,26 +103,27 @@ where
 }
 
 pub type PoolAllocator = Arc<Mutex<LinearPoolAllocator>>;
-pub struct Pool {
+pub struct Pool<T> {
     ctx: Context,
-    pools: Mutex<HashMap<TypeId, PoolAllocator>>,
+    allocator: PoolAllocator,
+    _m: PhantomData<T>,
 }
-impl Pool {
-    pub fn new(ctx: &Context) -> Pool {
+
+impl<T> Pool<T>
+where
+    T: DescriptorInfo,
+{
+    pub fn new(ctx: &Context) -> Self {
         Pool {
             ctx: ctx.clone(),
-            pools: Mutex::new(HashMap::new()),
+            allocator: Arc::new(Mutex::new(LinearPoolAllocator::new::<T>(ctx))),
+            _m: PhantomData,
         }
     }
-    pub fn allocate<'a, T: DescriptorInfo>(&'a self) -> Allocator<'a, T> {
-        let mut pools_guard = self.pools.lock();
-        let allocator = pools_guard
-            .entry(TypeId::of::<T>())
-            .or_insert(Arc::new(Mutex::new(LinearPoolAllocator::new::<T>(
-                &self.ctx,
-            ))));
+
+    pub fn allocate<'a>(&'a self) -> Allocator<'a, T> {
         Allocator {
-            allocator: allocator.clone(),
+            allocator: self.allocator.lock(),
             current_allocations: 0,
             _m: PhantomData,
         }
