@@ -4,7 +4,10 @@
 
 layout (location = 0) in vec4 o_color;
 layout (location = 0) out vec4 uFragColor;
+layout(binding = 0 , set = 0) uniform Color {
+    vec4 color;
+} color;
 
 void main() {
-    uFragColor = o_color;
+    uFragColor = color.color;
 }
