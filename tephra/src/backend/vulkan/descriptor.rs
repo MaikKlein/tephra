@@ -3,7 +3,7 @@ use ash::version::DeviceV1_0;
 use ash::vk;
 use descriptor::{
     Binding, CreateDescriptor, CreateLayout, CreatePool, DescriptorApi, DescriptorInfo,
-    DescriptorResource, DescriptorSizes, DescriptorType, InnerDescriptor, InnerLayout, InnerPool,
+    DescriptorResource, DescriptorSizes, DescriptorType, NativeDescriptor, NativeLayout, NativePool,
     LayoutApi, PoolApi,
 };
 pub struct Pool {
@@ -11,6 +11,7 @@ pub struct Pool {
     pub pool: vk::DescriptorPool,
     pub layouts: Vec<vk::DescriptorSetLayout>,
 }
+
 impl PoolApi for Pool {
     fn reset(&mut self) {
         unsafe {
@@ -19,7 +20,7 @@ impl PoolApi for Pool {
                 .reset_descriptor_pool(self.pool, vk::DescriptorPoolResetFlags::empty());
         }
     }
-    fn create_descriptor(&self) -> InnerDescriptor {
+    fn create_descriptor(&self) -> NativeDescriptor {
         let desc_alloc_info = vk::DescriptorSetAllocateInfo {
             descriptor_pool: self.pool,
             descriptor_set_count: self.layouts.len() as u32,
@@ -36,7 +37,7 @@ impl PoolApi for Pool {
             ctx: self.ctx.clone(),
             descriptor_set,
         };
-        InnerDescriptor {
+        NativeDescriptor {
             inner: Box::new(inner),
         }
     }
@@ -47,7 +48,7 @@ impl CreatePool for Context {
         alloc_size: u32,
         data: &[Binding<DescriptorType>],
         sizes: DescriptorSizes,
-    ) -> InnerPool {
+    ) -> NativePool {
         let layout_bindings: Vec<_> = data
             .iter()
             .map(|desc| {
@@ -105,7 +106,7 @@ impl CreatePool for Context {
             layouts,
             pool,
         };
-        InnerPool {
+        NativePool {
             inner: Box::new(inner),
         }
     }
@@ -116,7 +117,7 @@ pub struct Layout {
 }
 impl LayoutApi for Layout {}
 impl CreateLayout for Context {
-    fn create_layout(&self, data: &[Binding<DescriptorType>]) -> InnerLayout {
+    fn create_layout(&self, data: &[Binding<DescriptorType>]) -> NativeLayout {
         let layout_bindings: Vec<_> = data
             .iter()
             .map(|desc| {
@@ -147,7 +148,7 @@ impl CreateLayout for Context {
             ctx: self.clone(),
             layouts,
         };
-        InnerLayout {
+        NativeLayout {
             inner: Box::new(inner),
         }
     }
@@ -162,7 +163,7 @@ impl CreateDescriptor for Context {
         &self,
         data: &[Binding<DescriptorType>],
         sizes: DescriptorSizes,
-    ) -> InnerDescriptor {
+    ) -> NativeDescriptor {
         unimplemented!()
     }
 }

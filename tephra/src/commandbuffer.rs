@@ -1,5 +1,5 @@
 use buffer::{Buffer, BufferApi, GenericBuffer};
-use descriptor::{Descriptor, DescriptorInfo, InnerDescriptor};
+use descriptor::{Allocator, Descriptor, DescriptorInfo, NativeDescriptor};
 use framegraph::{Resource, ResourceIndex};
 use image::Image;
 use pipeline::PipelineState;
@@ -25,7 +25,7 @@ pub struct Execute {
 pub enum GraphicsCmd<'a> {
     BindVertex(&'a GenericBuffer),
     BindIndex(&'a GenericBuffer),
-    BindDescriptor(&'a InnerDescriptor),
+    BindDescriptor(NativeDescriptor),
     BindPipeline {
         state: &'a PipelineState,
         stride: u32,
@@ -37,12 +37,16 @@ pub enum GraphicsCmd<'a> {
 }
 
 pub struct GraphicsCommandbuffer<'a> {
+    pool_allocator: Allocator<'a>,
     pub(crate) cmds: Vec<GraphicsCmd<'a>>,
 }
 
 impl<'a> GraphicsCommandbuffer<'a> {
-    pub fn new() -> Self {
-        GraphicsCommandbuffer { cmds: Vec::new() }
+    pub fn new(pool_allocator: Allocator<'a>) -> Self {
+        GraphicsCommandbuffer {
+            cmds: Vec::new(),
+            pool_allocator,
+        }
     }
     pub fn bind_vertex<T>(&mut self, buffer: &'a Buffer<T>) {
         let cmd = GraphicsCmd::BindVertex(&buffer.buffer);
@@ -65,11 +69,13 @@ impl<'a> GraphicsCommandbuffer<'a> {
         self.cmds.push(cmd);
     }
 
-    pub fn bind_descriptor<T>(&mut self, descriptor: &'a Descriptor<'a, T>)
+    pub fn bind_descriptor<T>(&mut self, descriptor: &'a T)
     where
         T: DescriptorInfo,
     {
-        let cmd = GraphicsCmd::BindDescriptor(&descriptor.inner_descriptor);
+        let mut d = self.pool_allocator.allocate::<T>();
+        d.update(descriptor);
+        let cmd = GraphicsCmd::BindDescriptor(d.inner_descriptor);
         self.cmds.push(cmd);
     }
 }

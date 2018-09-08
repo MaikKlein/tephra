@@ -13,7 +13,7 @@ pub trait CreateDescriptor {
         &self,
         data: &[Binding<DescriptorType>],
         sizes: DescriptorSizes,
-    ) -> InnerDescriptor;
+    ) -> NativeDescriptor;
 }
 
 pub trait CreatePool {
@@ -22,21 +22,22 @@ pub trait CreatePool {
         alloc_size: u32,
         data: &[Binding<DescriptorType>],
         sizes: DescriptorSizes,
-    ) -> InnerPool;
+    ) -> NativePool;
 }
+
 pub trait PoolApi {
-    fn create_descriptor(&self) -> InnerDescriptor;
+    fn create_descriptor(&self) -> NativeDescriptor;
     fn reset(&mut self);
 }
 
-pub struct InnerPool {
+pub struct NativePool {
     pub inner: Box<dyn PoolApi>,
 }
 
 pub struct LinearPoolAllocator {
     ctx: Context,
     block_size: usize,
-    pools: Vec<InnerPool>,
+    pools: Vec<NativePool>,
     // Infos
     layout: Vec<Binding<DescriptorType>>,
     sizes: DescriptorSizes,
@@ -70,31 +71,41 @@ impl LinearPoolAllocator {
     }
 }
 
-pub struct Allocator<'pool, T: 'static> {
-    allocator: MutexGuard<'pool, LinearPoolAllocator>,
-    current_allocations: usize,
-    _m: PhantomData<T>,
+pub struct Allocator<'pool> {
+    ctx: Context,
+    pool: &'pool mut Pool,
+    current_allocations: HashMap<TypeId, usize>,
 }
 
-impl<'a, T> Drop for Allocator<'a, T> {
+impl<'a> Drop for Allocator<'a> {
     fn drop(&mut self) {
-        self.allocator.reset();
+        self.pool.reset();
     }
 }
 
-impl<'pool, T> Allocator<'pool, T>
-where
-    T: DescriptorInfo,
-{
-    pub fn allocate<'alloc>(&'alloc mut self) -> Descriptor<'alloc, T> {
-        let allocator = &mut self.allocator;
-        let allocator_index = self.current_allocations / allocator.block_size;
+impl<'pool> Allocator<'pool> {
+    pub fn allocate<'alloc, T>(&'alloc mut self) -> Descriptor<'alloc, T>
+    where
+        T: DescriptorInfo + 'static,
+    {
+        let ctx = self.ctx.clone();
+        let allocator = self
+            .pool
+            .allocators
+            .entry(TypeId::of::<T>())
+            .or_insert_with(|| LinearPoolAllocator::new::<T>(&ctx));
+        let current_allocation = self
+            .current_allocations
+            .entry(TypeId::of::<T>())
+            .or_insert(0);
+        let allocator_index = *current_allocation / allocator.block_size;
         // If we don't have enough space, we need to allocate a new pool
         if allocator_index >= allocator.pools.len() {
             allocator.allocate_additional_pool();
         }
         let inner_descriptor = allocator.pools[allocator_index].inner.create_descriptor();
-        self.current_allocations += 1;
+        *current_allocation += 1;
+
         Descriptor {
             inner_descriptor,
             _m: PhantomData,
@@ -102,45 +113,47 @@ where
     }
 }
 
-pub type PoolAllocator = Arc<Mutex<LinearPoolAllocator>>;
-pub struct Pool<T> {
+pub struct Pool {
     ctx: Context,
-    allocator: PoolAllocator,
-    _m: PhantomData<T>,
+    allocators: HashMap<TypeId, LinearPoolAllocator>,
 }
 
-impl<T> Pool<T>
-where
-    T: DescriptorInfo,
-{
+impl Pool {
     pub fn new(ctx: &Context) -> Self {
         Pool {
             ctx: ctx.clone(),
-            allocator: Arc::new(Mutex::new(LinearPoolAllocator::new::<T>(ctx))),
-            _m: PhantomData,
+            allocators: HashMap::new(),
         }
     }
 
-    pub fn allocate<'a>(&'a self) -> Allocator<'a, T> {
+    pub fn allocate<'a>(&'a mut self) -> Allocator<'a> {
         Allocator {
-            allocator: self.allocator.lock(),
-            current_allocations: 0,
-            _m: PhantomData,
+            ctx: self.ctx.clone(),
+            pool: self,
+            current_allocations: HashMap::new(),
+        }
+    }
+
+    pub fn reset(&mut self) {
+        for allocator in self.allocators.values_mut() {
+            allocator.reset();
         }
     }
 }
 
 pub trait CreateLayout {
-    fn create_layout(&self, data: &[Binding<DescriptorType>]) -> InnerLayout;
+    fn create_layout(&self, data: &[Binding<DescriptorType>]) -> NativeLayout;
 }
-pub trait LayoutApi {}
+pub trait LayoutApi {
+    //pub fn layout(&self) -> &[]
+}
 
-pub struct InnerLayout {
+pub struct NativeLayout {
     pub inner: Box<dyn LayoutApi>,
 }
 
 pub struct Layout<T: DescriptorInfo> {
-    pub inner_layout: InnerLayout,
+    pub inner_layout: NativeLayout,
     _m: PhantomData<T>,
 }
 impl<T> Layout<T>
@@ -159,7 +172,7 @@ pub trait DescriptorApi: Downcast {
 }
 impl_downcast!(DescriptorApi);
 
-pub struct InnerDescriptor {
+pub struct NativeDescriptor {
     pub inner: Box<dyn DescriptorApi>,
 }
 
@@ -190,7 +203,7 @@ pub struct Binding<T> {
 }
 
 pub struct Descriptor<'a, T: DescriptorInfo> {
-    pub inner_descriptor: InnerDescriptor,
+    pub inner_descriptor: NativeDescriptor,
     _m: PhantomData<&'a T>,
 }
 impl<'a, T> Descriptor<'a, T>

@@ -1,5 +1,6 @@
 use buffer::{Buffer, BufferApi, GenericBuffer};
 use commandbuffer::GraphicsCommandbuffer;
+use descriptor::Pool;
 use context::Context;
 use framegraph::render_task::{Execute, RenderTask};
 use image::{Image, ImageApi, ImageDesc, Resolution};
@@ -118,6 +119,7 @@ pub struct Framegraph<'graph, T = Recording>
 where
     T: 'graph,
 {
+    ctx: Context,
     execute_fns: HashMap<Handle, Arc<dyn Execute<'graph> + 'graph>>,
     state: T,
     graph: Graph<Pass, Access>,
@@ -163,8 +165,9 @@ impl<'graph> Framegraph<'graph> {
         let id = self.add_resource(ResourceType::Buffer(buffer.buffer));
         Resource::new(id, 0)
     }
-    pub fn new() -> Self {
+    pub fn new(ctx: &Context) -> Self {
         Framegraph {
+            ctx: ctx.clone(),
             state: Recording {
                 image_data: Vec::new(),
                 frame_buffer_layout: HashMap::new(),
@@ -252,6 +255,7 @@ impl<'graph> Framegraph<'graph> {
             .collect();
         let state = Compiled { render };
         Framegraph {
+            ctx: self.ctx,
             execute_fns: self.execute_fns,
             resources: self.resources,
             graph: self.graph,
@@ -268,12 +272,14 @@ impl<'graph> Framegraph<'graph, Compiled> {
 
     pub fn execute(&self, blackboard: &Blackboard) {
         use petgraph::visit::{Bfs, Walker};
+        let mut pool = Pool::new(&self.ctx);
         let bfs = Bfs::new(&self.graph, Handle::new(0));
         bfs.iter(&self.graph).for_each(|idx| {
+            let pool_allocator = pool.allocate();
             let execute = self.execute_fns.get(&idx).expect("renderpass");
 
             let render = self.state.render.get(&idx).expect("render");
-            let mut cmds = GraphicsCommandbuffer::new();
+            let mut cmds = GraphicsCommandbuffer::new(pool_allocator);
             execute.execute(blackboard, &mut cmds, self);
             render.execute_commands(&cmds.cmds);
         });

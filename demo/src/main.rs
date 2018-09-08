@@ -110,7 +110,7 @@ pub fn add_triangle_pass<'graph>(
 // }
 
 pub fn render_pass(ctx: &context::Context, resolution: Resolution) -> Framegraph<Compiled> {
-    let mut fg = Framegraph::new();
+    let mut fg = Framegraph::new(ctx);
     let _triangle_data = add_triangle_pass(&mut fg, resolution);
     //add_present_pass(&mut fg, triangle_data.color);
     // Compiles the graph, allocates and optimizes resources
@@ -136,51 +136,45 @@ pub trait GraphicsShader {
         descriptors: &'cmd [Self::Descriptor],
         cmds: &mut GraphicsCommandbuffer<'cmd>,
     ) {
-        // let mut color_desc = allocator.allocate();
-        // color_desc.update(color);
         cmds.bind_vertex(vertex_buffer);
         cmds.bind_index(index_buffer);
-        //cmds.bind_descriptor(&color_desc);
         cmds.bind_pipeline::<Self::VertexInput>(state);
-        cmds.draw_index(range.end);
-    }
-}
-
-pub struct Shader<S: GraphicsShader> {
-    pool: Pool<S::Descriptor>,
-    vertex_shader: ShaderModule,
-    fragment_shader: ShaderModule,
-}
-
-use std::path::Path;
-impl<S: GraphicsShader> Shader<S> {
-    pub fn new(
-        ctx: &tephra::context::Context,
-        vertex_shader: ShaderModule,
-        fragment_shader: ShaderModule,
-    ) -> Self {
-        Shader {
-            vertex_shader,
-            fragment_shader,
-            pool: Pool::<S::Descriptor>::new(ctx),
+        for desc in descriptors {
+            cmds.bind_descriptor(desc);
+            cmds.draw_index(range.end);
         }
     }
 }
 
-pub struct TriangleShader {
-    color_pool: Pool<Color>,
-}
+// pub struct Shader<S: GraphicsShader> {
+//     vertex_shader: ShaderModule,
+//     fragment_shader: ShaderModule,
+// }
 
-impl GraphicsShader for TriangleShader {
-    type VertexInput = Vertex;
-    type Descriptor = Color;
-}
+// use std::path::Path;
+// impl<S: GraphicsShader> Shader<S> {
+//     pub fn new(
+//         ctx: &tephra::context::Context,
+//         vertex_shader: ShaderModule,
+//         fragment_shader: ShaderModule,
+//     ) -> Self {
+//         Shader {
+//             vertex_shader,
+//             fragment_shader,
+//         }
+//     }
+// }
+
+pub struct TriangleShader {}
+
+// impl GraphicsShader for TriangleShader {
+//     type VertexInput = Vertex;
+//     type Descriptor = Color;
+// }
 
 impl TriangleShader {
     pub fn new(ctx: &tephra::context::Context) -> Self {
-        TriangleShader {
-            color_pool: Pool::new(ctx),
-        }
+        TriangleShader {}
     }
 
     pub fn draw_index<'a>(
@@ -195,6 +189,7 @@ impl TriangleShader {
         cmds.bind_index(index_buffer);
         // TODO: terrible, don't clone
         cmds.bind_pipeline::<Vertex>(state);
+        cmds.bind_descriptor(color);
         cmds.draw_index(3);
     }
 }
