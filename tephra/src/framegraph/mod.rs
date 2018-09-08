@@ -40,10 +40,7 @@ impl<T> Clone for Resource<T> {
     }
 }
 impl<T> Resource<T> {
-    pub fn new(
-        id: usize,
-        version: u32,
-    ) -> Self {
+    pub fn new(id: usize, version: u32) -> Self {
         Resource {
             id,
             version,
@@ -98,18 +95,12 @@ pub struct Access {
 }
 
 impl fmt::Display for Pass {
-    fn fmt(
-        &self,
-        f: &mut fmt::Formatter,
-    ) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:#?}", self)
     }
 }
 impl fmt::Display for Access {
-    fn fmt(
-        &self,
-        f: &mut fmt::Formatter,
-    ) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:#?}", self)
     }
 }
@@ -123,74 +114,52 @@ pub struct Recording {
     frame_buffer_layout: HashMap<Handle, Vec<Resource<Image>>>,
 }
 
-pub struct Framegraph<T = Recording> {
+pub struct Framegraph<'graph, T = Recording>
+where
+    T: 'graph,
+{
+    execute_fns: HashMap<Handle, Arc<dyn Execute<'graph> + 'graph>>,
     state: T,
     graph: Graph<Pass, Access>,
     resources: Vec<ResourceType>,
-    execute_fns: HashMap<Handle, Arc<dyn Execute>>,
     pass_map: HashMap<(ResourceIndex, u32), Handle>,
 }
 
 pub trait GetResource<T> {
-    fn get_resource(
-        &self,
-        resource: Resource<T>,
-    ) -> &T;
+    fn get_resource(&self, resource: Resource<T>) -> &T;
 }
 
-impl<T> GetResource<Image> for Framegraph<T> {
-    fn get_resource(
-        &self,
-        resource: Resource<Image>,
-    ) -> &Image {
+impl<'graph, T> GetResource<Image> for Framegraph<'graph, T> {
+    fn get_resource(&self, resource: Resource<Image>) -> &Image {
         self.resources[resource.id].as_image()
     }
 }
 
-impl<T> GetResource<GenericBuffer> for Framegraph<T> {
-    fn get_resource(
-        &self,
-        resource: Resource<GenericBuffer>,
-    ) -> &GenericBuffer {
+impl<'graph, T> GetResource<GenericBuffer> for Framegraph<'graph, T> {
+    fn get_resource(&self, resource: Resource<GenericBuffer>) -> &GenericBuffer {
         self.resources[resource.id].as_buffer()
     }
 }
-impl<T> Framegraph<T> {
-    pub fn insert_pass_handle<D>(
-        &mut self,
-        resource: Resource<D>,
-        handle: Handle,
-    ) {
+impl<'graph, T> Framegraph<'graph, T> {
+    pub fn insert_pass_handle<D>(&mut self, resource: Resource<D>, handle: Handle) {
         self.pass_map
             .insert((resource.id, resource.version), handle);
     }
-    pub fn get_pass_handle<D>(
-        &self,
-        resource: Resource<D>,
-    ) -> Option<Handle> {
+    pub fn get_pass_handle<D>(&self, resource: Resource<D>) -> Option<Handle> {
         self.pass_map.get(&(resource.id, resource.version)).cloned()
     }
 }
-impl Framegraph {
-    pub fn add_resource(
-        &mut self,
-        ty: ResourceType,
-    ) -> ResourceIndex {
+impl<'graph> Framegraph<'graph> {
+    pub fn add_resource(&mut self, ty: ResourceType) -> ResourceIndex {
         let id = self.resources.len();
         self.resources.push(ty);
         id
     }
-    pub fn add_image(
-        &mut self,
-        image: Image,
-    ) -> Resource<Image> {
+    pub fn add_image(&mut self, image: Image) -> Resource<Image> {
         let id = self.add_resource(ResourceType::Image(image));
         Resource::new(id, 0)
     }
-    pub fn add_buffer<T>(
-        &mut self,
-        buffer: Buffer<T>,
-    ) -> Resource<GenericBuffer> {
+    pub fn add_buffer<T>(&mut self, buffer: Buffer<T>) -> Resource<GenericBuffer> {
         let id = self.add_resource(ResourceType::Buffer(buffer.buffer));
         Resource::new(id, 0)
     }
@@ -225,12 +194,12 @@ impl Framegraph {
         name: &'static str,
         setup: Setup,
         pass: P,
-        execute: render_task::ExecuteFn<Data>,
-    ) -> render_task::ARenderTask<Data>
+        execute: render_task::ExecuteFn<'graph, Data>,
+    ) -> render_task::ARenderTask<'graph, Data>
     where
-        Setup: Fn(&mut TaskBuilder) -> Data,
+        Setup: Fn(&mut TaskBuilder<'_, 'graph>) -> Data,
         P: Fn(&Data) -> Vec<Resource<Image>>,
-        Data: 'static,
+        Data: 'graph,
     {
         let (pass_handle, image_resources, task) = {
             let renderpass = Pass {
@@ -238,11 +207,13 @@ impl Framegraph {
                 ty: PassType::Graphics,
             };
             let pass_handle = self.graph.add_node(renderpass);
-            let mut builder = TaskBuilder {
-                pass_handle,
-                framegraph: self,
+            let data = {
+                let mut builder = TaskBuilder {
+                    pass_handle,
+                    framegraph: self,
+                };
+                setup(&mut builder)
             };
-            let data = setup(&mut builder);
             let image_resources = pass(&data);
             let task = RenderTask { data, execute };
             (pass_handle, image_resources, Arc::new(task))
@@ -257,7 +228,7 @@ impl Framegraph {
         mut self,
         resolution: Resolution,
         ctx: &Context,
-    ) -> Framegraph<Compiled> {
+    ) -> Framegraph<'graph, Compiled> {
         let images: Vec<_> = self
             .state
             .image_data
@@ -277,7 +248,8 @@ impl Framegraph {
                     .map(|&resource| self.get_resource(resource))
                     .collect();
                 (handle, Render::new(ctx, resolution, &images))
-            }).collect();
+            })
+            .collect();
         let state = Compiled { render };
         Framegraph {
             execute_fns: self.execute_fns,
@@ -289,15 +261,12 @@ impl Framegraph {
     }
 }
 
-impl Framegraph<Compiled> {
+impl<'graph> Framegraph<'graph, Compiled> {
     // fn submission_order(&self) -> impl Iterator<Item=Handle> {
     //     (0..1)
     // }
 
-    pub fn execute(
-        &self,
-        blackboard: &Blackboard,
-    ) {
+    pub fn execute(&self, blackboard: &Blackboard) {
         use petgraph::visit::{Bfs, Walker};
         let bfs = Bfs::new(&self.graph, Handle::new(0));
         bfs.iter(&self.graph).for_each(|idx| {
@@ -309,27 +278,18 @@ impl Framegraph<Compiled> {
             render.execute_commands(self, &cmds.cmds);
         });
     }
-    pub fn export_graphviz<P: AsRef<Path>>(
-        &self,
-        path: P,
-    ) {
+    pub fn export_graphviz<P: AsRef<Path>>(&self, path: P) {
         use std::io::Write;
         let mut file = File::create(path.as_ref()).expect("path");
         let dot = petgraph::dot::Dot::with_config(&self.graph, &[]);
         write!(&mut file, "{}", dot);
     }
 }
-impl<T> Framegraph<T> {
-    pub fn get_image(
-        &self,
-        id: ResourceIndex,
-    ) -> &Image {
+impl<'graph, T> Framegraph<'graph, T> {
+    pub fn get_image(&self, id: ResourceIndex) -> &Image {
         self.resources[id].as_image()
     }
-    pub fn get_buffer(
-        &self,
-        id: ResourceIndex,
-    ) -> &GenericBuffer {
+    pub fn get_buffer(&self, id: ResourceIndex) -> &GenericBuffer {
         self.resources[id].as_buffer()
     }
 }

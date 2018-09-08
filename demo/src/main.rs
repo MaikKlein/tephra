@@ -56,10 +56,10 @@ pub struct TriangleData {
     pub color: Resource<Image>,
     pub depth: Resource<Image>,
 }
-pub fn add_triangle_pass(
-    fg: &mut Framegraph<Recording>,
+pub fn add_triangle_pass<'graph>(
+    fg: &mut Framegraph<'graph, Recording>,
     resolution: Resolution,
-) -> ARenderTask<TriangleData> {
+) -> ARenderTask<'graph, TriangleData> {
     fg.add_render_pass(
         "Triangle Pass",
         |builder| {

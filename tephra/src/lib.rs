@@ -1,4 +1,5 @@
 #![feature(rust_2018_preview)]
+#![feature(nll)]
 extern crate parking_lot;
 extern crate rspirv;
 extern crate spirv_headers;

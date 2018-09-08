@@ -1,15 +1,11 @@
 use super::{Access, Framegraph, Handle, Recording, Resource, ResourceAccess, ResourceType};
 use image::{Image, ImageDesc};
-pub struct TaskBuilder<'graph> {
+pub struct TaskBuilder<'borrow, 'graph: 'borrow> {
     pub(crate) pass_handle: Handle,
-    pub(crate) framegraph: &'graph mut Framegraph<Recording>,
+    pub(crate) framegraph: &'borrow mut Framegraph<'graph, Recording>,
 }
-impl<'graph> TaskBuilder<'graph> {
-    pub fn create_image(
-        &mut self,
-        name: &'static str,
-        desc: ImageDesc,
-    ) -> Resource<Image> {
+impl<'borrow, 'graph> TaskBuilder<'borrow, 'graph> {
+    pub fn create_image(&mut self, name: &'static str, desc: ImageDesc) -> Resource<Image> {
         // TODO: Freeze resources or this ins incorrect
         let id = self.framegraph.resources.len() + self.framegraph.state.image_data.len();
         self.framegraph.state.image_data.push((id, desc));
@@ -19,10 +15,7 @@ impl<'graph> TaskBuilder<'graph> {
         resource
     }
 
-    pub fn write<T>(
-        &mut self,
-        resource: Resource<T>,
-    ) -> Resource<T> {
+    pub fn write<T>(&mut self, resource: Resource<T>) -> Resource<T> {
         let access = Access {
             resource: resource.id,
             resource_access: ResourceAccess::Write,
@@ -37,10 +30,7 @@ impl<'graph> TaskBuilder<'graph> {
         write_resource
     }
 
-    pub fn read<T>(
-        &mut self,
-        resource: Resource<T>,
-    ) -> Resource<T> {
+    pub fn read<T>(&mut self, resource: Resource<T>) -> Resource<T> {
         let access = Access {
             resource: resource.id,
             resource_access: ResourceAccess::Read,

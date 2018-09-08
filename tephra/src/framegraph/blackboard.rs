@@ -8,10 +8,7 @@ impl Blackboard {
             any_map: AnyMap::new(),
         }
     }
-    pub fn add<T: 'static>(
-        &mut self,
-        t: T,
-    ) {
+    pub fn add<T: 'static>(&mut self, t: T) {
         self.any_map.insert(t);
     }
 
