@@ -1,8 +1,8 @@
 use buffer::{Buffer, BufferApi, GenericBuffer};
 use commandbuffer::GraphicsCommandbuffer;
-use descriptor::Pool;
 use context::Context;
-use framegraph::render_task::{Execute, RenderTask};
+use descriptor::{Layout, NativeLayout, Pool};
+use framegraph::render_task::Execute;
 use image::{Image, ImageApi, ImageDesc, Resolution};
 use petgraph::{self, Graph};
 use render::Render;
@@ -17,6 +17,7 @@ pub mod blackboard;
 pub mod render_task;
 pub mod task_builder;
 pub use self::blackboard::Blackboard;
+use self::render_task::Renderpass;
 use self::task_builder::TaskBuilder;
 
 pub trait ResourceBase {}
@@ -113,6 +114,7 @@ pub struct Compiled {
 pub struct Recording {
     image_data: Vec<(ResourceIndex, ImageDesc)>,
     frame_buffer_layout: HashMap<Handle, Vec<Resource<Image>>>,
+    layouts: HashMap<Handle, NativeLayout>,
 }
 
 pub struct Framegraph<'graph, T = Recording>
@@ -171,6 +173,7 @@ impl<'graph> Framegraph<'graph> {
             state: Recording {
                 image_data: Vec::new(),
                 frame_buffer_layout: HashMap::new(),
+                layouts: HashMap::new(),
             },
             graph: Graph::new(),
             resources: Vec::new(),
@@ -192,39 +195,68 @@ impl<'graph> Framegraph<'graph> {
     // {
     //     unimplemented!()
     // }
-    pub fn add_render_pass<Input, P, Setup>(
-        &mut self,
-        name: &'static str,
-        setup: Setup,
-        pass: P,
-        execute: render_task::ExecuteFn<'graph, Input>,
-    ) -> render_task::ARenderTask<'graph, Input>
+    // pub fn add_render_pass<Input, P, Setup>(
+    //     &mut self,
+    //     name: &'static str,
+    //     setup: Setup,
+    //     pass: P,
+    //     execute: render_task::ExecuteFn<'graph, Input>,
+    // ) -> render_task::ARenderTask<'graph, Input>
+    // where
+    //     Setup: Fn(&mut TaskBuilder<'_, 'graph>) -> Input,
+    //     P: Fn(&Input) -> Vec<Resource<Image>>,
+    //     Input: 'static,
+    // {
+    //     let (pass_handle, image_resources, task) = {
+    //         let renderpass = Pass {
+    //             name,
+    //             ty: PassType::Graphics,
+    //         };
+    //         let pass_handle = self.graph.add_node(renderpass);
+    //         let input = {
+    //             let mut builder = TaskBuilder {
+    //                 pass_handle,
+    //                 framegraph: self,
+    //             };
+    //             setup(&mut builder)
+    //         };
+    //         let image_resources = pass(&input);
+    //         let task = RenderTask { data: input, execute };
+    //         (pass_handle, image_resources, Arc::new(task))
+    //     };
+    //     self.execute_fns.insert(pass_handle, task.clone());
+    //     self.state
+    //         .frame_buffer_layout
+    //         .insert(pass_handle, image_resources);
+    //     task
+    // }
+    pub fn add_render_pass<F, P>(&mut self, name: &'static str, mut f: F) -> Arc<P>
     where
-        Setup: Fn(&mut TaskBuilder<'_, 'graph>) -> Input,
-        P: Fn(&Input) -> Vec<Resource<Image>>,
-        Input: 'static,
+        F: FnMut(&mut TaskBuilder<'_, 'graph>) -> P,
+        P: Renderpass<'graph> + 'graph,
     {
+        let layout = Layout::<P::Layout>::new(&self.ctx);
         let (pass_handle, image_resources, task) = {
             let renderpass = Pass {
                 name,
                 ty: PassType::Graphics,
             };
             let pass_handle = self.graph.add_node(renderpass);
-            let input = {
+            let renderpass = {
                 let mut builder = TaskBuilder {
                     pass_handle,
                     framegraph: self,
                 };
-                setup(&mut builder)
+                f(&mut builder)
             };
-            let image_resources = pass(&input);
-            let task = RenderTask { data: input, execute };
-            (pass_handle, image_resources, Arc::new(task))
+            let image_resources = renderpass.framebuffer();
+            (pass_handle, image_resources, Arc::new(renderpass))
         };
         self.execute_fns.insert(pass_handle, task.clone());
         self.state
             .frame_buffer_layout
             .insert(pass_handle, image_resources);
+        self.state.layouts.insert(pass_handle, layout.inner_layout);
         task
     }
     pub fn compile(
@@ -250,7 +282,8 @@ impl<'graph> Framegraph<'graph> {
                     .iter()
                     .map(|&resource| self.get_resource(resource))
                     .collect();
-                (handle, Render::new(ctx, resolution, &images))
+                let layout = self.state.layouts.get(&handle).expect("layout");
+                (handle, Render::new(ctx, resolution, &images, layout))
             })
             .collect();
         let state = Compiled { render };

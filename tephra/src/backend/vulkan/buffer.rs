@@ -69,11 +69,12 @@ impl CreateBuffer for Context {
             let vertex_input_buffer_memory_req = context
                 .device
                 .get_buffer_memory_requirements(vertex_input_buffer);
-            let vertex_input_buffer_memory_index = find_memorytype_index(
-                &vertex_input_buffer_memory_req,
-                &device_memory_properties,
-                property_to_vk_property(property),
-            ).expect("Unable to find suitable memorytype for the vertex buffer.");
+            let vertex_input_buffer_memory_index =
+                find_memorytype_index(
+                    &vertex_input_buffer_memory_req,
+                    &device_memory_properties,
+                    property_to_vk_property(property),
+                ).expect("Unable to find suitable memorytype for the vertex buffer.");
 
             let vertex_buffer_allocate_info = vk::MemoryAllocateInfo {
                 s_type: vk::StructureType::MEMORY_ALLOCATE_INFO,

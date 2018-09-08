@@ -3,8 +3,8 @@ use ash::version::DeviceV1_0;
 use ash::vk;
 use descriptor::{
     Binding, CreateDescriptor, CreateLayout, CreatePool, DescriptorApi, DescriptorInfo,
-    DescriptorResource, DescriptorSizes, DescriptorType, NativeDescriptor, NativeLayout, NativePool,
-    LayoutApi, PoolApi,
+    DescriptorResource, DescriptorSizes, DescriptorType, LayoutApi, NativeDescriptor, NativeLayout,
+    NativePool, PoolApi,
 };
 pub struct Pool {
     pub ctx: Context,

@@ -7,13 +7,16 @@ use framegraph::{Compiled, Framegraph};
 use image::{Image, Resolution};
 use pipeline::PipelineState;
 use renderpass::{VertexInput, VertexInputData};
+use descriptor::NativeLayout;
 use std::mem::size_of;
 use std::ops::Deref;
+
 pub trait CreateRender {
     fn create_render(
         &self,
         resolution: Resolution,
         images: &[&Image],
+        layout: &NativeLayout,
     ) -> Render;
 }
 
@@ -75,7 +78,8 @@ impl Render {
         ctx: &Context,
         resolution: Resolution,
         images: &[&Image],
+        layout: &NativeLayout,
     ) -> Render {
-        ctx.create_render(resolution, images)
+        ctx.create_render(resolution, images, layout)
     }
 }

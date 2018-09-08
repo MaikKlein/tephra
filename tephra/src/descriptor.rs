@@ -144,9 +144,16 @@ impl Pool {
 pub trait CreateLayout {
     fn create_layout(&self, data: &[Binding<DescriptorType>]) -> NativeLayout;
 }
-pub trait LayoutApi {
+pub trait LayoutApi: Downcast {
     //pub fn layout(&self) -> &[]
 }
+impl LayoutApi {
+    pub fn downcast<B: BackendApi>(&self) -> &B::Layout {
+        self.downcast_ref::<B::Layout>()
+            .expect("Downcast Layout Vulkan")
+    }
+}
+impl_downcast!(LayoutApi);
 
 pub struct NativeLayout {
     pub inner: Box<dyn LayoutApi>,

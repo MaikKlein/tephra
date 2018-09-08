@@ -19,10 +19,7 @@ impl ImageApi for ImageData {
     fn desc(&self) -> &ImageDesc {
         &self.desc
     }
-    fn copy_image(
-        &self,
-        target: &Image,
-    ) {
+    fn copy_image(&self, target: &Image) {
         let ctx = &self.context;
         let target = target.downcast::<Vulkan>();
         let _self_layout = get_image_layout(&self.desc);
@@ -208,16 +205,10 @@ fn get_aspect_mask(desc: &ImageDesc) -> vk::ImageAspectFlags {
     }
 }
 impl CreateImage for Context {
-    fn from_buffer(
-        &self,
-        _buffer: Buffer<u8>,
-    ) -> Image {
+    fn from_buffer(&self, _buffer: Buffer<u8>) -> Image {
         unimplemented!()
     }
-    fn allocate(
-        &self,
-        desc: ImageDesc,
-    ) -> Image {
+    fn allocate(&self, desc: ImageDesc) -> Image {
         let aspect_mask = match desc.layout {
             ImageLayout::Color => vk::ImageAspectFlags::COLOR,
             ImageLayout::Depth => vk::ImageAspectFlags::DEPTH,
@@ -278,11 +269,12 @@ impl CreateImage for Context {
                 .create_image(&depth_image_create_info, None)
                 .unwrap();
             let depth_image_memory_req = ctx.device.get_image_memory_requirements(depth_image);
-            let depth_image_memory_index = buffer::find_memorytype_index(
-                &depth_image_memory_req,
-                &device_memory_properties,
-                vk::MemoryPropertyFlags::DEVICE_LOCAL,
-            ).expect("Unable to find suitable memory index for depth image.");
+            let depth_image_memory_index =
+                buffer::find_memorytype_index(
+                    &depth_image_memory_req,
+                    &device_memory_properties,
+                    vk::MemoryPropertyFlags::DEVICE_LOCAL,
+                ).expect("Unable to find suitable memory index for depth image.");
 
             let depth_image_allocate_info = vk::MemoryAllocateInfo {
                 s_type: vk::StructureType::MEMORY_ALLOCATE_INFO,

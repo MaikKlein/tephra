@@ -9,31 +9,30 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 pub trait Renderpass<'graph> {
-    type Input;
     type Vertex: VertexInput;
-    type Descriptor: DescriptorInfo;
-    fn setup<'a>(&'a self, task_builder: &mut TaskBuilder<'a, 'graph>) -> Self::Input;
-    fn framebuffer(&self, data: &Self::Input) -> Vec<Resource<Image>>;
+    type Layout: DescriptorInfo;
+    fn framebuffer(&self) -> Vec<Resource<Image>>;
     fn execute<'a>(
-        data: &Self::Input,
+        &self,
+        &'a Blackboard,
         cmds: &mut GraphicsCommandbuffer<'a>,
         fg: &Framegraph<'graph, Compiled>,
     );
 }
-pub type ExecuteFn<'graph, T> =
-    for<'a> fn(&T, &'a Blackboard, &mut GraphicsCommandbuffer<'a>, &Framegraph<'graph, Compiled>);
-pub type ARenderTask<'graph, T> = Arc<RenderTask<'graph, T>>;
-pub struct RenderTask<'graph, T> {
-    pub data: T,
-    pub execute: ExecuteFn<'graph, T>,
-}
+// pub type ExecuteFn<'graph, T> =
+//     for<'a> fn(&T, &'a Blackboard, &mut GraphicsCommandbuffer<'a>, &Framegraph<'graph, Compiled>);
+// pub type ARenderTask<'graph, T> = Arc<RenderTask<'graph, T>>;
+// pub struct RenderTask<'graph, T> {
+//     pub data: T,
+//     pub execute: ExecuteFn<'graph, T>,
+// }
 
-impl<'graph, T> Deref for RenderTask<'graph, T> {
-    type Target = T;
-    fn deref(&self) -> &Self::Target {
-        &self.data
-    }
-}
+// impl<'graph, T> Deref for RenderTask<'graph, T> {
+//     type Target = T;
+//     fn deref(&self) -> &Self::Target {
+//         &self.data
+//     }
+// }
 
 pub trait Execute<'graph> {
     fn execute<'a>(
@@ -44,13 +43,16 @@ pub trait Execute<'graph> {
     );
 }
 
-impl<'graph, T> Execute<'graph> for RenderTask<'graph, T> {
+impl<'graph, P> Execute<'graph> for P
+where
+    P: Renderpass<'graph>,
+{
     fn execute<'a>(
         &self,
         blackboard: &'a Blackboard,
         render: &mut GraphicsCommandbuffer<'a>,
         ctx: &Framegraph<'graph, Compiled>,
     ) {
-        (self.execute)(&self.data, blackboard, render, ctx)
+        self.execute(blackboard, render, ctx)
     }
 }

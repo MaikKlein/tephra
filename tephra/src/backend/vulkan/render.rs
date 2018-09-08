@@ -5,6 +5,7 @@ use ash::version::DeviceV1_0;
 use ash::vk;
 use buffer::BufferApi;
 use commandbuffer::GraphicsCmd;
+use descriptor::NativeLayout;
 use framegraph::{Compiled, Framegraph};
 use image::{Image, ImageLayout, Resolution};
 use pipeline::PipelineState;
@@ -246,11 +247,16 @@ impl RenderApi for Render {
 }
 
 impl CreateRender for Context {
-    fn create_render(&self, resolution: Resolution, images: &[&Image]) -> render::Render {
+    fn create_render(
+        &self,
+        resolution: Resolution,
+        images: &[&Image],
+        layout: &NativeLayout,
+    ) -> render::Render {
         unsafe {
             let renderpass = create_renderpass(self, images);
             let framebuffer = create_framebuffer(self, renderpass, images);
-            let pipeline_layout = create_pipeline_layout(self);
+            let pipeline_layout = create_pipeline_layout(self, layout);
             let ctx = self.clone();
             let render = Render {
                 renderpass,
@@ -292,13 +298,14 @@ fn create_framebuffer(
             .unwrap()
     }
 }
-pub unsafe fn create_pipeline_layout(ctx: &Context) -> vk::PipelineLayout {
+pub unsafe fn create_pipeline_layout(ctx: &Context, layout: &NativeLayout) -> vk::PipelineLayout {
+    let vk_layout = layout.inner.as_ref().downcast::<Vulkan>();
     let layout_create_info = vk::PipelineLayoutCreateInfo {
         s_type: vk::StructureType::PIPELINE_LAYOUT_CREATE_INFO,
         p_next: ptr::null(),
         flags: Default::default(),
-        set_layout_count: 0,
-        p_set_layouts: ptr::null(),
+        set_layout_count: vk_layout.layouts.len() as _,
+        p_set_layouts: vk_layout.layouts.as_ptr(),
         push_constant_range_count: 0,
         p_push_constant_ranges: ptr::null(),
     };

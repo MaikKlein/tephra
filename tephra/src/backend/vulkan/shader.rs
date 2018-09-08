@@ -21,10 +21,7 @@ impl Drop for ShaderData {
 }
 impl ShaderApi for ShaderData {}
 impl CreateShader for Context {
-    fn load(
-        &self,
-        bytes: &[u8],
-    ) -> Result<ShaderModule, ShaderError> {
+    fn load(&self, bytes: &[u8]) -> Result<ShaderModule, ShaderError> {
         let context = self;
         unsafe {
             let shader_info = vk::ShaderModuleCreateInfo {

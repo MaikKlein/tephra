@@ -13,10 +13,7 @@ pub struct Execute {
     ctx: Context,
 }
 impl ExecuteApi for Execute {
-    fn execute_commands(
-        &self,
-        cmds: &[GraphicsCmd],
-    ) {
+    fn execute_commands(&self, cmds: &[GraphicsCmd]) {
         let clear_values = [
             vk::ClearValue {
                 color: vk::ClearColorValue {

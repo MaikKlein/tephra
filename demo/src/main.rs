@@ -4,6 +4,7 @@ extern crate tephra;
 extern crate tephra_derive;
 pub use tephra::winit;
 
+use std::sync::Arc;
 use tephra::backend::vulkan::Context;
 use tephra::buffer::{Buffer, BufferUsage, GenericBuffer, Property};
 use tephra::commandbuffer::GraphicsCommandbuffer;
@@ -12,7 +13,7 @@ use tephra::descriptor::{
     Allocator, Binding, Descriptor, DescriptorInfo, DescriptorResource, DescriptorSizes,
     DescriptorType, Pool,
 };
-use tephra::framegraph::render_task::ARenderTask;
+use tephra::framegraph::render_task::Renderpass;
 use tephra::framegraph::{Blackboard, Compiled, Framegraph, GetResource, Recording, Resource};
 use tephra::image::{Image, ImageDesc, ImageLayout, Resolution};
 use tephra::pipeline::PipelineState;
@@ -56,39 +57,52 @@ pub struct TriangleData {
     pub color: Resource<Image>,
     pub depth: Resource<Image>,
 }
+pub struct TrianglePass {
+    pub color: Resource<Image>,
+    pub depth: Resource<Image>,
+}
+
+impl<'graph> Renderpass<'graph> for TrianglePass {
+    type Vertex = Vertex;
+    type Layout = Color;
+    fn framebuffer(&self) -> Vec<Resource<Image>> {
+        vec![self.color, self.depth]
+    }
+    fn execute<'a>(
+        &self,
+        blackboard: &'a Blackboard,
+        cmds: &mut GraphicsCommandbuffer<'a>,
+        fg: &Framegraph<'graph, Compiled>,
+    ) {
+        {
+            let r = blackboard.get::<TriangleState>().expect("state");
+            let shader = blackboard.get::<TriangleShader>().expect("shader");
+            shader.draw_index(&r.vertex_buffer, &r.index_buffer, &r.state, &r.color, cmds);
+        }
+        let swapchain = blackboard.get::<Swapchain>().expect("swap");
+        let color_image = fg.get_resource(self.color);
+        swapchain.copy_and_present(color_image);
+    }
+}
+
 pub fn add_triangle_pass<'graph>(
     fg: &mut Framegraph<'graph, Recording>,
     resolution: Resolution,
-) -> ARenderTask<'graph, TriangleData> {
-    fg.add_render_pass(
-        "Triangle Pass",
-        |builder| {
-            let color_desc = ImageDesc {
-                layout: ImageLayout::Color,
-                resolution,
-            };
-            let depth_desc = ImageDesc {
-                layout: ImageLayout::Depth,
-                resolution,
-            };
-            TriangleData {
-                color: builder.create_image("Color", color_desc),
-                depth: builder.create_image("Depth", depth_desc),
-            }
-        },
-        // TODO: Infer framebuffer layout based on data/shader,
-        |data| vec![data.color, data.depth],
-        |data, blackboard, cmds, context| {
-            {
-                let r = blackboard.get::<TriangleState>().expect("state");
-                let shader = blackboard.get::<TriangleShader>().expect("shader");
-                shader.draw_index(&r.vertex_buffer, &r.index_buffer, &r.state, &r.color, cmds);
-            }
-            let swapchain = blackboard.get::<Swapchain>().expect("swap");
-            let color_image = context.get_resource(data.color);
-            swapchain.copy_and_present(color_image);
-        },
-    )
+) -> Arc<TrianglePass> {
+    fg.add_render_pass("Triangle Pass", |builder| {
+        let color_desc = ImageDesc {
+            layout: ImageLayout::Color,
+            resolution,
+        };
+        let depth_desc = ImageDesc {
+            layout: ImageLayout::Depth,
+            resolution,
+        };
+        TrianglePass {
+            color: builder.create_image("Color", color_desc),
+            depth: builder.create_image("Depth", depth_desc),
+        }
+    })
 }
 
 // pub fn add_present_pass(fg: &mut Framegraph<Recording>, color: Resource<Image>) {

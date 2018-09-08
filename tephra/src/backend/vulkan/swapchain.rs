@@ -27,10 +27,7 @@ impl Drop for SwapchainData {
 }
 
 impl SwapchainApi for SwapchainData {
-    fn copy_and_present(
-        &self,
-        image: &Image,
-    ) {
+    fn copy_and_present(&self, image: &Image) {
         let index = self.aquire_next_image().expect("acquire");
         let present_image = &self.present_images()[index as usize];
         image.copy_image(present_image);
@@ -55,23 +52,19 @@ impl SwapchainApi for SwapchainData {
                     ::std::u64::MAX,
                     self.context.present_complete_semaphore,
                     vk::Fence::null(),
-                ).map_err(|err| {
-                    match err {
-                        vk::Result::ERROR_OUT_OF_DATE_KHR => SwapchainError::OutOfDate,
-                        vk::Result::SUBOPTIMAL_KHR => SwapchainError::Suboptimal,
-                        err => {
-                            println!("{:?}", err);
-                            println!("{:?}", vk::Result::ERROR_OUT_OF_DATE_KHR);
-                            SwapchainError::Unknown
-                        }
+                )
+                .map_err(|err| match err {
+                    vk::Result::ERROR_OUT_OF_DATE_KHR => SwapchainError::OutOfDate,
+                    vk::Result::SUBOPTIMAL_KHR => SwapchainError::Suboptimal,
+                    err => {
+                        println!("{:?}", err);
+                        println!("{:?}", vk::Result::ERROR_OUT_OF_DATE_KHR);
+                        SwapchainError::Unknown
                     }
                 })
         }
     }
-    fn present(
-        &self,
-        index: u32,
-    ) {
+    fn present(&self, index: u32) {
         unsafe {
             let present_info = vk::PresentInfoKHR {
                 s_type: vk::StructureType::PRESENT_INFO_KHR,
@@ -141,12 +134,10 @@ unsafe fn get_swapchain_images(
             Image {
                 data: Box::new(data),
             }
-        }).collect()
+        })
+        .collect()
 }
-fn create_swapchain(
-    ctx: &Context,
-    old_swapchain: Option<vk::SwapchainKHR>,
-) -> SwapchainData {
+fn create_swapchain(ctx: &Context, old_swapchain: Option<vk::SwapchainKHR>) -> SwapchainData {
     unsafe {
         let surface_formats = ctx
             .surface_loader
@@ -154,17 +145,14 @@ fn create_swapchain(
             .unwrap();
         let surface_format = surface_formats
             .iter()
-            .map(|sfmt| {
-                match sfmt.format {
-                    vk::Format::UNDEFINED => {
-                        vk::SurfaceFormatKHR {
-                            format: vk::Format::B8G8R8_UNORM,
-                            color_space: sfmt.color_space,
-                        }
-                    }
-                    _ => sfmt.clone(),
-                }
-            }).nth(0)
+            .map(|sfmt| match sfmt.format {
+                vk::Format::UNDEFINED => vk::SurfaceFormatKHR {
+                    format: vk::Format::B8G8R8_UNORM,
+                    color_space: sfmt.color_space,
+                },
+                _ => sfmt.clone(),
+            })
+            .nth(0)
             .expect("Unable to find suitable surface format.");
         let surface_capabilities = ctx
             .surface_loader
