@@ -189,17 +189,17 @@ impl<'graph> Framegraph<'graph> {
     // {
     //     unimplemented!()
     // }
-    pub fn add_render_pass<Data, P, Setup>(
+    pub fn add_render_pass<Input, P, Setup>(
         &mut self,
         name: &'static str,
         setup: Setup,
         pass: P,
-        execute: render_task::ExecuteFn<'graph, Data>,
-    ) -> render_task::ARenderTask<'graph, Data>
+        execute: render_task::ExecuteFn<'graph, Input>,
+    ) -> render_task::ARenderTask<'graph, Input>
     where
-        Setup: Fn(&mut TaskBuilder<'_, 'graph>) -> Data,
-        P: Fn(&Data) -> Vec<Resource<Image>>,
-        Data: 'graph,
+        Setup: Fn(&mut TaskBuilder<'_, 'graph>) -> Input,
+        P: Fn(&Input) -> Vec<Resource<Image>>,
+        Input: 'static,
     {
         let (pass_handle, image_resources, task) = {
             let renderpass = Pass {
@@ -207,15 +207,15 @@ impl<'graph> Framegraph<'graph> {
                 ty: PassType::Graphics,
             };
             let pass_handle = self.graph.add_node(renderpass);
-            let data = {
+            let input = {
                 let mut builder = TaskBuilder {
                     pass_handle,
                     framegraph: self,
                 };
                 setup(&mut builder)
             };
-            let image_resources = pass(&data);
-            let task = RenderTask { data, execute };
+            let image_resources = pass(&input);
+            let task = RenderTask { data: input, execute };
             (pass_handle, image_resources, Arc::new(task))
         };
         self.execute_fns.insert(pass_handle, task.clone());

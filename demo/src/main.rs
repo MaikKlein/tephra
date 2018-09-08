@@ -127,14 +127,14 @@ use std::ops::Range;
 pub trait GraphicsShader {
     type VertexInput: VertexInput;
     type Descriptor: DescriptorInfo;
-    fn draw_indexed<'a>(
+    fn draw_indexed<'cmd>(
         &self,
-        vertex_buffer: &'a Buffer<Self::VertexInput>,
-        index_buffer: &'a Buffer<u32>,
-        state: &'a PipelineState,
+        vertex_buffer: &'cmd Buffer<Self::VertexInput>,
+        index_buffer: &'cmd Buffer<u32>,
+        state: &'cmd PipelineState,
         range: Range<usize>,
-        descriptors: &[Self::Descriptor],
-        cmds: &mut GraphicsCommandbuffer<'a>,
+        descriptors: &'cmd [Self::Descriptor],
+        cmds: &mut GraphicsCommandbuffer<'cmd>,
     ) {
         // let mut color_desc = allocator.allocate();
         // color_desc.update(color);
