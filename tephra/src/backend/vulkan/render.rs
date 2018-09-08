@@ -22,7 +22,7 @@ pub struct Render {
 }
 
 impl RenderApi for Render {
-    fn execute_commands(&self, _fg: &Framegraph<Compiled>, cmds: &[GraphicsCmd]) {
+    fn execute_commands(&self, cmds: &[GraphicsCmd]) {
         let viewports = [vk::Viewport {
             x: 0.0,
             y: 0.0,

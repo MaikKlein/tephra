@@ -29,7 +29,6 @@ pub trait RenderApi: Downcast {
     // );
     fn execute_commands(
         &self,
-        fg: &Framegraph<Compiled>,
         cmds: &[GraphicsCmd],
     );
 }

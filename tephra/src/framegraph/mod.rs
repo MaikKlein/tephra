@@ -275,7 +275,7 @@ impl<'graph> Framegraph<'graph, Compiled> {
             let render = self.state.render.get(&idx).expect("render");
             let mut cmds = GraphicsCommandbuffer::new();
             execute.execute(blackboard, &mut cmds, self);
-            render.execute_commands(self, &cmds.cmds);
+            render.execute_commands(&cmds.cmds);
         });
     }
     pub fn export_graphviz<P: AsRef<Path>>(&self, path: P) {
