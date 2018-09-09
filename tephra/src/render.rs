@@ -1,6 +1,6 @@
 use backend::BackendApi;
 use buffer::{Buffer, BufferApi};
-use commandbuffer::GraphicsCmd;
+use commandbuffer::{ComputeCmd, GraphicsCmd };
 use context::Context;
 use downcast::Downcast;
 use framegraph::{Compiled, Framegraph};
@@ -20,16 +20,26 @@ pub trait CreateRender {
     ) -> Render;
 }
 
+pub trait CreateCompute {
+    fn create_compute(
+        &self,
+        layout: &NativeLayout,
+    ) -> Compute;
+}
+
+pub trait ComputeApi: Downcast {
+    fn execute_commands(
+        &self,
+        cmds: &[ComputeCmd],
+    );
+}
+impl_downcast!(ComputeApi);
+
+pub struct Compute {
+    pub inner: Box<dyn ComputeApi>
+}
+
 pub trait RenderApi: Downcast {
-    // fn draw_indexed(
-    //     &self,
-    //     state: &PipelineState,
-    //     stride: u32,
-    //     vertex_input: &[VertexInputData],
-    //     vertex_buffer: &BufferApi,
-    //     index_buffer: &BufferApi,
-    //     len: u32,
-    // );
     fn execute_commands(
         &self,
         cmds: &[GraphicsCmd],
@@ -37,26 +47,6 @@ pub trait RenderApi: Downcast {
 }
 impl_downcast!(RenderApi);
 
-// impl Render {
-//     pub fn draw_indexed<I, D>(
-//         &self,
-//         state: &PipelineState,
-//         vertex_buffer: &Buffer<I>,
-//         index_buffer: &Buffer<u32>,
-//         descriptors: &[D],
-//     ) where
-//         I: VertexInput,
-//     {
-//         self.inner.draw_indexed(
-//             state,
-//             size_of::<I>() as u32,
-//             &I::vertex_input_data(),
-//             vertex_buffer.buffer.as_ref(),
-//             index_buffer.buffer.as_ref(),
-//             index_buffer.len(),
-//         );
-//     }
-// }
 pub struct Render {
     pub inner: Box<dyn RenderApi>,
 }

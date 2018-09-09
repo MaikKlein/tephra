@@ -12,7 +12,7 @@ pub trait Computepass<'graph> {
     type Layout: DescriptorInfo;
     fn execute<'a>(
         &self,
-        &'a Blackboard,
+        blackboard: &'a Blackboard,
         cmds: &mut GraphicsCommandbuffer<'a>,
         fg: &Framegraph<'graph, Compiled>,
     );

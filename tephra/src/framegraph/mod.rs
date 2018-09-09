@@ -121,7 +121,7 @@ pub struct Framegraph<'graph, T = Recording>
 where
     T: 'graph,
 {
-    ctx: Context,
+    pub ctx: Context,
     execute_fns: HashMap<Handle, Arc<dyn ExecuteGraphics<'graph> + 'graph>>,
     execute_compute: HashMap<Handle, Arc<dyn ExecuteCompute<'graph> + 'graph>>,
     state: T,

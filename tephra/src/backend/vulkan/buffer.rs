@@ -26,6 +26,7 @@ fn bitflag_to_bufferflags(usage: BufferUsage) -> vk::BufferUsageFlags {
         BufferUsage::Vertex => vk::BufferUsageFlags::VERTEX_BUFFER,
         BufferUsage::Index => vk::BufferUsageFlags::INDEX_BUFFER,
         BufferUsage::Uniform => vk::BufferUsageFlags::UNIFORM_BUFFER,
+        BufferUsage::Storage => vk::BufferUsageFlags::STORAGE_BUFFER,
     }
 }
 

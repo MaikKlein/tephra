@@ -13,7 +13,7 @@ use tephra::descriptor::{
     Allocator, Binding, Descriptor, DescriptorInfo, DescriptorResource, DescriptorSizes,
     DescriptorType, Pool,
 };
-use tephra::framegraph::render_task::Renderpass;
+use tephra::framegraph::render_task::{Computepass, Renderpass};
 use tephra::framegraph::{Blackboard, Compiled, Framegraph, GetResource, Recording, Resource};
 use tephra::image::{Image, ImageDesc, ImageLayout, Resolution};
 use tephra::pipeline::PipelineState;
@@ -62,6 +62,36 @@ pub struct TrianglePass {
     pub depth: Resource<Image>,
 }
 
+pub struct TriangleCompute {
+    pub storage_buffer: Resource<GenericBuffer>,
+}
+impl TriangleCompute {
+    pub fn add_pass<'graph>(
+        fg: &mut Framegraph<'graph, Recording>,
+    ) -> Arc<TriangleCompute> {
+        let buffer = Buffer::from_slice(
+            &fg.ctx,
+            Property::HostVisible,
+            BufferUsage::Storage,
+            &[1.0f32, 2.0, 3.0, 4.0],
+        ).expect("Buffer");
+        let storage_buffer = fg.add_buffer(buffer);
+        fg.add_compute_pass("Compute", |builder| TriangleCompute {
+            //storage_buffer: builder.write(storage_buffer),
+            storage_buffer,
+        })
+    }
+}
+impl<'graph> Computepass<'graph> for TriangleCompute {
+    type Layout = Color;
+    fn execute<'a>(
+        &self,
+        blackboard: &'a Blackboard,
+        cmds: &mut GraphicsCommandbuffer<'a>,
+        fg: &Framegraph<'graph, Compiled>,
+    ) {
+    }
+}
 impl<'graph> Renderpass<'graph> for TrianglePass {
     type Vertex = Vertex;
     type Layout = Color;
@@ -107,26 +137,9 @@ impl TrianglePass {
     }
 }
 
-// pub fn add_present_pass(fg: &mut Framegraph<Recording>, color: Resource<Image>) {
-//     struct PresentData {
-//         color: Resource<Image>,
-//     }
-//     fg.add_render_pass(
-//         "Present Pass",
-//         |builder| PresentData {
-//             color: builder.read(color),
-//         },
-//         |_data| vec![],
-//         |data, blackboard, _render, context| {
-//             let swapchain = blackboard.get::<Swapchain>().expect("swap");
-//             let color_image = context.get_resource(data.color);
-//             swapchain.copy_and_present(color_image);
-//         },
-//     );
-// }
-
 pub fn render_pass(ctx: &context::Context, resolution: Resolution) -> Framegraph<Compiled> {
     let mut fg = Framegraph::new(ctx);
+    TriangleCompute::add_pass(&mut fg);
     let _triangle_data = TrianglePass::add_pass(&mut fg, resolution);
     //add_present_pass(&mut fg, triangle_data.color);
     // Compiles the graph, allocates and optimizes resources

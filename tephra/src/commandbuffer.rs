@@ -8,9 +8,6 @@ use renderpass::{VertexInput, VertexInputData};
 use std::marker::PhantomData;
 pub struct Graphics;
 pub struct Compute;
-// pub trait CreateCommandbuffer<Type> {
-//     fn create_commandbuffer(&self) -> Commandbuffer<Type>;
-// }
 pub trait ExecuteApi {
     fn execute_commands(&self, cmds: &[GraphicsCmd]);
 }
@@ -22,6 +19,15 @@ pub struct Execute {
     pub inner: Box<dyn ExecuteApi>,
 }
 
+pub enum ComputeCmd<'a> {
+    BindPipeline {
+        state: &'a PipelineState,
+    },
+}
+pub struct ComputeCommandbuffer<'a> {
+    pool_allocator: Allocator<'a>,
+    pub(crate) cmds: Vec<ComputeCmd<'a>>,
+}
 pub enum GraphicsCmd<'a> {
     BindVertex(&'a GenericBuffer),
     BindIndex(&'a GenericBuffer),

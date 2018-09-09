@@ -4,16 +4,35 @@ use super::{CommandBuffer, Vulkan};
 use ash::version::DeviceV1_0;
 use ash::vk;
 use buffer::BufferApi;
-use commandbuffer::GraphicsCmd;
+use commandbuffer::{ComputeCmd, GraphicsCmd};
 use descriptor::NativeLayout;
 use framegraph::{Compiled, Framegraph};
 use image::{Image, ImageLayout, Resolution};
 use pipeline::PipelineState;
-use render::{self, CreateRender, RenderApi};
+use render::{self, ComputeApi, CreateCompute, CreateRender, RenderApi};
 use renderpass::{VertexInputData, VertexType};
 use std::ffi::CString;
 use std::ptr;
 
+pub struct Compute {
+    pub ctx: Context,
+    pub pipeline_layout: vk::PipelineLayout,
+}
+impl ComputeApi for Compute {
+    fn execute_commands(&self, cmds: &[ComputeCmd]) {}
+}
+impl CreateCompute for Context {
+    fn create_compute(&self, layout: &NativeLayout) -> render::Compute {
+        let pipeline_layout = unsafe { create_pipeline_layout(self, layout) };
+        let inner = Compute {
+            ctx: self.clone(),
+            pipeline_layout,
+        };
+        render::Compute {
+            inner: Box::new(inner),
+        }
+    }
+}
 pub struct Render {
     pub ctx: Context,
     pub framebuffer: vk::Framebuffer,

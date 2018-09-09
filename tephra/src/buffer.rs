@@ -170,4 +170,5 @@ pub enum BufferUsage {
     Vertex,
     Index,
     Uniform,
+    Storage,
 }
