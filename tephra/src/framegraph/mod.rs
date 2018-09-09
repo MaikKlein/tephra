@@ -2,7 +2,7 @@ use buffer::{Buffer, BufferApi, GenericBuffer};
 use commandbuffer::GraphicsCommandbuffer;
 use context::Context;
 use descriptor::{Layout, NativeLayout, Pool};
-use framegraph::render_task::Execute;
+use framegraph::render_task::ExecuteGraphics;
 use image::{Image, ImageApi, ImageDesc, Resolution};
 use petgraph::{self, Graph};
 use render::Render;
@@ -17,7 +17,7 @@ pub mod blackboard;
 pub mod render_task;
 pub mod task_builder;
 pub use self::blackboard::Blackboard;
-use self::render_task::Renderpass;
+use self::render_task::{Computepass, ExecuteCompute, Renderpass};
 use self::task_builder::TaskBuilder;
 
 pub trait ResourceBase {}
@@ -122,7 +122,8 @@ where
     T: 'graph,
 {
     ctx: Context,
-    execute_fns: HashMap<Handle, Arc<dyn Execute<'graph> + 'graph>>,
+    execute_fns: HashMap<Handle, Arc<dyn ExecuteGraphics<'graph> + 'graph>>,
+    execute_compute: HashMap<Handle, Arc<dyn ExecuteCompute<'graph> + 'graph>>,
     state: T,
     graph: Graph<Pass, Access>,
     resources: Vec<ResourceType>,
@@ -178,6 +179,7 @@ impl<'graph> Framegraph<'graph> {
             graph: Graph::new(),
             resources: Vec::new(),
             execute_fns: HashMap::new(),
+            execute_compute: HashMap::new(),
             pass_map: HashMap::new(),
         }
     }
@@ -230,6 +232,31 @@ impl<'graph> Framegraph<'graph> {
     //         .insert(pass_handle, image_resources);
     //     task
     // }
+    pub fn add_compute_pass<F, P>(&mut self, name: &'static str, mut f: F) -> Arc<P>
+    where
+        F: FnMut(&mut TaskBuilder<'_, 'graph>) -> P,
+        P: Computepass<'graph> + 'graph,
+    {
+        let layout = Layout::<P::Layout>::new(&self.ctx);
+        let (pass_handle, task) = {
+            let renderpass = Pass {
+                name,
+                ty: PassType::Graphics,
+            };
+            let pass_handle = self.graph.add_node(renderpass);
+            let renderpass = {
+                let mut builder = TaskBuilder {
+                    pass_handle,
+                    framegraph: self,
+                };
+                f(&mut builder)
+            };
+            (pass_handle, Arc::new(renderpass))
+        };
+        self.execute_compute.insert(pass_handle, task.clone());
+        self.state.layouts.insert(pass_handle, layout.inner_layout);
+        task
+    }
     pub fn add_render_pass<F, P>(&mut self, name: &'static str, mut f: F) -> Arc<P>
     where
         F: FnMut(&mut TaskBuilder<'_, 'graph>) -> P,
@@ -290,6 +317,7 @@ impl<'graph> Framegraph<'graph> {
         Framegraph {
             ctx: self.ctx,
             execute_fns: self.execute_fns,
+            execute_compute: self.execute_compute,
             resources: self.resources,
             graph: self.graph,
             state,

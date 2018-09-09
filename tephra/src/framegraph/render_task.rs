@@ -8,6 +8,16 @@ use renderpass::VertexInput;
 use std::ops::Deref;
 use std::sync::Arc;
 
+pub trait Computepass<'graph> {
+    type Layout: DescriptorInfo;
+    fn execute<'a>(
+        &self,
+        &'a Blackboard,
+        cmds: &mut GraphicsCommandbuffer<'a>,
+        fg: &Framegraph<'graph, Compiled>,
+    );
+}
+
 pub trait Renderpass<'graph> {
     type Vertex: VertexInput;
     type Layout: DescriptorInfo;
@@ -34,7 +44,7 @@ pub trait Renderpass<'graph> {
 //     }
 // }
 
-pub trait Execute<'graph> {
+pub trait ExecuteGraphics<'graph> {
     fn execute<'a>(
         &self,
         blackboard: &'a Blackboard,
@@ -43,7 +53,29 @@ pub trait Execute<'graph> {
     );
 }
 
-impl<'graph, P> Execute<'graph> for P
+pub trait ExecuteCompute<'graph> {
+    fn execute<'a>(
+        &self,
+        blackboard: &'a Blackboard,
+        render: &mut GraphicsCommandbuffer<'a>,
+        ctx: &Framegraph<'graph, Compiled>,
+    );
+}
+
+impl<'graph, P> ExecuteCompute<'graph> for P
+where
+    P: Computepass<'graph>,
+{
+    fn execute<'a>(
+        &self,
+        blackboard: &'a Blackboard,
+        render: &mut GraphicsCommandbuffer<'a>,
+        ctx: &Framegraph<'graph, Compiled>,
+    ) {
+        self.execute(blackboard, render, ctx)
+    }
+}
+impl<'graph, P> ExecuteGraphics<'graph> for P
 where
     P: Renderpass<'graph>,
 {

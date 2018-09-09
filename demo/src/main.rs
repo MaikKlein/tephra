@@ -85,24 +85,26 @@ impl<'graph> Renderpass<'graph> for TrianglePass {
     }
 }
 
-pub fn add_triangle_pass<'graph>(
-    fg: &mut Framegraph<'graph, Recording>,
-    resolution: Resolution,
-) -> Arc<TrianglePass> {
-    fg.add_render_pass("Triangle Pass", |builder| {
-        let color_desc = ImageDesc {
-            layout: ImageLayout::Color,
-            resolution,
-        };
-        let depth_desc = ImageDesc {
-            layout: ImageLayout::Depth,
-            resolution,
-        };
-        TrianglePass {
-            color: builder.create_image("Color", color_desc),
-            depth: builder.create_image("Depth", depth_desc),
-        }
-    })
+impl TrianglePass {
+    pub fn add_pass<'graph>(
+        fg: &mut Framegraph<'graph, Recording>,
+        resolution: Resolution,
+    ) -> Arc<TrianglePass> {
+        fg.add_render_pass("Triangle Pass", |builder| {
+            let color_desc = ImageDesc {
+                layout: ImageLayout::Color,
+                resolution,
+            };
+            let depth_desc = ImageDesc {
+                layout: ImageLayout::Depth,
+                resolution,
+            };
+            TrianglePass {
+                color: builder.create_image("Color", color_desc),
+                depth: builder.create_image("Depth", depth_desc),
+            }
+        })
+    }
 }
 
 // pub fn add_present_pass(fg: &mut Framegraph<Recording>, color: Resource<Image>) {
@@ -125,7 +127,7 @@ pub fn add_triangle_pass<'graph>(
 
 pub fn render_pass(ctx: &context::Context, resolution: Resolution) -> Framegraph<Compiled> {
     let mut fg = Framegraph::new(ctx);
-    let _triangle_data = add_triangle_pass(&mut fg, resolution);
+    let _triangle_data = TrianglePass::add_pass(&mut fg, resolution);
     //add_present_pass(&mut fg, triangle_data.color);
     // Compiles the graph, allocates and optimizes resources
     fg.compile(resolution, ctx)

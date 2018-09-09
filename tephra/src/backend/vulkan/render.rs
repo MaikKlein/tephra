@@ -77,7 +77,6 @@ impl RenderApi for Render {
                         match cmd {
                             GraphicsCmd::BindDescriptor(descriptor) => {
                                 let vk_descriptor = descriptor.inner.as_ref().downcast::<Vulkan>();
-                                println!("{:?}", vk_descriptor.descriptor_set);
                                 device.cmd_bind_descriptor_sets(
                                     draw_command_buffer,
                                     vk::PipelineBindPoint::GRAPHICS,
