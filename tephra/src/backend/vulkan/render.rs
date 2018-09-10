@@ -8,7 +8,7 @@ use commandbuffer::{ComputeCmd, GraphicsCmd};
 use descriptor::NativeLayout;
 use framegraph::{Compiled, Framegraph};
 use image::{Image, ImageLayout, Resolution};
-use pipeline::PipelineState;
+use pipeline::{ComputeState, PipelineState};
 use render::{self, ComputeApi, CreateCompute, CreateRender, RenderApi};
 use renderpass::{VertexInputData, VertexType};
 use std::ffi::CString;
@@ -19,8 +19,42 @@ pub struct Compute {
     pub pipeline_layout: vk::PipelineLayout,
 }
 impl ComputeApi for Compute {
-    fn execute_commands(&self, cmds: &[ComputeCmd]) {}
+    fn execute_commands(&self, cmds: &[ComputeCmd]) {
+        let mut pipelines = Vec::new();
+        let command_buffer =
+            CommandBuffer::record(&self.ctx, "ComputePass", |draw_command_buffer| {
+                for cmd in cmds {
+                    match cmd {
+                        ComputeCmd::BindPipeline { state } => {
+                            let pipeline = unsafe {
+                                create_compute_pipeline(&self.ctx, state, self.pipeline_layout)
+                            };
+                            pipelines.push(pipeline);
+                            unsafe {
+                                self.ctx.device.cmd_bind_pipeline(
+                                    draw_command_buffer,
+                                    vk::PipelineBindPoint::COMPUTE,
+                                    pipeline,
+                                );
+                            }
+                        }
+                        &ComputeCmd::Dispatch { x, y, z } => unsafe {
+                            self.ctx.device.cmd_dispatch(draw_command_buffer, x, y, z);
+                        },
+                    }
+                }
+            });
+        self.ctx.present_queue.submit(
+            &self.ctx,
+            &[vk::PipelineStageFlags::BOTTOM_OF_PIPE],
+            // FIXME: Add proper sync points
+            &[],
+            &[],
+            command_buffer,
+        );
+    }
 }
+
 impl CreateCompute for Context {
     fn create_compute(&self, layout: &NativeLayout) -> render::Compute {
         let pipeline_layout = unsafe { create_pipeline_layout(self, layout) };
@@ -33,6 +67,7 @@ impl CreateCompute for Context {
         }
     }
 }
+
 pub struct Render {
     pub ctx: Context,
     pub framebuffer: vk::Framebuffer,
@@ -331,6 +366,13 @@ pub unsafe fn create_pipeline_layout(ctx: &Context, layout: &NativeLayout) -> vk
     ctx.device
         .create_pipeline_layout(&layout_create_info, None)
         .unwrap()
+}
+pub unsafe fn create_compute_pipeline(
+    ctx: &Context,
+    state: &ComputeState,
+    pipeline_layout: vk::PipelineLayout,
+) -> vk::Pipeline {
+    unimplemented!()
 }
 pub unsafe fn create_pipeline(
     ctx: &Context,

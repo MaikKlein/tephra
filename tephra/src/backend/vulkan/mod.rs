@@ -31,12 +31,10 @@ impl BackendApi for Vulkan {
     type Shader = shader::ShaderData;
     type Context = Context;
     type Buffer = buffer::BufferData;
-    //type Renderpass = renderpass::RenderpassData;
-    // type Pipeline = pipeline::PipelineData;
-    // type Framebuffer = image::FramebufferData;
     type Image = image::ImageData;
     type Swapchain = swapchain::SwapchainData;
     type Render = render::Render;
+    type Compute = render::Compute;
     type Descriptor = descriptor::Descriptor;
     type Layout = descriptor::Layout;
 }

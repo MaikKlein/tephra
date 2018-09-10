@@ -7,7 +7,7 @@ use image::CreateImage;
 // use pipeline::CreatePipeline;
 // use renderpass::CreateRenderpass;
 use descriptor::{CreatePool, CreateDescriptor, CreateLayout};
-use render::CreateRender;
+use render::{CreateCompute, CreateRender };
 use shader::CreateShader;
 use swapchain::CreateSwapchain;
 
@@ -21,6 +21,7 @@ where
         + CreateDescriptor
         + CreateLayout
         + CreatePool
+        + CreateCompute
 {
 }
 impl_downcast!(ContextApi);

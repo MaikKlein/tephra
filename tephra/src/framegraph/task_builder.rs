@@ -20,10 +20,11 @@ impl<'borrow, 'graph> TaskBuilder<'borrow, 'graph> {
             resource: resource.id,
             resource_access: ResourceAccess::Write,
         };
-        let handle = self.framegraph.get_pass_handle(resource).expect("Handle");
-        self.framegraph
-            .graph
-            .add_edge(handle, self.pass_handle, access);
+        if let Some(handle) = self.framegraph.get_pass_handle(resource) {
+            self.framegraph
+                .graph
+                .add_edge(handle, self.pass_handle, access);
+        }
         let write_resource = Resource::new(resource.id, resource.version + 1);
         self.framegraph
             .insert_pass_handle(write_resource, self.pass_handle);

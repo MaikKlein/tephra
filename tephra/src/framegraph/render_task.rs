@@ -1,4 +1,4 @@
-use commandbuffer::GraphicsCommandbuffer;
+use commandbuffer::{ComputeCommandbuffer, GraphicsCommandbuffer};
 use descriptor::DescriptorInfo;
 use framegraph::blackboard::Blackboard;
 use framegraph::{Compiled, Framegraph, Resource, TaskBuilder};
@@ -13,7 +13,7 @@ pub trait Computepass<'graph> {
     fn execute<'a>(
         &self,
         blackboard: &'a Blackboard,
-        cmds: &mut GraphicsCommandbuffer<'a>,
+        cmds: &mut ComputeCommandbuffer<'a>,
         fg: &Framegraph<'graph, Compiled>,
     );
 }
@@ -57,7 +57,7 @@ pub trait ExecuteCompute<'graph> {
     fn execute<'a>(
         &self,
         blackboard: &'a Blackboard,
-        render: &mut GraphicsCommandbuffer<'a>,
+        render: &mut ComputeCommandbuffer<'a>,
         ctx: &Framegraph<'graph, Compiled>,
     );
 }
@@ -69,7 +69,7 @@ where
     fn execute<'a>(
         &self,
         blackboard: &'a Blackboard,
-        render: &mut GraphicsCommandbuffer<'a>,
+        render: &mut ComputeCommandbuffer<'a>,
         ctx: &Framegraph<'graph, Compiled>,
     ) {
         self.execute(blackboard, render, ctx)

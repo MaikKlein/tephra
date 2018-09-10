@@ -1,13 +1,12 @@
 use backend::BackendApi;
 use buffer::{Buffer, BufferApi};
-use commandbuffer::{ComputeCmd, GraphicsCmd };
+use commandbuffer::{ComputeCmd, GraphicsCmd};
 use context::Context;
+use descriptor::NativeLayout;
 use downcast::Downcast;
 use framegraph::{Compiled, Framegraph};
 use image::{Image, Resolution};
-use pipeline::PipelineState;
 use renderpass::{VertexInput, VertexInputData};
-use descriptor::NativeLayout;
 use std::mem::size_of;
 use std::ops::Deref;
 
@@ -21,29 +20,31 @@ pub trait CreateRender {
 }
 
 pub trait CreateCompute {
-    fn create_compute(
-        &self,
-        layout: &NativeLayout,
-    ) -> Compute;
+    fn create_compute(&self, layout: &NativeLayout) -> Compute;
 }
 
 pub trait ComputeApi: Downcast {
-    fn execute_commands(
-        &self,
-        cmds: &[ComputeCmd],
-    );
+    fn execute_commands(&self, cmds: &[ComputeCmd]);
 }
 impl_downcast!(ComputeApi);
 
 pub struct Compute {
-    pub inner: Box<dyn ComputeApi>
+    pub inner: Box<dyn ComputeApi>,
+}
+impl Deref for Compute {
+    type Target = ComputeApi;
+    fn deref(&self) -> &Self::Target {
+        self.inner.as_ref()
+    }
+}
+impl Compute {
+    pub fn new(ctx: &Context, layout: &NativeLayout) -> Compute {
+        ctx.create_compute(layout)
+    }
 }
 
 pub trait RenderApi: Downcast {
-    fn execute_commands(
-        &self,
-        cmds: &[GraphicsCmd],
-    );
+    fn execute_commands(&self, cmds: &[GraphicsCmd]);
 }
 impl_downcast!(RenderApi);
 

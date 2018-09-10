@@ -2,7 +2,7 @@ use buffer::{Buffer, BufferApi, GenericBuffer};
 use descriptor::{Allocator, Descriptor, DescriptorInfo, NativeDescriptor};
 use framegraph::{Resource, ResourceIndex};
 use image::Image;
-use pipeline::PipelineState;
+use pipeline::{ComputeState, PipelineState };
 use render::RenderApi;
 use renderpass::{VertexInput, VertexInputData};
 use std::marker::PhantomData;
@@ -21,12 +21,39 @@ pub struct Execute {
 
 pub enum ComputeCmd<'a> {
     BindPipeline {
-        state: &'a PipelineState,
+        state: &'a ComputeState,
     },
+    Dispatch{
+        x: u32,
+        y: u32,
+        z: u32,
+    }
 }
 pub struct ComputeCommandbuffer<'a> {
     pool_allocator: Allocator<'a>,
     pub(crate) cmds: Vec<ComputeCmd<'a>>,
+}
+impl<'a> ComputeCommandbuffer<'a> {
+    pub fn new(pool_allocator: Allocator<'a>) -> Self {
+        ComputeCommandbuffer {
+            cmds: Vec::new(),
+            pool_allocator,
+        }
+    }
+
+    pub fn dispatch(&mut self, x: u32, y: u32, z: u32) {
+        let cmd = ComputeCmd::Dispatch{
+            x, y, z
+        };
+        self.cmds.push(cmd);
+    }
+
+    pub fn bind_pipeline(&mut self, state: &'a ComputeState) {
+        let cmd = ComputeCmd::BindPipeline {
+            state,
+        };
+        self.cmds.push(cmd);
+    }
 }
 pub enum GraphicsCmd<'a> {
     BindVertex(&'a GenericBuffer),

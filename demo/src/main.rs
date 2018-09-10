@@ -7,7 +7,7 @@ pub use tephra::winit;
 use std::sync::Arc;
 use tephra::backend::vulkan::Context;
 use tephra::buffer::{Buffer, BufferUsage, GenericBuffer, Property};
-use tephra::commandbuffer::GraphicsCommandbuffer;
+use tephra::commandbuffer::{ComputeCommandbuffer, GraphicsCommandbuffer};
 use tephra::context;
 use tephra::descriptor::{
     Allocator, Binding, Descriptor, DescriptorInfo, DescriptorResource, DescriptorSizes,
@@ -58,6 +58,7 @@ pub struct TriangleData {
     pub depth: Resource<Image>,
 }
 pub struct TrianglePass {
+    pub storage_buffer: Resource<GenericBuffer>,
     pub color: Resource<Image>,
     pub depth: Resource<Image>,
 }
@@ -66,9 +67,7 @@ pub struct TriangleCompute {
     pub storage_buffer: Resource<GenericBuffer>,
 }
 impl TriangleCompute {
-    pub fn add_pass<'graph>(
-        fg: &mut Framegraph<'graph, Recording>,
-    ) -> Arc<TriangleCompute> {
+    pub fn add_pass<'graph>(fg: &mut Framegraph<'graph, Recording>) -> Arc<TriangleCompute> {
         let buffer = Buffer::from_slice(
             &fg.ctx,
             Property::HostVisible,
@@ -77,8 +76,7 @@ impl TriangleCompute {
         ).expect("Buffer");
         let storage_buffer = fg.add_buffer(buffer);
         fg.add_compute_pass("Compute", |builder| TriangleCompute {
-            //storage_buffer: builder.write(storage_buffer),
-            storage_buffer,
+            storage_buffer: builder.write(storage_buffer),
         })
     }
 }
@@ -87,7 +85,7 @@ impl<'graph> Computepass<'graph> for TriangleCompute {
     fn execute<'a>(
         &self,
         blackboard: &'a Blackboard,
-        cmds: &mut GraphicsCommandbuffer<'a>,
+        cmds: &mut ComputeCommandbuffer<'a>,
         fg: &Framegraph<'graph, Compiled>,
     ) {
     }
@@ -118,6 +116,7 @@ impl<'graph> Renderpass<'graph> for TrianglePass {
 impl TrianglePass {
     pub fn add_pass<'graph>(
         fg: &mut Framegraph<'graph, Recording>,
+        storage_buffer: Resource<GenericBuffer>,
         resolution: Resolution,
     ) -> Arc<TrianglePass> {
         fg.add_render_pass("Triangle Pass", |builder| {
@@ -132,6 +131,7 @@ impl TrianglePass {
             TrianglePass {
                 color: builder.create_image("Color", color_desc),
                 depth: builder.create_image("Depth", depth_desc),
+                storage_buffer: builder.read(storage_buffer),
             }
         })
     }
@@ -139,9 +139,9 @@ impl TrianglePass {
 
 pub fn render_pass(ctx: &context::Context, resolution: Resolution) -> Framegraph<Compiled> {
     let mut fg = Framegraph::new(ctx);
-    TriangleCompute::add_pass(&mut fg);
-    let _triangle_data = TrianglePass::add_pass(&mut fg, resolution);
-    //add_present_pass(&mut fg, triangle_data.color);
+    let triangle_compute = TriangleCompute::add_pass(&mut fg);
+    let _triangle_data =
+        TrianglePass::add_pass(&mut fg, triangle_compute.storage_buffer, resolution);
     // Compiles the graph, allocates and optimizes resources
     fg.compile(resolution, ctx)
 }

@@ -7,6 +7,7 @@ use descriptor::{DescriptorApi, LayoutApi};
 use image::ImageApi;
 use render::RenderApi;
 use swapchain::SwapchainApi;
+use render::ComputeApi;
 
 pub trait BackendApi
 where
@@ -16,6 +17,7 @@ where
     type Shader: ShaderApi;
     type Buffer: BufferApi;
     type Render: RenderApi;
+    type Compute: ComputeApi;
     type Image: ImageApi;
     type Swapchain: SwapchainApi;
     type Descriptor: DescriptorApi;

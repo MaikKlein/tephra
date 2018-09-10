@@ -203,6 +203,7 @@ pub enum DescriptorType {
 }
 pub enum DescriptorResource<'a> {
     Uniform(&'a GenericBuffer),
+    Storage(&'a GenericBuffer),
 }
 pub struct Binding<T> {
     pub binding: u32,

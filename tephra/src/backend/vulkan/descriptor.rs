@@ -173,7 +173,7 @@ impl DescriptorApi for Descriptor {
         let buffer_infos: Vec<_> = data
             .iter()
             .map(|resource| match resource.data {
-                DescriptorResource::Uniform(buffer) => {
+                DescriptorResource::Uniform(buffer) | DescriptorResource::Storage(buffer) => {
                     let vkbuffer = buffer.as_ref().downcast::<Vulkan>();
                     let buffer_info = vk::DescriptorBufferInfo {
                         buffer: vkbuffer.buffer,
@@ -190,17 +190,24 @@ impl DescriptorApi for Descriptor {
 
         let writes: Vec<_> = buffer_infos
             .iter()
-            .map(|info| vk::WriteDescriptorSet {
-                s_type: vk::StructureType::WRITE_DESCRIPTOR_SET,
-                p_next: std::ptr::null(),
-                dst_set: self.descriptor_set,
-                dst_binding: info.binding,
-                dst_array_element: 0,
-                descriptor_count: 1,
-                descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
-                p_image_info: std::ptr::null(),
-                p_buffer_info: &info.data,
-                p_texel_buffer_view: std::ptr::null(),
+            .enumerate()
+            .map(|(idx, info)| {
+                let ty = match data[idx].data {
+                    DescriptorResource::Uniform(_) => vk::DescriptorType::UNIFORM_BUFFER,
+                    DescriptorResource::Storage(_) => vk::DescriptorType::STORAGE_BUFFER,
+                };
+                vk::WriteDescriptorSet {
+                    s_type: vk::StructureType::WRITE_DESCRIPTOR_SET,
+                    p_next: std::ptr::null(),
+                    dst_set: self.descriptor_set,
+                    dst_binding: info.binding,
+                    dst_array_element: 0,
+                    descriptor_count: 1,
+                    descriptor_type: ty,
+                    p_image_info: std::ptr::null(),
+                    p_buffer_info: &info.data,
+                    p_texel_buffer_view: std::ptr::null(),
+                }
             })
             .collect();
         unsafe {

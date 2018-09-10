@@ -1,13 +1,15 @@
 use buffer::{Buffer, BufferApi, GenericBuffer};
-use commandbuffer::GraphicsCommandbuffer;
+use commandbuffer::{ComputeCommandbuffer, GraphicsCommandbuffer};
 use context::Context;
 use descriptor::{Layout, NativeLayout, Pool};
 use framegraph::render_task::ExecuteGraphics;
 use image::{Image, ImageApi, ImageDesc, Resolution};
+use petgraph::Direction;
 use petgraph::{self, Graph};
-use render::Render;
+use render::{Compute, Render};
 use std::clone::Clone;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fmt;
 use std::fs::File;
 use std::marker::PhantomData;
@@ -109,6 +111,7 @@ impl fmt::Display for Access {
 
 pub struct Compiled {
     render: HashMap<Handle, Render>,
+    compute: HashMap<Handle, Compute>,
 }
 
 pub struct Recording {
@@ -241,7 +244,7 @@ impl<'graph> Framegraph<'graph> {
         let (pass_handle, task) = {
             let renderpass = Pass {
                 name,
-                ty: PassType::Graphics,
+                ty: PassType::Compute,
             };
             let pass_handle = self.graph.add_node(renderpass);
             let renderpass = {
@@ -313,7 +316,19 @@ impl<'graph> Framegraph<'graph> {
                 (handle, Render::new(ctx, resolution, &images, layout))
             })
             .collect();
-        let state = Compiled { render };
+        let compute: HashMap<_, _> = self
+            .execute_compute
+            .keys()
+            .map(|compute_handle| {
+                let layout = self
+                    .state
+                    .layouts
+                    .get(compute_handle)
+                    .expect("compute layout");
+                (*compute_handle, Compute::new(ctx, layout))
+            })
+            .collect();
+        let state = Compiled { render, compute };
         Framegraph {
             ctx: self.ctx,
             execute_fns: self.execute_fns,
@@ -330,19 +345,63 @@ impl<'graph> Framegraph<'graph, Compiled> {
     // fn submission_order(&self) -> impl Iterator<Item=Handle> {
     //     (0..1)
     // }
+    fn submission_order(&self) -> impl Iterator<Item = Handle> {
+        let mut submission = Vec::new();
+        let mut cache = HashSet::new();
+
+        // FIXME: Find real backbuffers. This is just a workaround because
+        // there are not backbuffers yet.
+        let backbuffer = self
+            .graph
+            .node_indices()
+            .find(|&idx| {
+                self.graph
+                    .neighbors_directed(idx, Direction::Outgoing)
+                    .count() == 0
+            })
+            .expect("Unable to find backbuffer");
+        self.record_submission(backbuffer, &mut submission, &mut cache);
+        submission.into_iter().rev()
+    }
+
+    fn record_submission(
+        &self,
+        node: Handle,
+        submission: &mut Vec<Handle>,
+        cache: &mut HashSet<Handle>,
+    ) {
+        self.graph
+            .neighbors_directed(node, Direction::Incoming)
+            .for_each(|neighbor| {
+                self.record_submission(neighbor, submission, cache);
+            });
+        if !cache.contains(&node) {
+            submission.push(node);
+            cache.insert(node);
+        }
+    }
 
     pub fn execute(&self, blackboard: &Blackboard) {
         use petgraph::visit::{Bfs, Walker};
         let mut pool = Pool::new(&self.ctx);
         let bfs = Bfs::new(&self.graph, Handle::new(0));
-        bfs.iter(&self.graph).for_each(|idx| {
-            let pool_allocator = pool.allocate();
-            let execute = self.execute_fns.get(&idx).expect("renderpass");
 
-            let render = self.state.render.get(&idx).expect("render");
-            let mut cmds = GraphicsCommandbuffer::new(pool_allocator);
-            execute.execute(blackboard, &mut cmds, self);
-            render.execute_commands(&cmds.cmds);
+        self.submission_order().for_each(|idx| {
+            if let Some(execute) = self.execute_fns.get(&idx) {
+                let pool_allocator = pool.allocate();
+                let render = self.state.render.get(&idx).expect("render");
+                let mut cmds = GraphicsCommandbuffer::new(pool_allocator);
+                execute.execute(blackboard, &mut cmds, self);
+                render.execute_commands(&cmds.cmds);
+            } else {
+                if let Some(execute) = self.execute_compute.get(&idx) {
+                    let pool_allocator = pool.allocate();
+                    let compute = self.state.compute.get(&idx).expect("compute");
+                    let mut cmds = ComputeCommandbuffer::new(pool_allocator);
+                    execute.execute(blackboard, &mut cmds, self);
+                    compute.execute_commands(&cmds.cmds);
+                }
+            }
         });
     }
     pub fn export_graphviz<P: AsRef<Path>>(&self, path: P) {
