@@ -16,7 +16,7 @@ use tephra::descriptor::{
 use tephra::framegraph::render_task::{Computepass, Renderpass};
 use tephra::framegraph::{Blackboard, Compiled, Framegraph, GetResource, Recording, Resource};
 use tephra::image::{Image, ImageDesc, ImageLayout, Resolution};
-use tephra::pipeline::PipelineState;
+use tephra::pipeline::{ComputeState, PipelineState};
 use tephra::renderpass::VertexInput;
 use tephra::shader::ShaderModule;
 use tephra::swapchain::Swapchain;
@@ -65,6 +65,7 @@ pub struct TrianglePass {
 
 pub struct TriangleCompute {
     pub storage_buffer: Resource<GenericBuffer>,
+    pub state: ComputeState,
 }
 impl TriangleCompute {
     pub fn add_pass<'graph>(fg: &mut Framegraph<'graph, Recording>) -> Arc<TriangleCompute> {
@@ -74,20 +75,26 @@ impl TriangleCompute {
             BufferUsage::Storage,
             &[1.0f32, 2.0, 3.0, 4.0],
         ).expect("Buffer");
+        let compute_shader =
+            ShaderModule::load(&fg.ctx, "shader/triangle/comp.spv").expect("compute shader");
         let storage_buffer = fg.add_buffer(buffer);
-        fg.add_compute_pass("Compute", |builder| TriangleCompute {
+        fg.add_compute_pass("Compute", move |builder| TriangleCompute {
             storage_buffer: builder.write(storage_buffer),
+            state: ComputeState {
+                compute_shader: Some(compute_shader.clone()),
+            },
         })
     }
 }
 impl<'graph> Computepass<'graph> for TriangleCompute {
     type Layout = Color;
-    fn execute<'a>(
-        &self,
-        blackboard: &'a Blackboard,
-        cmds: &mut ComputeCommandbuffer<'a>,
+    fn execute<'cmd>(
+        &'cmd self,
+        blackboard: &'cmd Blackboard,
+        cmds: &mut ComputeCommandbuffer<'cmd>,
         fg: &Framegraph<'graph, Compiled>,
     ) {
+        cmds.bind_pipeline(&self.state);
     }
 }
 impl<'graph> Renderpass<'graph> for TrianglePass {
@@ -143,7 +150,9 @@ pub fn render_pass(ctx: &context::Context, resolution: Resolution) -> Framegraph
     let _triangle_data =
         TrianglePass::add_pass(&mut fg, triangle_compute.storage_buffer, resolution);
     // Compiles the graph, allocates and optimizes resources
-    fg.compile(resolution, ctx)
+    let fg = fg.compile(resolution, ctx);
+    fg.export_graphviz("graph.dot");
+    fg
 }
 // Just state for the triangle pass
 struct TriangleState {

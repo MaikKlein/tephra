@@ -8,16 +8,6 @@ use renderpass::VertexInput;
 use std::ops::Deref;
 use std::sync::Arc;
 
-pub trait Computepass<'graph> {
-    type Layout: DescriptorInfo;
-    fn execute<'a>(
-        &self,
-        blackboard: &'a Blackboard,
-        cmds: &mut ComputeCommandbuffer<'a>,
-        fg: &Framegraph<'graph, Compiled>,
-    );
-}
-
 pub trait Renderpass<'graph> {
     type Vertex: VertexInput;
     type Layout: DescriptorInfo;
@@ -45,19 +35,29 @@ pub trait Renderpass<'graph> {
 // }
 
 pub trait ExecuteGraphics<'graph> {
-    fn execute<'a>(
+    fn execute<'cmd>(
         &self,
-        blackboard: &'a Blackboard,
-        render: &mut GraphicsCommandbuffer<'a>,
+        blackboard: &'cmd Blackboard,
+        render: &mut GraphicsCommandbuffer<'cmd>,
         ctx: &Framegraph<'graph, Compiled>,
     );
 }
 
+pub trait Computepass<'graph> {
+    type Layout: DescriptorInfo;
+    fn execute<'cmd>(
+        &'cmd self,
+        blackboard: &'cmd Blackboard,
+        cmds: &mut ComputeCommandbuffer<'cmd>,
+        fg: &Framegraph<'graph, Compiled>,
+    );
+}
+
 pub trait ExecuteCompute<'graph> {
-    fn execute<'a>(
-        &self,
-        blackboard: &'a Blackboard,
-        render: &mut ComputeCommandbuffer<'a>,
+    fn execute<'cmd>(
+        &'cmd self,
+        blackboard: &'cmd Blackboard,
+        render: &mut ComputeCommandbuffer<'cmd>,
         ctx: &Framegraph<'graph, Compiled>,
     );
 }
@@ -66,10 +66,10 @@ impl<'graph, P> ExecuteCompute<'graph> for P
 where
     P: Computepass<'graph>,
 {
-    fn execute<'a>(
-        &self,
-        blackboard: &'a Blackboard,
-        render: &mut ComputeCommandbuffer<'a>,
+    fn execute<'cmd>(
+        &'cmd self,
+        blackboard: &'cmd Blackboard,
+        render: &mut ComputeCommandbuffer<'cmd>,
         ctx: &Framegraph<'graph, Compiled>,
     ) {
         self.execute(blackboard, render, ctx)

@@ -342,15 +342,13 @@ impl<'graph> Framegraph<'graph> {
 }
 
 impl<'graph> Framegraph<'graph, Compiled> {
-    // fn submission_order(&self) -> impl Iterator<Item=Handle> {
-    //     (0..1)
-    // }
+    /// Calculates the submission order of all the passes
     fn submission_order(&self) -> impl Iterator<Item = Handle> {
         let mut submission = Vec::new();
         let mut cache = HashSet::new();
 
         // FIXME: Find real backbuffers. This is just a workaround because
-        // there are not backbuffers yet.
+        // there are no backbuffers yet.
         let backbuffer = self
             .graph
             .node_indices()
@@ -360,6 +358,9 @@ impl<'graph> Framegraph<'graph, Compiled> {
                     .count() == 0
             })
             .expect("Unable to find backbuffer");
+        // We start from the backbuffer and traverse the graph backwards. After
+        // we have collected all the indices of the passes, we need to reverse the 
+        // submission order.
         self.record_submission(backbuffer, &mut submission, &mut cache);
         submission.into_iter().rev()
     }
@@ -387,12 +388,13 @@ impl<'graph> Framegraph<'graph, Compiled> {
         let bfs = Bfs::new(&self.graph, Handle::new(0));
 
         self.submission_order().for_each(|idx| {
+            // TODO: Improve pass execution
             if let Some(execute) = self.execute_fns.get(&idx) {
-                let pool_allocator = pool.allocate();
-                let render = self.state.render.get(&idx).expect("render");
-                let mut cmds = GraphicsCommandbuffer::new(pool_allocator);
-                execute.execute(blackboard, &mut cmds, self);
-                render.execute_commands(&cmds.cmds);
+                // let pool_allocator = pool.allocate();
+                // let render = self.state.render.get(&idx).expect("render");
+                // let mut cmds = GraphicsCommandbuffer::new(pool_allocator);
+                // execute.execute(blackboard, &mut cmds, self);
+                // render.execute_commands(&cmds.cmds);
             } else {
                 if let Some(execute) = self.execute_compute.get(&idx) {
                     let pool_allocator = pool.allocate();
