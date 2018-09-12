@@ -21,18 +21,6 @@ use tephra::renderpass::VertexInput;
 use tephra::shader::ShaderModule;
 use tephra::swapchain::Swapchain;
 
-#[derive(Descriptor)]
-pub struct ComputeDesc {
-    #[descriptor(Storage)]
-    pub buffer: Resource<Buffer<[f32; 4]>>,
-}
-
-#[derive(Descriptor)]
-pub struct Color {
-    #[descriptor(Storage)]
-    pub color: Resource<Buffer<[f32; 4]>>,
-}
-
 #[derive(Clone, Debug, Copy)]
 #[repr(C)]
 #[derive(VertexInput)]
@@ -41,16 +29,17 @@ pub struct Vertex {
     pub color: [f32; 4],
 }
 
-pub struct TrianglePass {
-    pub storage_buffer: Resource<Buffer<[f32; 4]>>,
-    pub color: Resource<Image>,
-    pub depth: Resource<Image>,
+#[derive(Descriptor)]
+pub struct ComputeDesc {
+    #[descriptor(Storage)]
+    pub buffer: Resource<Buffer<[f32; 4]>>,
 }
 
 pub struct TriangleCompute {
     pub storage_buffer: Resource<Buffer<[f32; 4]>>,
     pub state: ComputeState,
 }
+
 impl TriangleCompute {
     pub fn add_pass(fg: &mut Framegraph<Recording>) -> Arc<TriangleCompute> {
         let buffer = Buffer::from_slice(
@@ -70,6 +59,7 @@ impl TriangleCompute {
         })
     }
 }
+
 impl Computepass for TriangleCompute {
     type Layout = ComputeDesc;
     fn execute<'cmd>(
@@ -86,6 +76,18 @@ impl Computepass for TriangleCompute {
         cmds.dispatch(1, 1, 1);
     }
 }
+
+#[derive(Descriptor)]
+pub struct Color {
+    #[descriptor(Storage)]
+    pub color: Resource<Buffer<[f32; 4]>>,
+}
+pub struct TrianglePass {
+    pub storage_buffer: Resource<Buffer<[f32; 4]>>,
+    pub color: Resource<Image>,
+    pub depth: Resource<Image>,
+}
+
 impl Renderpass for TrianglePass {
     type Vertex = Vertex;
     type Layout = Color;
@@ -96,19 +98,14 @@ impl Renderpass for TrianglePass {
         &'a self,
         blackboard: &'a Blackboard,
         cmds: &mut GraphicsCommandbuffer<'a>,
-        fg: &Framegraph<Compiled>,
+        _fg: &Framegraph<Compiled>,
     ) {
         let color = Color {
             color: self.storage_buffer,
         };
-        {
-            let r = blackboard.get::<TriangleState>().expect("state");
-            let shader = blackboard.get::<TriangleShader>().expect("shader");
-            shader.draw_index(&r.vertex_buffer, &r.index_buffer, &r.state, &color, cmds);
-        }
-        let swapchain = blackboard.get::<Swapchain>().expect("swap");
-        let color_image = fg.get_resource(self.color);
-        swapchain.copy_and_present(color_image);
+        let r = blackboard.get::<TriangleState>().expect("state");
+        let shader = blackboard.get::<TriangleShader>().expect("shader");
+        shader.draw_index(&r.vertex_buffer, &r.index_buffer, &r.state, &color, cmds);
     }
 }
 
@@ -136,12 +133,36 @@ impl TrianglePass {
     }
 }
 
+struct Presentpass {
+    color: Resource<Image>,
+}
+impl Computepass for Presentpass {
+    type Layout = ();
+    fn execute<'cmd>(
+        &'cmd self,
+        blackboard: &'cmd Blackboard,
+        cmds: &mut ComputeCommandbuffer<'cmd>,
+        fg: &Framegraph<Compiled>,
+    ) {
+        let swapchain = blackboard.get::<Swapchain>().expect("swap");
+        let color_image = fg.get_resource(self.color);
+        swapchain.copy_and_present(color_image);
+    }
+}
+impl Presentpass {
+    pub fn add_pass(fg: &mut Framegraph<Recording>, color: Resource<Image>) {
+        fg.add_compute_pass("PresentPass", |builder| Presentpass {
+            color: builder.read(color),
+        });
+    }
+}
+
 pub fn render_pass(fg: &mut Framegraph<Recording>, resolution: Resolution) {
     let triangle_compute = TriangleCompute::add_pass(fg);
-    let _triangle_data = TrianglePass::add_pass(fg, triangle_compute.storage_buffer, resolution);
-    // Compiles the graph, allocates and optimizes resources
+    let triangle_data = TrianglePass::add_pass(fg, triangle_compute.storage_buffer, resolution);
+    Presentpass::add_pass(fg, triangle_data.color);
 }
-// Just state for the triangle pass
+
 struct TriangleState {
     vertex_buffer: Buffer<Vertex>,
     index_buffer: Buffer<u32>,
@@ -165,7 +186,6 @@ impl TriangleShader {
     ) {
         cmds.bind_vertex(vertex_buffer);
         cmds.bind_index(index_buffer);
-        // TODO: terrible, don't clone
         cmds.bind_pipeline::<Vertex>(state);
         cmds.bind_descriptor(color);
         cmds.draw_index(3);

@@ -217,6 +217,14 @@ where
     fn descriptor_data(&self) -> Vec<Binding<DescriptorResource>>;
     fn layout() -> Vec<Binding<DescriptorType>>;
 }
+impl DescriptorInfo for () {
+    fn descriptor_data(&self) -> Vec<Binding<DescriptorResource>>{
+        Vec::new()
+    }
+    fn layout() -> Vec<Binding<DescriptorType>> {
+        Vec::new()
+    }
+}
 
 pub enum DescriptorType {
     Uniform,
