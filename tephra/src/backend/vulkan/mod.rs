@@ -895,10 +895,16 @@ unsafe extern "system" fn debug_utils_callback(
         let data = &*p_callback_data;
         for i in 0..data.object_count {
             let obj = data.p_objects.offset(i as isize).read();
+            let obj_name = if obj.p_object_name.is_null() {
+                "Unknown"
+            }
+            else{
+                CStr::from_ptr(obj.p_object_name).to_str().unwrap()
+            };
             println!(
                 "Object: [{}] {} 0x{:x}",
                 obj.object_type,
-                CStr::from_ptr(obj.p_object_name).to_str().unwrap(),
+                obj_name,
                 obj.object_handle
             );
         }
