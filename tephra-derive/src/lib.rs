@@ -16,6 +16,7 @@ pub fn derive_descriptor_info(input: proc_macro::TokenStream) -> proc_macro::Tok
     derive.into()
 }
 fn gen_descriptor_info(ident: &Ident, input: &DataStruct) -> TokenStream {
+    let path = quote!{tephra::descriptor};
     let field_names = input
         .fields
         .iter()
@@ -27,17 +28,17 @@ fn gen_descriptor_info(ident: &Ident, input: &DataStruct) -> TokenStream {
             let ty = match desc.ty {
                 DescriptorType::Storage => {
                     quote!{
-                        tephra::descriptor::DescriptorResource::Storage(self.#field.to_generic_buffer())
+                        #path::DescriptorResource::Storage(self.#field.to_generic_buffer())
                     }
                 }
                 DescriptorType::Uniform => {
                     quote!{
-                        tephra::descriptor::DescriptorResource::Uniform(self.#field.to_generic_buffer())
+                        #path::DescriptorResource::Uniform(self.#field.to_generic_buffer())
                     }
                 }
             };
             quote!{
-                 tephra::descriptor::Binding {
+                 #path::Binding {
                      binding: #binding,
                      data: #ty
                  }
@@ -46,24 +47,24 @@ fn gen_descriptor_info(ident: &Ident, input: &DataStruct) -> TokenStream {
     let layout = parse_descriptor_attributes(input).map(|desc| {
         let binding = desc.binding;
         let ty = match desc.ty {
-            DescriptorType::Storage => quote!{tephra::descriptor::DescriptorType::Storage},
-            DescriptorType::Uniform => quote!{tephra::descriptor::DescriptorType::Uniform},
+            DescriptorType::Storage => quote!{#path::DescriptorType::Storage},
+            DescriptorType::Uniform => quote!{#path::DescriptorType::Uniform},
         };
         quote!{
-            tephra::descriptor::Binding {
+            #path::Binding {
                 binding: #binding,
                 data: #ty
             }
         }
     });
     quote!{
-        impl tephra::descriptor::DescriptorInfo for #ident {
-            fn descriptor_data(&self) -> Vec<Binding<DescriptorResource>> {
+        impl #path::DescriptorInfo for #ident {
+            fn descriptor_data(&self) -> Vec<#path::Binding<#path::DescriptorResource>> {
                 vec![
                     #(#descriptor),*
                 ]
             }
-            fn layout() -> Vec<Binding<DescriptorType>> {
+            fn layout() -> Vec<#path::Binding<#path::DescriptorType>> {
                 vec![
                     #(#layout),*
                 ]

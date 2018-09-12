@@ -6,18 +6,12 @@ pub use tephra::winit;
 
 use std::sync::Arc;
 use tephra::backend::vulkan::Context;
-use tephra::buffer::{Buffer, BufferUsage, GenericBuffer, Property};
+use tephra::buffer::{Buffer, BufferUsage, Property};
 use tephra::commandbuffer::{ComputeCommandbuffer, GraphicsCommandbuffer};
-use tephra::context;
-use tephra::descriptor::{
-    Allocator, Binding, Descriptor, DescriptorInfo, DescriptorResource, DescriptorSizes,
-    DescriptorType, Pool,
-};
 use tephra::framegraph::render_task::{Computepass, Renderpass};
 use tephra::framegraph::{Blackboard, Compiled, Framegraph, GetResource, Recording, Resource};
 use tephra::image::{Image, ImageDesc, ImageLayout, Resolution};
 use tephra::pipeline::{ComputeState, PipelineState};
-use tephra::renderpass::VertexInput;
 use tephra::shader::ShaderModule;
 use tephra::swapchain::Swapchain;
 
@@ -64,9 +58,9 @@ impl Computepass for TriangleCompute {
     type Layout = ComputeDesc;
     fn execute<'cmd>(
         &'cmd self,
-        blackboard: &'cmd Blackboard,
+        _blackboard: &'cmd Blackboard,
         cmds: &mut ComputeCommandbuffer<'cmd>,
-        fg: &Framegraph<Compiled>,
+        _fg: &Framegraph<Compiled>,
     ) {
         let desc = ComputeDesc {
             buffer: self.storage_buffer,
@@ -134,14 +128,15 @@ impl TrianglePass {
 }
 
 struct Presentpass {
-    color: Resource<Image>,
+    pub color: Resource<Image>,
 }
+
 impl Computepass for Presentpass {
     type Layout = ();
     fn execute<'cmd>(
         &'cmd self,
         blackboard: &'cmd Blackboard,
-        cmds: &mut ComputeCommandbuffer<'cmd>,
+        _cmds: &mut ComputeCommandbuffer<'cmd>,
         fg: &Framegraph<Compiled>,
     ) {
         let swapchain = blackboard.get::<Swapchain>().expect("swap");
@@ -149,6 +144,7 @@ impl Computepass for Presentpass {
         swapchain.copy_and_present(color_image);
     }
 }
+
 impl Presentpass {
     pub fn add_pass(fg: &mut Framegraph<Recording>, color: Resource<Image>) {
         fg.add_compute_pass("PresentPass", |builder| Presentpass {
@@ -167,12 +163,10 @@ struct TriangleState {
     vertex_buffer: Buffer<Vertex>,
     index_buffer: Buffer<u32>,
     state: PipelineState,
-    color: Color,
 }
 pub struct TriangleShader {}
-
 impl TriangleShader {
-    pub fn new(ctx: &tephra::context::Context) -> Self {
+    pub fn new() -> Self {
         TriangleShader {}
     }
 
@@ -193,13 +187,6 @@ impl TriangleShader {
 }
 fn main() {
     let ctx = Context::new();
-    let color_buffer = Buffer::from_slice(
-        &ctx,
-        Property::HostVisible,
-        BufferUsage::Uniform,
-        &[[1.0f32, 0.0, 0.0, 1.0]],
-    ).expect("color buffer");
-
     let mut blackboard = Blackboard::new();
     let swapchain = Swapchain::new(&ctx);
     let resolution = swapchain.resolution();
@@ -236,18 +223,14 @@ fn main() {
         Buffer::from_slice(&ctx, Property::HostVisible, BufferUsage::Vertex, &vertices)
             .expect("Failed to create vertex buffer");
 
-    let triangle_shader = TriangleShader::new(&ctx);
+    let triangle_shader = TriangleShader::new();
     blackboard.add(triangle_shader);
     blackboard.add(swapchain);
     let mut fg = Framegraph::new(&ctx);
-    let color = Color {
-        color: fg.add_buffer(color_buffer),
-    };
     let triangle_state = TriangleState {
         vertex_buffer,
         index_buffer,
         state,
-        color,
     };
     blackboard.add(triangle_state);
     render_pass(&mut fg, resolution);
