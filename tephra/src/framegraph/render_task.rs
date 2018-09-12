@@ -8,7 +8,7 @@ use renderpass::VertexInput;
 use std::ops::Deref;
 use std::sync::Arc;
 
-pub trait Renderpass<'graph> {
+pub trait Renderpass {
     type Vertex: VertexInput;
     type Layout: DescriptorInfo;
     fn framebuffer(&self) -> Vec<Resource<Image>>;
@@ -16,74 +16,74 @@ pub trait Renderpass<'graph> {
         &self,
         &'a Blackboard,
         cmds: &mut GraphicsCommandbuffer<'a>,
-        fg: &Framegraph<'graph, Compiled>,
+        fg: &Framegraph<Compiled>,
     );
 }
-// pub type ExecuteFn<'graph, T> =
-//     for<'a> fn(&T, &'a Blackboard, &mut GraphicsCommandbuffer<'a>, &Framegraph<'graph, Compiled>);
-// pub type ARenderTask<'graph, T> = Arc<RenderTask<'graph, T>>;
-// pub struct RenderTask<'graph, T> {
+// pub type ExecuteFn<, T> =
+//     for<'a> fn(&T, &'a Blackboard, &mut GraphicsCommandbuffer<'a>, &Framegraph<, Compiled>);
+// pub type ARenderTask<, T> = Arc<RenderTask<, T>>;
+// pub struct RenderTask<, T> {
 //     pub data: T,
-//     pub execute: ExecuteFn<'graph, T>,
+//     pub execute: ExecuteFn<, T>,
 // }
 
-// impl<'graph, T> Deref for RenderTask<'graph, T> {
+// impl<, T> Deref for RenderTask<, T> {
 //     type Target = T;
 //     fn deref(&self) -> &Self::Target {
 //         &self.data
 //     }
 // }
 
-pub trait ExecuteGraphics<'graph> {
+pub trait ExecuteGraphics {
     fn execute<'cmd>(
         &self,
         blackboard: &'cmd Blackboard,
         render: &mut GraphicsCommandbuffer<'cmd>,
-        ctx: &Framegraph<'graph, Compiled>,
+        ctx: &Framegraph<Compiled>,
     );
 }
 
-pub trait Computepass<'graph> {
+pub trait Computepass {
     type Layout: DescriptorInfo;
     fn execute<'cmd>(
         &'cmd self,
         blackboard: &'cmd Blackboard,
         cmds: &mut ComputeCommandbuffer<'cmd>,
-        fg: &Framegraph<'graph, Compiled>,
+        fg: &Framegraph<Compiled>,
     );
 }
 
-pub trait ExecuteCompute<'graph> {
+pub trait ExecuteCompute {
     fn execute<'cmd>(
         &'cmd self,
         blackboard: &'cmd Blackboard,
         render: &mut ComputeCommandbuffer<'cmd>,
-        ctx: &Framegraph<'graph, Compiled>,
+        ctx: &Framegraph<Compiled>,
     );
 }
 
-impl<'graph, P> ExecuteCompute<'graph> for P
+impl<P> ExecuteCompute for P
 where
-    P: Computepass<'graph>,
+    P: Computepass,
 {
     fn execute<'cmd>(
         &'cmd self,
         blackboard: &'cmd Blackboard,
         render: &mut ComputeCommandbuffer<'cmd>,
-        ctx: &Framegraph<'graph, Compiled>,
+        ctx: &Framegraph<Compiled>,
     ) {
         self.execute(blackboard, render, ctx)
     }
 }
-impl<'graph, P> ExecuteGraphics<'graph> for P
+impl<P> ExecuteGraphics for P
 where
-    P: Renderpass<'graph>,
+    P: Renderpass,
 {
     fn execute<'a>(
         &self,
         blackboard: &'a Blackboard,
-        render: &mut GraphicsCommandbuffer<'a>,
-        ctx: &Framegraph<'graph, Compiled>,
+        render: &mut GraphicsCommandbuffer<'a, >,
+        ctx: &Framegraph<Compiled>,
     ) {
         self.execute(blackboard, render, ctx)
     }

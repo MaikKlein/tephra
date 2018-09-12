@@ -21,6 +21,29 @@ use tephra::renderpass::VertexInput;
 use tephra::shader::ShaderModule;
 use tephra::swapchain::Swapchain;
 
+pub struct ComputeDesc {
+    pub buffer: Buffer<f32>,
+}
+impl DescriptorInfo for ComputeDesc {
+    fn descriptor_data(&self) -> Vec<Binding<DescriptorResource>> {
+        vec![Binding {
+            binding: 0,
+            data: DescriptorResource::Storage(&self.buffer.buffer),
+        }]
+    }
+    fn sizes() -> DescriptorSizes {
+        DescriptorSizes {
+            buffer: 1,
+            images: 0,
+        }
+    }
+    fn layout() -> Vec<Binding<DescriptorType>> {
+        vec![Binding {
+            binding: 0,
+            data: DescriptorType::Storage,
+        }]
+    }
+}
 pub struct Color {
     pub color: Buffer<[f32; 4]>,
 }
@@ -68,7 +91,7 @@ pub struct TriangleCompute {
     pub state: ComputeState,
 }
 impl TriangleCompute {
-    pub fn add_pass<'graph>(fg: &mut Framegraph<'graph, Recording>) -> Arc<TriangleCompute> {
+    pub fn add_pass(fg: &mut Framegraph<Recording>) -> Arc<TriangleCompute> {
         let buffer = Buffer::from_slice(
             &fg.ctx,
             Property::HostVisible,
@@ -86,18 +109,21 @@ impl TriangleCompute {
         })
     }
 }
-impl<'graph> Computepass<'graph> for TriangleCompute {
-    type Layout = Color;
+impl Computepass for TriangleCompute {
+    type Layout = ComputeDesc;
     fn execute<'cmd>(
         &'cmd self,
         blackboard: &'cmd Blackboard,
         cmds: &mut ComputeCommandbuffer<'cmd>,
-        fg: &Framegraph<'graph, Compiled>,
+        fg: &Framegraph<Compiled>,
     ) {
-        cmds.bind_pipeline(&self.state);
+        //let storage_buffer = fg.get_resource(self.storage_buffer);
+        //cmds.bind_pipeline(&self.state);
+        //cmds.bind_descriptor(storage_buffer);
+        //cmds.dispatch(4, 1, 1);
     }
 }
-impl<'graph> Renderpass<'graph> for TrianglePass {
+impl Renderpass for TrianglePass {
     type Vertex = Vertex;
     type Layout = Color;
     fn framebuffer(&self) -> Vec<Resource<Image>> {
@@ -107,7 +133,7 @@ impl<'graph> Renderpass<'graph> for TrianglePass {
         &self,
         blackboard: &'a Blackboard,
         cmds: &mut GraphicsCommandbuffer<'a>,
-        fg: &Framegraph<'graph, Compiled>,
+        fg: &Framegraph<Compiled>,
     ) {
         {
             let r = blackboard.get::<TriangleState>().expect("state");
@@ -121,8 +147,8 @@ impl<'graph> Renderpass<'graph> for TrianglePass {
 }
 
 impl TrianglePass {
-    pub fn add_pass<'graph>(
-        fg: &mut Framegraph<'graph, Recording>,
+    pub fn add_pass(
+        fg: &mut Framegraph<Recording>,
         storage_buffer: Resource<GenericBuffer>,
         resolution: Resolution,
     ) -> Arc<TrianglePass> {
@@ -162,27 +188,27 @@ struct TriangleState {
     color: Color,
 }
 use std::ops::Range;
-pub trait GraphicsShader {
-    type VertexInput: VertexInput;
-    type Descriptor: DescriptorInfo;
-    fn draw_indexed<'cmd>(
-        &self,
-        vertex_buffer: &'cmd Buffer<Self::VertexInput>,
-        index_buffer: &'cmd Buffer<u32>,
-        state: &'cmd PipelineState,
-        range: Range<usize>,
-        descriptors: &'cmd [Self::Descriptor],
-        cmds: &mut GraphicsCommandbuffer<'cmd>,
-    ) {
-        cmds.bind_vertex(vertex_buffer);
-        cmds.bind_index(index_buffer);
-        cmds.bind_pipeline::<Self::VertexInput>(state);
-        for desc in descriptors {
-            cmds.bind_descriptor(desc);
-            cmds.draw_index(range.end);
-        }
-    }
-}
+// pub trait GraphicsShader {
+//     type VertexInput: VertexInput;
+//     type Descriptor: DescriptorInfo;
+//     fn draw_indexed<'cmd>(
+//         &self,
+//         vertex_buffer: &'cmd Buffer<Self::VertexInput>,
+//         index_buffer: &'cmd Buffer<u32>,
+//         state: &'cmd PipelineState,
+//         range: Range<usize>,
+//         descriptors: &'cmd [Self::Descriptor],
+//         cmds: &mut GraphicsCommandbuffer<'cmd>,
+//     ) {
+//         cmds.bind_vertex(vertex_buffer);
+//         cmds.bind_index(index_buffer);
+//         cmds.bind_pipeline::<Self::VertexInput>(state);
+//         for desc in descriptors {
+//             cmds.bind_descriptor(desc);
+//             cmds.draw_index(range.end);
+//         }
+//     }
+// }
 
 // pub struct Shader<S: GraphicsShader> {
 //     vertex_shader: ShaderModule,
@@ -291,7 +317,7 @@ fn main() {
     blackboard.add(triangle_shader);
     blackboard.add(triangle_state);
     blackboard.add(swapchain);
-    let render_pass = render_pass(&ctx, resolution);
+    let mut render_pass = render_pass(&ctx, resolution);
     loop {
         // Execute the graph every frame
         render_pass.execute(&blackboard);

@@ -1,8 +1,8 @@
 use buffer::{Buffer, BufferApi, GenericBuffer};
 use descriptor::{Allocator, Descriptor, DescriptorInfo, NativeDescriptor};
-use framegraph::{Resource, ResourceIndex};
+use framegraph::{Compiled, Framegraph, Resource, ResourceIndex};
 use image::Image;
-use pipeline::{ComputeState, PipelineState };
+use pipeline::{ComputeState, PipelineState};
 use render::RenderApi;
 use renderpass::{VertexInput, VertexInputData};
 use std::marker::PhantomData;
@@ -20,14 +20,9 @@ pub struct Execute {
 }
 
 pub enum ComputeCmd<'a> {
-    BindPipeline {
-        state: &'a ComputeState,
-    },
-    Dispatch{
-        x: u32,
-        y: u32,
-        z: u32,
-    }
+    BindPipeline { state: &'a ComputeState },
+    Dispatch { x: u32, y: u32, z: u32 },
+    BindDescriptor(NativeDescriptor),
 }
 pub struct ComputeCommandbuffer<'a> {
     pool_allocator: Allocator<'a>,
@@ -42,16 +37,21 @@ impl<'a> ComputeCommandbuffer<'a> {
     }
 
     pub fn dispatch(&mut self, x: u32, y: u32, z: u32) {
-        let cmd = ComputeCmd::Dispatch{
-            x, y, z
-        };
+        let cmd = ComputeCmd::Dispatch { x, y, z };
         self.cmds.push(cmd);
     }
 
     pub fn bind_pipeline(&mut self, state: &'a ComputeState) {
-        let cmd = ComputeCmd::BindPipeline {
-            state,
-        };
+        let cmd = ComputeCmd::BindPipeline { state };
+        self.cmds.push(cmd);
+    }
+    pub fn bind_descriptor<T>(&mut self, descriptor: &'a T)
+    where
+        T: DescriptorInfo,
+    {
+        let mut d = self.pool_allocator.allocate::<T>();
+        d.update(descriptor);
+        let cmd = ComputeCmd::BindDescriptor(d.inner_descriptor);
         self.cmds.push(cmd);
     }
 }
@@ -69,14 +69,16 @@ pub enum GraphicsCmd<'a> {
     },
 }
 
-pub struct GraphicsCommandbuffer<'a> {
+pub struct GraphicsCommandbuffer<'a, > {
+    fg: &'a Framegraph<Compiled>,
     pool_allocator: Allocator<'a>,
     pub(crate) cmds: Vec<GraphicsCmd<'a>>,
 }
 
 impl<'a> GraphicsCommandbuffer<'a> {
-    pub fn new(pool_allocator: Allocator<'a>) -> Self {
+    pub fn new(fg: &'a Framegraph<Compiled>, pool_allocator: Allocator<'a>) -> Self {
         GraphicsCommandbuffer {
+            fg,
             cmds: Vec::new(),
             pool_allocator,
         }

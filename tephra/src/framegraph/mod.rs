@@ -120,13 +120,11 @@ pub struct Recording {
     layouts: HashMap<Handle, NativeLayout>,
 }
 
-pub struct Framegraph<'graph, T = Recording>
-where
-    T: 'graph,
+pub struct Framegraph<T = Recording>
 {
     pub ctx: Context,
-    execute_fns: HashMap<Handle, Arc<dyn ExecuteGraphics<'graph> + 'graph>>,
-    execute_compute: HashMap<Handle, Arc<dyn ExecuteCompute<'graph> + 'graph>>,
+    execute_fns: HashMap<Handle, Arc<dyn ExecuteGraphics>>,
+    execute_compute: HashMap<Handle, Arc<dyn ExecuteCompute>>,
     state: T,
     graph: Graph<Pass, Access>,
     resources: Vec<ResourceType>,
@@ -137,18 +135,18 @@ pub trait GetResource<T> {
     fn get_resource(&self, resource: Resource<T>) -> &T;
 }
 
-impl<'graph, T> GetResource<Image> for Framegraph<'graph, T> {
+impl<T> GetResource<Image> for Framegraph<T> {
     fn get_resource(&self, resource: Resource<Image>) -> &Image {
         self.resources[resource.id].as_image()
     }
 }
 
-impl<'graph, T> GetResource<GenericBuffer> for Framegraph<'graph, T> {
+impl<T> GetResource<GenericBuffer> for Framegraph<T> {
     fn get_resource(&self, resource: Resource<GenericBuffer>) -> &GenericBuffer {
         self.resources[resource.id].as_buffer()
     }
 }
-impl<'graph, T> Framegraph<'graph, T> {
+impl<T> Framegraph<T> {
     pub fn insert_pass_handle<D>(&mut self, resource: Resource<D>, handle: Handle) {
         self.pass_map
             .insert((resource.id, resource.version), handle);
@@ -157,7 +155,7 @@ impl<'graph, T> Framegraph<'graph, T> {
         self.pass_map.get(&(resource.id, resource.version)).cloned()
     }
 }
-impl<'graph> Framegraph<'graph> {
+impl Framegraph {
     pub fn add_resource(&mut self, ty: ResourceType) -> ResourceIndex {
         let id = self.resources.len();
         self.resources.push(ty);
@@ -205,8 +203,8 @@ impl<'graph> Framegraph<'graph> {
     //     name: &'static str,
     //     setup: Setup,
     //     pass: P,
-    //     execute: render_task::ExecuteFn<'graph, Input>,
-    // ) -> render_task::ARenderTask<'graph, Input>
+    //     execute: render_task::ExecuteFn<Input>,
+    // ) -> render_task::ARenderTask<Input>
     // where
     //     Setup: Fn(&mut TaskBuilder<'_, 'graph>) -> Input,
     //     P: Fn(&Input) -> Vec<Resource<Image>>,
@@ -237,8 +235,8 @@ impl<'graph> Framegraph<'graph> {
     // }
     pub fn add_compute_pass<F, P>(&mut self, name: &'static str, mut f: F) -> Arc<P>
     where
-        F: FnMut(&mut TaskBuilder<'_, 'graph>) -> P,
-        P: Computepass<'graph> + 'graph,
+        F: FnMut(&mut TaskBuilder<'_>) -> P,
+        P: Computepass + 'static,
     {
         let layout = Layout::<P::Layout>::new(&self.ctx);
         let (pass_handle, task) = {
@@ -262,8 +260,8 @@ impl<'graph> Framegraph<'graph> {
     }
     pub fn add_render_pass<F, P>(&mut self, name: &'static str, mut f: F) -> Arc<P>
     where
-        F: FnMut(&mut TaskBuilder<'_, 'graph>) -> P,
-        P: Renderpass<'graph> + 'graph,
+        F: FnMut(&mut TaskBuilder<'_>) -> P,
+        P: Renderpass + 'static,
     {
         let layout = Layout::<P::Layout>::new(&self.ctx);
         let (pass_handle, image_resources, task) = {
@@ -293,7 +291,7 @@ impl<'graph> Framegraph<'graph> {
         mut self,
         resolution: Resolution,
         ctx: &Context,
-    ) -> Framegraph<'graph, Compiled> {
+    ) -> Framegraph<Compiled> {
         let images: Vec<_> = self
             .state
             .image_data
@@ -341,7 +339,7 @@ impl<'graph> Framegraph<'graph> {
     }
 }
 
-impl<'graph> Framegraph<'graph, Compiled> {
+impl Framegraph<Compiled> {
     /// Calculates the submission order of all the passes
     fn submission_order(&self) -> impl Iterator<Item = Handle> {
         let mut submission = Vec::new();
@@ -359,10 +357,9 @@ impl<'graph> Framegraph<'graph, Compiled> {
             })
             .expect("Unable to find backbuffer");
         // We start from the backbuffer and traverse the graph backwards. After
-        // we have collected all the indices of the passes, we need to reverse the 
-        // submission order.
+        // we have collected all the indices of the passes
         self.record_submission(backbuffer, &mut submission, &mut cache);
-        submission.into_iter().rev()
+        submission.into_iter()
     }
 
     fn record_submission(
@@ -382,19 +379,16 @@ impl<'graph> Framegraph<'graph, Compiled> {
         }
     }
 
-    pub fn execute(&self, blackboard: &Blackboard) {
-        use petgraph::visit::{Bfs, Walker};
+    pub fn execute(&mut self, blackboard: &Blackboard) {
         let mut pool = Pool::new(&self.ctx);
-        let bfs = Bfs::new(&self.graph, Handle::new(0));
-
         self.submission_order().for_each(|idx| {
             // TODO: Improve pass execution
             if let Some(execute) = self.execute_fns.get(&idx) {
-                // let pool_allocator = pool.allocate();
-                // let render = self.state.render.get(&idx).expect("render");
-                // let mut cmds = GraphicsCommandbuffer::new(pool_allocator);
-                // execute.execute(blackboard, &mut cmds, self);
-                // render.execute_commands(&cmds.cmds);
+                let pool_allocator = pool.allocate();
+                let render = self.state.render.get(&idx).expect("render");
+                let mut cmds = GraphicsCommandbuffer::new(self, pool_allocator);
+                execute.execute(blackboard, &mut cmds, self);
+                render.execute_commands(&cmds.cmds);
             } else {
                 if let Some(execute) = self.execute_compute.get(&idx) {
                     let pool_allocator = pool.allocate();
@@ -413,7 +407,7 @@ impl<'graph> Framegraph<'graph, Compiled> {
         write!(&mut file, "{}", dot);
     }
 }
-impl<'graph, T> Framegraph<'graph, T> {
+impl<T> Framegraph<T> {
     pub fn get_image(&self, id: ResourceIndex) -> &Image {
         self.resources[id].as_image()
     }

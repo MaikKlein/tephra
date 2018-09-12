@@ -25,6 +25,19 @@ impl ComputeApi for Compute {
             CommandBuffer::record(&self.ctx, "ComputePass", |draw_command_buffer| {
                 for cmd in cmds {
                     match cmd {
+                        ComputeCmd::BindDescriptor(descriptor) => {
+                            let vk_descriptor = descriptor.inner.as_ref().downcast::<Vulkan>();
+                            unsafe {
+                                self.ctx.device.cmd_bind_descriptor_sets(
+                                    draw_command_buffer,
+                                    vk::PipelineBindPoint::COMPUTE,
+                                    self.pipeline_layout,
+                                    0,
+                                    &[vk_descriptor.descriptor_set],
+                                    &[],
+                                );
+                            }
+                        }
                         ComputeCmd::BindPipeline { state } => {
                             let pipeline = unsafe {
                                 create_compute_pipeline(&self.ctx, state, self.pipeline_layout)
@@ -372,7 +385,27 @@ pub unsafe fn create_compute_pipeline(
     state: &ComputeState,
     pipeline_layout: vk::PipelineLayout,
 ) -> vk::Pipeline {
-    unimplemented!()
+    let compute_shader = state.compute_shader.as_ref().expect("shader");
+    let vk_shader = compute_shader.downcast::<Vulkan>();
+    let shader_entry_name = CString::new("main").unwrap();
+    let create_info = vk::ComputePipelineCreateInfo {
+        layout: pipeline_layout,
+        stage: vk::PipelineShaderStageCreateInfo {
+            stage: vk::ShaderStageFlags::COMPUTE,
+            module: vk_shader.shader_module,
+            p_name: shader_entry_name.as_ptr(),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    println!("TEST");
+    println!("{:#?}", create_info);
+    let pipelines = ctx
+        .device
+        .create_compute_pipelines(ctx.pipeline_cache, &[create_info], None)
+        .expect("pipeline");
+    println!("TEST");
+    pipelines[0]
 }
 pub unsafe fn create_pipeline(
     ctx: &Context,

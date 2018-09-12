@@ -54,6 +54,7 @@ impl CreatePool for Context {
             .map(|desc| {
                 let ty = match desc.data {
                     DescriptorType::Uniform => vk::DescriptorType::UNIFORM_BUFFER,
+                    DescriptorType::Storage => vk::DescriptorType::STORAGE_BUFFER,
                 };
                 vk::DescriptorSetLayoutBinding {
                     binding: desc.binding,
@@ -123,6 +124,7 @@ impl CreateLayout for Context {
             .map(|desc| {
                 let ty = match desc.data {
                     DescriptorType::Uniform => vk::DescriptorType::UNIFORM_BUFFER,
+                    DescriptorType::Storage => vk::DescriptorType::STORAGE_BUFFER,
                 };
                 vk::DescriptorSetLayoutBinding {
                     binding: 0,

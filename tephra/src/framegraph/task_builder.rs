@@ -1,10 +1,10 @@
 use super::{Access, Framegraph, Handle, Recording, Resource, ResourceAccess, ResourceType};
 use image::{Image, ImageDesc};
-pub struct TaskBuilder<'borrow, 'graph: 'borrow> {
+pub struct TaskBuilder<'borrow> {
     pub(crate) pass_handle: Handle,
-    pub(crate) framegraph: &'borrow mut Framegraph<'graph, Recording>,
+    pub(crate) framegraph: &'borrow mut Framegraph<Recording>,
 }
-impl<'borrow, 'graph> TaskBuilder<'borrow, 'graph> {
+impl<'borrow> TaskBuilder<'borrow> {
     pub fn create_image(&mut self, name: &'static str, desc: ImageDesc) -> Resource<Image> {
         // TODO: Freeze resources or this ins incorrect
         let id = self.framegraph.resources.len() + self.framegraph.state.image_data.len();

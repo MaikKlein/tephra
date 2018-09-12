@@ -200,6 +200,7 @@ where
 
 pub enum DescriptorType {
     Uniform,
+    Storage,
 }
 pub enum DescriptorResource<'a> {
     Uniform(&'a GenericBuffer),
