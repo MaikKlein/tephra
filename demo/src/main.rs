@@ -21,39 +21,16 @@ use tephra::renderpass::VertexInput;
 use tephra::shader::ShaderModule;
 use tephra::swapchain::Swapchain;
 
+#[derive(Descriptor)]
 pub struct ComputeDesc {
+    #[descriptor(Storage)]
     pub buffer: Resource<Buffer<[f32; 4]>>,
 }
-impl DescriptorInfo for ComputeDesc {
-    fn descriptor_data(&self) -> Vec<Binding<DescriptorResource>> {
-        vec![Binding {
-            binding: 0,
-            data: DescriptorResource::Storage(self.buffer.to_generic_buffer()),
-        }]
-    }
-    fn layout() -> Vec<Binding<DescriptorType>> {
-        vec![Binding {
-            binding: 0,
-            data: DescriptorType::Storage,
-        }]
-    }
-}
+
+#[derive(Descriptor)]
 pub struct Color {
+    #[descriptor(Storage)]
     pub color: Resource<Buffer<[f32; 4]>>,
-}
-impl DescriptorInfo for Color {
-    fn descriptor_data(&self) -> Vec<Binding<DescriptorResource>> {
-        vec![Binding {
-            binding: 0,
-            data: DescriptorResource::Storage(self.color.to_generic_buffer()),
-        }]
-    }
-    fn layout() -> Vec<Binding<DescriptorType>> {
-        vec![Binding {
-            binding: 0,
-            data: DescriptorType::Storage,
-        }]
-    }
 }
 
 #[derive(Clone, Debug, Copy)]
@@ -64,10 +41,6 @@ pub struct Vertex {
     pub color: [f32; 4],
 }
 
-pub struct TriangleData {
-    pub color: Resource<Image>,
-    pub depth: Resource<Image>,
-}
 pub struct TrianglePass {
     pub storage_buffer: Resource<Buffer<[f32; 4]>>,
     pub color: Resource<Image>,
@@ -175,54 +148,7 @@ struct TriangleState {
     state: PipelineState,
     color: Color,
 }
-use std::ops::Range;
-// pub trait GraphicsShader {
-//     type VertexInput: VertexInput;
-//     type Descriptor: DescriptorInfo;
-//     fn draw_indexed<'cmd>(
-//         &self,
-//         vertex_buffer: &'cmd Buffer<Self::VertexInput>,
-//         index_buffer: &'cmd Buffer<u32>,
-//         state: &'cmd PipelineState,
-//         range: Range<usize>,
-//         descriptors: &'cmd [Self::Descriptor],
-//         cmds: &mut GraphicsCommandbuffer<'cmd>,
-//     ) {
-//         cmds.bind_vertex(vertex_buffer);
-//         cmds.bind_index(index_buffer);
-//         cmds.bind_pipeline::<Self::VertexInput>(state);
-//         for desc in descriptors {
-//             cmds.bind_descriptor(desc);
-//             cmds.draw_index(range.end);
-//         }
-//     }
-// }
-
-// pub struct Shader<S: GraphicsShader> {
-//     vertex_shader: ShaderModule,
-//     fragment_shader: ShaderModule,
-// }
-
-// use std::path::Path;
-// impl<S: GraphicsShader> Shader<S> {
-//     pub fn new(
-//         ctx: &tephra::context::Context,
-//         vertex_shader: ShaderModule,
-//         fragment_shader: ShaderModule,
-//     ) -> Self {
-//         Shader {
-//             vertex_shader,
-//             fragment_shader,
-//         }
-//     }
-// }
-
 pub struct TriangleShader {}
-
-// impl GraphicsShader for TriangleShader {
-//     type VertexInput = Vertex;
-//     type Descriptor = Color;
-// }
 
 impl TriangleShader {
     pub fn new(ctx: &tephra::context::Context) -> Self {
@@ -253,8 +179,6 @@ fn main() {
         BufferUsage::Uniform,
         &[[1.0f32, 0.0, 0.0, 1.0]],
     ).expect("color buffer");
-    // let pool = Pool::<Color>::new(&ctx);
-    // let mut color_allocator = pool.allocate();
 
     let mut blackboard = Blackboard::new();
     let swapchain = Swapchain::new(&ctx);
