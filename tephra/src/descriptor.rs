@@ -49,12 +49,14 @@ impl LinearPoolAllocator {
     where
         T: DescriptorInfo,
     {
+        let layout = T::layout();
+        let sizes = DescriptorSizes::from_layout(&layout);
         LinearPoolAllocator {
             ctx: ctx.clone(),
             block_size: 50,
             pools: Vec::new(),
-            layout: T::layout(),
-            sizes: T::sizes(),
+            layout,
+            sizes,
         }
     }
 
@@ -187,7 +189,25 @@ pub struct NativeDescriptor {
 #[derive(Debug, Copy, Clone)]
 pub struct DescriptorSizes {
     pub buffer: u32,
+    pub storage: u32,
     pub images: u32,
+}
+
+impl DescriptorSizes {
+    pub fn from_layout(layout: &[Binding<DescriptorType>]) -> Self {
+        let sizes = DescriptorSizes {
+            buffer: 0,
+            storage: 0,
+            images: 0,
+        };
+        layout.iter().fold(sizes, |mut acc, elem| {
+            match elem.data {
+                DescriptorType::Uniform => acc.buffer += 1,
+                DescriptorType::Storage => acc.storage += 1,
+            }
+            acc
+        })
+    }
 }
 
 pub trait DescriptorInfo
@@ -195,7 +215,6 @@ where
     Self: 'static,
 {
     fn descriptor_data(&self) -> Vec<Binding<DescriptorResource>>;
-    fn sizes() -> DescriptorSizes;
     fn layout() -> Vec<Binding<DescriptorType>>;
 }
 

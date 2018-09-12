@@ -31,12 +31,6 @@ impl DescriptorInfo for ComputeDesc {
             data: DescriptorResource::Storage(self.buffer.to_generic_buffer()),
         }]
     }
-    fn sizes() -> DescriptorSizes {
-        DescriptorSizes {
-            buffer: 1,
-            images: 0,
-        }
-    }
     fn layout() -> Vec<Binding<DescriptorType>> {
         vec![Binding {
             binding: 0,
@@ -53,12 +47,6 @@ impl DescriptorInfo for Color {
             binding: 0,
             data: DescriptorResource::Uniform(self.color.to_generic_buffer()),
         }]
-    }
-    fn sizes() -> DescriptorSizes {
-        DescriptorSizes {
-            buffer: 1,
-            images: 0,
-        }
     }
     fn layout() -> Vec<Binding<DescriptorType>> {
         vec![Binding {
@@ -117,10 +105,12 @@ impl Computepass for TriangleCompute {
         cmds: &mut ComputeCommandbuffer<'cmd>,
         fg: &Framegraph<Compiled>,
     ) {
-        //let storage_buffer = fg.get_resource(self.storage_buffer);
-        //cmds.bind_pipeline(&self.state);
-        //cmds.bind_descriptor(storage_buffer);
-        //cmds.dispatch(4, 1, 1);
+        let desc = ComputeDesc{
+            buffer: self.storage_buffer,
+        };
+        cmds.bind_pipeline(&self.state);
+        cmds.bind_descriptor(&desc);
+        cmds.dispatch(4, 1, 1);
     }
 }
 impl Renderpass for TrianglePass {

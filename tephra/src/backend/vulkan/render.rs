@@ -398,13 +398,10 @@ pub unsafe fn create_compute_pipeline(
         },
         ..Default::default()
     };
-    println!("TEST");
-    println!("{:#?}", create_info);
     let pipelines = ctx
         .device
         .create_compute_pipelines(ctx.pipeline_cache, &[create_info], None)
         .expect("pipeline");
-    println!("TEST");
     pipelines[0]
 }
 pub unsafe fn create_pipeline(

@@ -82,6 +82,13 @@ impl CreatePool for Context {
             ty: vk::DescriptorType::UNIFORM_BUFFER,
             descriptor_count: sizes.buffer,
         };
+        let storage_size = vk::DescriptorPoolSize {
+            ty: vk::DescriptorType::STORAGE_BUFFER,
+            descriptor_count: sizes.storage,
+        };
+        if storage_size.descriptor_count > 0 {
+            pool_sizes.push(storage_size);
+        }
         if buffer_size.descriptor_count > 0 {
             pool_sizes.push(buffer_size);
         }
