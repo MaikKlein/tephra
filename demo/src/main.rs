@@ -22,7 +22,7 @@ use tephra::shader::ShaderModule;
 use tephra::swapchain::Swapchain;
 
 pub struct ComputeDesc {
-    pub buffer: Resource<Buffer<f32>>,
+    pub buffer: Resource<Buffer<[f32; 4]>>,
 }
 impl DescriptorInfo for ComputeDesc {
     fn descriptor_data(&self) -> Vec<Binding<DescriptorResource>> {
@@ -45,13 +45,13 @@ impl DescriptorInfo for Color {
     fn descriptor_data(&self) -> Vec<Binding<DescriptorResource>> {
         vec![Binding {
             binding: 0,
-            data: DescriptorResource::Uniform(self.color.to_generic_buffer()),
+            data: DescriptorResource::Storage(self.color.to_generic_buffer()),
         }]
     }
     fn layout() -> Vec<Binding<DescriptorType>> {
         vec![Binding {
             binding: 0,
-            data: DescriptorType::Uniform,
+            data: DescriptorType::Storage,
         }]
     }
 }
@@ -69,13 +69,13 @@ pub struct TriangleData {
     pub depth: Resource<Image>,
 }
 pub struct TrianglePass {
-    pub storage_buffer: Resource<Buffer<f32>>,
+    pub storage_buffer: Resource<Buffer<[f32; 4]>>,
     pub color: Resource<Image>,
     pub depth: Resource<Image>,
 }
 
 pub struct TriangleCompute {
-    pub storage_buffer: Resource<Buffer<f32>>,
+    pub storage_buffer: Resource<Buffer<[f32; 4]>>,
     pub state: ComputeState,
 }
 impl TriangleCompute {
@@ -84,7 +84,7 @@ impl TriangleCompute {
             &fg.ctx,
             Property::HostVisible,
             BufferUsage::Storage,
-            &[1.0f32, 2.0, 3.0, 4.0],
+            &[[1.0f32, 0.0, 0.0, 1.0]],
         ).expect("Buffer");
         let compute_shader =
             ShaderModule::load(&fg.ctx, "shader/triangle/comp.spv").expect("compute shader");
@@ -105,12 +105,12 @@ impl Computepass for TriangleCompute {
         cmds: &mut ComputeCommandbuffer<'cmd>,
         fg: &Framegraph<Compiled>,
     ) {
-        let desc = ComputeDesc{
+        let desc = ComputeDesc {
             buffer: self.storage_buffer,
         };
         cmds.bind_pipeline(&self.state);
         cmds.bind_descriptor(&desc);
-        cmds.dispatch(4, 1, 1);
+        cmds.dispatch(1, 1, 1);
     }
 }
 impl Renderpass for TrianglePass {
@@ -120,15 +120,18 @@ impl Renderpass for TrianglePass {
         vec![self.color, self.depth]
     }
     fn execute<'a>(
-        &self,
+        &'a self,
         blackboard: &'a Blackboard,
         cmds: &mut GraphicsCommandbuffer<'a>,
         fg: &Framegraph<Compiled>,
     ) {
+        let color = Color {
+            color: self.storage_buffer,
+        };
         {
             let r = blackboard.get::<TriangleState>().expect("state");
             let shader = blackboard.get::<TriangleShader>().expect("shader");
-            shader.draw_index(&r.vertex_buffer, &r.index_buffer, &r.state, &r.color, cmds);
+            shader.draw_index(&r.vertex_buffer, &r.index_buffer, &r.state, &color, cmds);
         }
         let swapchain = blackboard.get::<Swapchain>().expect("swap");
         let color_image = fg.get_resource(self.color);
@@ -139,7 +142,7 @@ impl Renderpass for TrianglePass {
 impl TrianglePass {
     pub fn add_pass(
         fg: &mut Framegraph<Recording>,
-        storage_buffer: Resource<Buffer<f32>>,
+        storage_buffer: Resource<Buffer<[f32; 4]>>,
         resolution: Resolution,
     ) -> Arc<TrianglePass> {
         fg.add_render_pass("Triangle Pass", |builder| {
@@ -162,8 +165,7 @@ impl TrianglePass {
 
 pub fn render_pass(fg: &mut Framegraph<Recording>, resolution: Resolution) {
     let triangle_compute = TriangleCompute::add_pass(fg);
-    let _triangle_data =
-        TrianglePass::add_pass(fg, triangle_compute.storage_buffer, resolution);
+    let _triangle_data = TrianglePass::add_pass(fg, triangle_compute.storage_buffer, resolution);
     // Compiles the graph, allocates and optimizes resources
 }
 // Just state for the triangle pass
@@ -232,7 +234,7 @@ impl TriangleShader {
         vertex_buffer: &'a Buffer<Vertex>,
         index_buffer: &'a Buffer<u32>,
         state: &'a PipelineState,
-        color: &'a Color,
+        color: &Color,
         cmds: &mut GraphicsCommandbuffer<'a>,
     ) {
         cmds.bind_vertex(vertex_buffer);

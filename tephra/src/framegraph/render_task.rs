@@ -12,10 +12,10 @@ pub trait Renderpass {
     type Vertex: VertexInput;
     type Layout: DescriptorInfo;
     fn framebuffer(&self) -> Vec<Resource<Image>>;
-    fn execute<'a>(
-        &self,
-        &'a Blackboard,
-        cmds: &mut GraphicsCommandbuffer<'a>,
+    fn execute<'cmd>(
+        &'cmd self,
+        &'cmd Blackboard,
+        cmds: &mut GraphicsCommandbuffer<'cmd>,
         fg: &Framegraph<Compiled>,
     );
 }
@@ -36,7 +36,7 @@ pub trait Renderpass {
 
 pub trait ExecuteGraphics {
     fn execute<'cmd>(
-        &self,
+        &'cmd self,
         blackboard: &'cmd Blackboard,
         render: &mut GraphicsCommandbuffer<'cmd>,
         ctx: &Framegraph<Compiled>,
@@ -79,10 +79,10 @@ impl<P> ExecuteGraphics for P
 where
     P: Renderpass,
 {
-    fn execute<'a>(
-        &self,
-        blackboard: &'a Blackboard,
-        render: &mut GraphicsCommandbuffer<'a>,
+    fn execute<'cmd>(
+        &'cmd self,
+        blackboard: &'cmd Blackboard,
+        render: &mut GraphicsCommandbuffer<'cmd>,
         ctx: &Framegraph<Compiled>,
     ) {
         self.execute(blackboard, render, ctx)

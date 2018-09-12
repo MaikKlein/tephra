@@ -449,11 +449,11 @@ impl Context {
                 .filter_map(|v| v)
                 .nth(0)
                 .expect("Couldn't find suitable device.");
-            println!("{:#?}", entry.enumerate_instance_extension_properties());
-            println!(
-                "{:#?}",
-                instance.enumerate_device_extension_properties(pdevice)
-            );
+            // println!("{:#?}", entry.enumerate_instance_extension_properties());
+            // println!(
+            //     "{:#?}",
+            //     instance.enumerate_device_extension_properties(pdevice)
+            // );
             let queue_family_index = queue_family_index as u32;
             let device_extension_names_raw = [Swapchain::name().as_ptr()];
             let features = vk::PhysicalDeviceFeatures {

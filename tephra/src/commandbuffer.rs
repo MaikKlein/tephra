@@ -106,7 +106,7 @@ impl<'a> GraphicsCommandbuffer<'a> {
         self.cmds.push(cmd);
     }
 
-    pub fn bind_descriptor<T>(&mut self, descriptor: &'a T)
+    pub fn bind_descriptor<T>(&mut self, descriptor: &T)
     where
         T: DescriptorInfo,
     {
