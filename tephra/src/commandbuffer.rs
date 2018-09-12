@@ -25,12 +25,14 @@ pub enum ComputeCmd<'a> {
     BindDescriptor(NativeDescriptor),
 }
 pub struct ComputeCommandbuffer<'a> {
+    fg: &'a Framegraph<Compiled>,
     pool_allocator: Allocator<'a>,
     pub(crate) cmds: Vec<ComputeCmd<'a>>,
 }
 impl<'a> ComputeCommandbuffer<'a> {
-    pub fn new(pool_allocator: Allocator<'a>) -> Self {
+    pub fn new(pool_allocator: Allocator<'a>, fg: &'a Framegraph<Compiled>) -> Self {
         ComputeCommandbuffer {
+            fg,
             cmds: Vec::new(),
             pool_allocator,
         }
@@ -50,7 +52,7 @@ impl<'a> ComputeCommandbuffer<'a> {
         T: DescriptorInfo,
     {
         let mut d = self.pool_allocator.allocate::<T>();
-        d.update(descriptor);
+        d.update(descriptor, &self.fg);
         let cmd = ComputeCmd::BindDescriptor(d.inner_descriptor);
         self.cmds.push(cmd);
     }
@@ -109,7 +111,7 @@ impl<'a> GraphicsCommandbuffer<'a> {
         T: DescriptorInfo,
     {
         let mut d = self.pool_allocator.allocate::<T>();
-        d.update(descriptor);
+        d.update(descriptor, &self.fg);
         let cmd = GraphicsCmd::BindDescriptor(d.inner_descriptor);
         self.cmds.push(cmd);
     }

@@ -2,6 +2,7 @@ use backend::BackendApi;
 use buffer::GenericBuffer;
 use context::Context;
 use downcast::Downcast;
+use framegraph::{Compiled, Framegraph, Resource};
 use parking_lot::{Mutex, MutexGuard};
 use std::any::TypeId;
 use std::collections::HashMap;
@@ -175,7 +176,7 @@ where
     }
 }
 pub trait DescriptorApi: Downcast {
-    fn write(&mut self, data: &[Binding<DescriptorResource>]);
+    fn write(&mut self, data: &[Binding<DescriptorResource>], fg: &Framegraph<Compiled>);
 }
 impl_downcast!(DescriptorApi);
 
@@ -202,9 +203,9 @@ pub enum DescriptorType {
     Uniform,
     Storage,
 }
-pub enum DescriptorResource<'a> {
-    Uniform(&'a GenericBuffer),
-    Storage(&'a GenericBuffer),
+pub enum DescriptorResource {
+    Uniform(Resource<GenericBuffer>),
+    Storage(Resource<GenericBuffer>),
 }
 pub struct Binding<T> {
     pub binding: u32,
@@ -219,8 +220,8 @@ impl<'a, T> Descriptor<'a, T>
 where
     T: DescriptorInfo,
 {
-    pub fn update(&mut self, t: &'a T) {
-        self.inner_descriptor.inner.write(&t.descriptor_data());
+    pub fn update(&mut self, t: &'a T, fg: &Framegraph<Compiled>) {
+        self.inner_descriptor.inner.write(&t.descriptor_data(), fg);
     }
 }
 

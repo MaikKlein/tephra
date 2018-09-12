@@ -1,3 +1,4 @@
+use framegraph::{Framegraph, Compiled};
 use super::{Context, Vulkan};
 use ash::version::DeviceV1_0;
 use ash::vk;
@@ -171,16 +172,18 @@ impl CreateDescriptor for Context {
 }
 
 impl DescriptorApi for Descriptor {
-    fn write(&mut self, data: &[Binding<DescriptorResource>]) {
+    fn write(&mut self, data: &[Binding<DescriptorResource>], fg: &Framegraph<Compiled>) {
+        use framegraph::GetResource;
         let buffer_infos: Vec<_> = data
             .iter()
             .map(|resource| match resource.data {
                 DescriptorResource::Uniform(buffer) | DescriptorResource::Storage(buffer) => {
-                    let vkbuffer = buffer.as_ref().downcast::<Vulkan>();
+                    let generic_buffer = fg.get_resource(buffer);
+                    let vkbuffer = generic_buffer.as_ref().downcast::<Vulkan>();
                     let buffer_info = vk::DescriptorBufferInfo {
                         buffer: vkbuffer.buffer,
                         offset: 0,
-                        range: buffer.size(),
+                        range: generic_buffer.size(),
                     };
                     Binding {
                         data: buffer_info,

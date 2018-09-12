@@ -34,6 +34,11 @@ pub type ResourceIndex = usize;
 
 impl<T> Copy for Resource<T> {}
 
+impl<T> Resource<Buffer<T>> {
+    pub fn to_generic_buffer(self) -> Resource<GenericBuffer> {
+        Resource::new(self.id, self.version)
+    }
+}
 impl<T> Clone for Resource<T> {
     fn clone(&self) -> Self {
         Resource {
@@ -120,8 +125,7 @@ pub struct Recording {
     layouts: HashMap<Handle, NativeLayout>,
 }
 
-pub struct Framegraph<T = Recording>
-{
+pub struct Framegraph<T = Recording> {
     pub ctx: Context,
     execute_fns: HashMap<Handle, Arc<dyn ExecuteGraphics>>,
     execute_compute: HashMap<Handle, Arc<dyn ExecuteCompute>>,
@@ -165,7 +169,7 @@ impl Framegraph {
         let id = self.add_resource(ResourceType::Image(image));
         Resource::new(id, 0)
     }
-    pub fn add_buffer<T>(&mut self, buffer: Buffer<T>) -> Resource<GenericBuffer> {
+    pub fn add_buffer<T>(&mut self, buffer: Buffer<T>) -> Resource<Buffer<T>> {
         let id = self.add_resource(ResourceType::Buffer(buffer.buffer));
         Resource::new(id, 0)
     }
@@ -287,11 +291,7 @@ impl Framegraph {
         self.state.layouts.insert(pass_handle, layout.inner_layout);
         task
     }
-    pub fn compile(
-        mut self,
-        resolution: Resolution,
-        ctx: &Context,
-    ) -> Framegraph<Compiled> {
+    pub fn compile(mut self, resolution: Resolution, ctx: &Context) -> Framegraph<Compiled> {
         let images: Vec<_> = self
             .state
             .image_data
@@ -393,7 +393,7 @@ impl Framegraph<Compiled> {
                 if let Some(execute) = self.execute_compute.get(&idx) {
                     let pool_allocator = pool.allocate();
                     let compute = self.state.compute.get(&idx).expect("compute");
-                    let mut cmds = ComputeCommandbuffer::new(pool_allocator);
+                    let mut cmds = ComputeCommandbuffer::new(pool_allocator, self);
                     execute.execute(blackboard, &mut cmds, self);
                     compute.execute_commands(&cmds.cmds);
                 }

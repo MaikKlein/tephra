@@ -22,13 +22,13 @@ use tephra::shader::ShaderModule;
 use tephra::swapchain::Swapchain;
 
 pub struct ComputeDesc {
-    pub buffer: Buffer<f32>,
+    pub buffer: Resource<Buffer<f32>>,
 }
 impl DescriptorInfo for ComputeDesc {
     fn descriptor_data(&self) -> Vec<Binding<DescriptorResource>> {
         vec![Binding {
             binding: 0,
-            data: DescriptorResource::Storage(&self.buffer.buffer),
+            data: DescriptorResource::Storage(self.buffer.to_generic_buffer()),
         }]
     }
     fn sizes() -> DescriptorSizes {
@@ -45,13 +45,13 @@ impl DescriptorInfo for ComputeDesc {
     }
 }
 pub struct Color {
-    pub color: Buffer<[f32; 4]>,
+    pub color: Resource<Buffer<[f32; 4]>>,
 }
 impl DescriptorInfo for Color {
     fn descriptor_data(&self) -> Vec<Binding<DescriptorResource>> {
         vec![Binding {
             binding: 0,
-            data: DescriptorResource::Uniform(&self.color.buffer),
+            data: DescriptorResource::Uniform(self.color.to_generic_buffer()),
         }]
     }
     fn sizes() -> DescriptorSizes {
@@ -81,13 +81,13 @@ pub struct TriangleData {
     pub depth: Resource<Image>,
 }
 pub struct TrianglePass {
-    pub storage_buffer: Resource<GenericBuffer>,
+    pub storage_buffer: Resource<Buffer<f32>>,
     pub color: Resource<Image>,
     pub depth: Resource<Image>,
 }
 
 pub struct TriangleCompute {
-    pub storage_buffer: Resource<GenericBuffer>,
+    pub storage_buffer: Resource<Buffer<f32>>,
     pub state: ComputeState,
 }
 impl TriangleCompute {
@@ -149,7 +149,7 @@ impl Renderpass for TrianglePass {
 impl TrianglePass {
     pub fn add_pass(
         fg: &mut Framegraph<Recording>,
-        storage_buffer: Resource<GenericBuffer>,
+        storage_buffer: Resource<Buffer<f32>>,
         resolution: Resolution,
     ) -> Arc<TrianglePass> {
         fg.add_render_pass("Triangle Pass", |builder| {
@@ -170,15 +170,11 @@ impl TrianglePass {
     }
 }
 
-pub fn render_pass(ctx: &context::Context, resolution: Resolution) -> Framegraph<Compiled> {
-    let mut fg = Framegraph::new(ctx);
-    let triangle_compute = TriangleCompute::add_pass(&mut fg);
+pub fn render_pass(fg: &mut Framegraph<Recording>, resolution: Resolution) {
+    let triangle_compute = TriangleCompute::add_pass(fg);
     let _triangle_data =
-        TrianglePass::add_pass(&mut fg, triangle_compute.storage_buffer, resolution);
+        TrianglePass::add_pass(fg, triangle_compute.storage_buffer, resolution);
     // Compiles the graph, allocates and optimizes resources
-    let fg = fg.compile(resolution, ctx);
-    fg.export_graphviz("graph.dot");
-    fg
 }
 // Just state for the triangle pass
 struct TriangleState {
@@ -265,9 +261,6 @@ fn main() {
         BufferUsage::Uniform,
         &[[1.0f32, 0.0, 0.0, 1.0]],
     ).expect("color buffer");
-    let color = Color {
-        color: color_buffer,
-    };
     // let pool = Pool::<Color>::new(&ctx);
     // let mut color_allocator = pool.allocate();
 
@@ -307,19 +300,25 @@ fn main() {
         Buffer::from_slice(&ctx, Property::HostVisible, BufferUsage::Vertex, &vertices)
             .expect("Failed to create vertex buffer");
 
+    let triangle_shader = TriangleShader::new(&ctx);
+    blackboard.add(triangle_shader);
+    blackboard.add(swapchain);
+    let mut fg = Framegraph::new(&ctx);
+    let color = Color {
+        color: fg.add_buffer(color_buffer),
+    };
     let triangle_state = TriangleState {
         vertex_buffer,
         index_buffer,
         state,
         color,
     };
-    let triangle_shader = TriangleShader::new(&ctx);
-    blackboard.add(triangle_shader);
     blackboard.add(triangle_state);
-    blackboard.add(swapchain);
-    let mut render_pass = render_pass(&ctx, resolution);
+    render_pass(&mut fg, resolution);
+    let mut fg = fg.compile(resolution, &ctx);
+    fg.export_graphviz("graph.dot");
     loop {
         // Execute the graph every frame
-        render_pass.execute(&blackboard);
+        fg.execute(&blackboard);
     }
 }

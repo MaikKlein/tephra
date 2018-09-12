@@ -82,7 +82,7 @@ where
     fn execute<'a>(
         &self,
         blackboard: &'a Blackboard,
-        render: &mut GraphicsCommandbuffer<'a, >,
+        render: &mut GraphicsCommandbuffer<'a>,
         ctx: &Framegraph<Compiled>,
     ) {
         self.execute(blackboard, render, ctx)
