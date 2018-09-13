@@ -127,7 +127,7 @@ impl TrianglePass {
     }
 }
 
-struct Presentpass {
+pub struct Presentpass {
     pub color: Resource<Image>,
 }
 

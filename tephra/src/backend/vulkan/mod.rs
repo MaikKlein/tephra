@@ -914,16 +914,3 @@ unsafe extern "system" fn debug_utils_callback(
     }
     0
 }
-// unsafe extern "system" fn vulkan_debug_callback(
-//     _: vk::DebugReportFlagsEXT,
-//     _: vk::DebugReportObjectTypeEXT,
-//     _: vk::uint64_t,
-//     _: vk::size_t,
-//     _: vk::int32_t,
-//     _: *const vk::c_char,
-//     p_message: *const vk::c_char,
-//     _: *mut vk::c_void,
-// ) -> u32 {
-//     println!("{:?}", CStr::from_ptr(p_message));
-//     1
-// }
