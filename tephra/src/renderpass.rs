@@ -34,6 +34,16 @@ pub trait VertexTypeData {
     fn vertex_type() -> VertexType;
 }
 
+impl VertexTypeData for [f32; 2] {
+    fn vertex_type() -> VertexType {
+        VertexType::F32(2)
+    }
+}
+impl VertexTypeData for [f32; 3] {
+    fn vertex_type() -> VertexType {
+        VertexType::F32(3)
+    }
+}
 impl VertexTypeData for [f32; 4] {
     fn vertex_type() -> VertexType {
         VertexType::F32(4)
