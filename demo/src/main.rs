@@ -14,7 +14,7 @@ use tephra::{
         Blackboard, Compiled, Framegraph, GetResource, Recording, Resource,
     },
     image::{Image, ImageDesc, ImageLayout, Resolution},
-    pipeline::{ComputeState, PipelineState},
+    pipeline::{ComputeState, PipelineState, ShaderStage},
     shader::ShaderModule,
     swapchain::Swapchain,
 };
@@ -199,8 +199,13 @@ fn main() {
     let fragment_shader_module =
         ShaderModule::load(&ctx, "shader/triangle/frag.spv").expect("vertex");
     let state = PipelineState::new()
-        .with_vertex_shader(vertex_shader_module)
-        .with_fragment_shader(fragment_shader_module);
+        .with_vertex_shader(ShaderStage {
+            shader_module: vertex_shader_module,
+            entry_name: "main".into(),
+        }).with_fragment_shader(ShaderStage {
+            shader_module: fragment_shader_module,
+            entry_name: "main".into(),
+        });
     let index_buffer_data = [0u32, 1, 2];
     let index_buffer = Buffer::from_slice(
         &ctx,

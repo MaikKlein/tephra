@@ -413,18 +413,19 @@ pub unsafe fn create_pipeline(
     pipeline_layout: vk::PipelineLayout,
 ) -> vk::Pipeline {
     let vertex_shader = state.vertex_shader.as_ref().expect("vertex");
-    let vk_vertex = vertex_shader.downcast::<Vulkan>();
+    let vk_vertex = vertex_shader.shader_module.downcast::<Vulkan>();
     let fragment_shader = state.fragment_shader.as_ref().expect("vertex");
-    let vk_fragment = fragment_shader.downcast::<Vulkan>();
+    let vk_fragment = fragment_shader.shader_module.downcast::<Vulkan>();
 
-    let shader_entry_name = CString::new("main").unwrap();
+    let vertex_name = CString::new(vertex_shader.entry_name.as_str()).unwrap();
+    let fragment_name = CString::new(fragment_shader.entry_name.as_str()).unwrap();
     let shader_stage_create_infos = [
         vk::PipelineShaderStageCreateInfo {
             s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
             p_next: ptr::null(),
             flags: Default::default(),
             module: vk_vertex.shader_module,
-            p_name: shader_entry_name.as_ptr(),
+            p_name: vertex_name.as_ptr(),
             p_specialization_info: ptr::null(),
             stage: vk::ShaderStageFlags::VERTEX,
         },
@@ -433,7 +434,7 @@ pub unsafe fn create_pipeline(
             p_next: ptr::null(),
             flags: Default::default(),
             module: vk_fragment.shader_module,
-            p_name: shader_entry_name.as_ptr(),
+            p_name: fragment_name.as_ptr(),
             p_specialization_info: ptr::null(),
             stage: vk::ShaderStageFlags::FRAGMENT,
         },

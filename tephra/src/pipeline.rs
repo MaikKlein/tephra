@@ -15,9 +15,14 @@ pub struct ComputeState {
 }
 
 #[derive(Clone)]
+pub struct ShaderStage {
+    pub shader_module: ShaderModule,
+    pub entry_name: String,
+}
+#[derive(Clone)]
 pub struct PipelineState {
-    pub vertex_shader: Option<ShaderModule>,
-    pub fragment_shader: Option<ShaderModule>,
+    pub vertex_shader: Option<ShaderStage>,
+    pub fragment_shader: Option<ShaderStage>,
 }
 
 impl PipelineState {
@@ -30,7 +35,7 @@ impl PipelineState {
 
     pub fn with_vertex_shader(
         self,
-        shader: ShaderModule,
+        shader: ShaderStage,
     ) -> Self {
         PipelineState {
             vertex_shader: Some(shader),
@@ -40,7 +45,7 @@ impl PipelineState {
 
     pub fn with_fragment_shader(
         self,
-        shader: ShaderModule,
+        shader: ShaderStage,
     ) -> Self {
         PipelineState {
             fragment_shader: Some(shader),
