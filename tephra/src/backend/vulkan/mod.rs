@@ -1,5 +1,5 @@
 use ash::extensions::{DebugReport, DebugUtils, Surface, Swapchain, XlibSurface};
-use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0, V1_0};
+use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
 use ash::vk;
 use ash::{Device, Entry, Instance};
 use backend::BackendApi;
@@ -41,12 +41,12 @@ impl BackendApi for Vulkan {
 
 #[derive(Clone)]
 pub struct ThreadLocalCommandPool {
-    queue_family_index: vk::uint32_t,
+    queue_family_index: u32,
     thread_local_command_pool: Arc<ThreadLocal<CommandPool>>,
 }
 
 impl ThreadLocalCommandPool {
-    pub fn new(queue_family_index: vk::uint32_t) -> Self {
+    pub fn new(queue_family_index: u32) -> Self {
         ThreadLocalCommandPool {
             queue_family_index,
             thread_local_command_pool: Arc::new(ThreadLocal::new()),
@@ -77,7 +77,7 @@ pub struct CommandPool {
 }
 
 impl CommandPool {
-    fn new(context: &Context, queue_family_index: vk::uint32_t) -> Self {
+    fn new(context: &Context, queue_family_index: u32) -> Self {
         let pool_create_info = vk::CommandPoolCreateInfo {
             s_type: vk::StructureType::COMMAND_POOL_CREATE_INFO,
             p_next: ptr::null(),
@@ -282,9 +282,9 @@ impl Deref for Context {
     }
 }
 pub struct InnerContext {
-    pub entry: Entry<V1_0>,
-    pub instance: Instance<V1_0>,
-    pub device: Device<V1_0>,
+    pub entry: Entry,
+    pub instance: Instance,
+    pub device: Device,
     pub window: winit::Window,
     pub events_loop: RefCell<winit::EventsLoop>,
     pub physical_device: vk::PhysicalDevice,
@@ -384,7 +384,7 @@ impl Context {
                 pp_enabled_extension_names: extension_names_raw.as_ptr(),
                 enabled_extension_count: extension_names_raw.len() as u32,
             };
-            let instance: Instance<V1_0> = entry
+            let instance = entry
                 .create_instance(&create_info, None)
                 .expect("Instance creation error");
             // let debug_info = vk::DebugReportCallbackCreateInfoEXT {
@@ -398,7 +398,7 @@ impl Context {
             // };
             // let debug_report_loader =
             //     DebugReport::new(&entry, &instance).expect("Unable to load debug report");
-            let debug_utils_loader = DebugUtils::new(&entry, &instance).expect("utils");
+            let debug_utils_loader = DebugUtils::new(&entry, &instance);
             let messenger_create_info = vk::DebugUtilsMessengerCreateInfoEXT {
                 s_type: vk::StructureType::DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
                 p_next: ::std::ptr::null(),
@@ -409,7 +409,7 @@ impl Context {
                 message_type: vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION
                     | vk::DebugUtilsMessageTypeFlagsEXT::GENERAL
                     | vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE,
-                pfn_user_callback: debug_utils_callback,
+                pfn_user_callback: Some(debug_utils_callback),
             };
 
             let debug_utils_messenger = debug_utils_loader
@@ -423,7 +423,7 @@ impl Context {
                 .enumerate_physical_devices()
                 .expect("Physical device error");
             let surface_loader =
-                Surface::new(&entry, &instance).expect("Unable to load the Surface extension");
+                Surface::new(&entry, &instance);
             let (pdevice, queue_family_index) = pdevices
                 .iter()
                 .map(|pdevice| {
@@ -433,7 +433,7 @@ impl Context {
                         .enumerate()
                         .filter_map(|(index, ref info)| {
                             let supports_graphic_and_surface =
-                                info.queue_flags.subset(vk::QueueFlags::GRAPHICS)
+                                info.queue_flags.contains(vk::QueueFlags::GRAPHICS)
                                     && surface_loader.get_physical_device_surface_support_khr(
                                         *pdevice,
                                         index as u32,
@@ -481,9 +481,8 @@ impl Context {
                 pp_enabled_extension_names: device_extension_names_raw.as_ptr(),
                 p_enabled_features: &features,
             };
-            let device: Device<V1_0> = instance
-                .create_device(pdevice, &device_create_info, None)
-                .unwrap();
+            let device: Device = instance
+                .create_device(pdevice, &device_create_info, None).expect("Unable to create device");
             let present_queue = device.get_device_queue(queue_family_index as u32, 0);
             let present_queue = Queue::new(present_queue);
 
@@ -512,7 +511,7 @@ impl Context {
                 _ => surface_capabilities.current_extent,
             };
             let swapchain_loader =
-                Swapchain::new(&instance, &device).expect("Unable to load swapchain");
+                Swapchain::new(&instance, &device);
             // let swapchain_create_info = vk::SwapchainCreateInfoKHR {
             //     s_type: vk::StructureType::SWAPCHAIN_CREATE_INFO_KHR,
             //     p_next: ptr::null(),
@@ -780,7 +779,7 @@ unsafe fn create_surface<E: EntryV1_0, I: InstanceV1_0>(
         dpy: x11_display as *mut vk::Display,
     };
     let xlib_surface_loader =
-        XlibSurface::new(entry, instance).expect("Unable to load xlib surface");
+        XlibSurface::new(entry, instance);
     xlib_surface_loader.create_xlib_surface_khr(&x11_create_info, None)
 }
 
@@ -889,7 +888,7 @@ unsafe extern "system" fn debug_utils_callback(
     _message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
     _message_type: vk::DebugUtilsMessageTypeFlagsEXT,
     p_callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT,
-    _p_user_data: *mut vk::c_void,
+    _p_user_data: *mut std::ffi::c_void,
 ) -> vk::Bool32 {
     if !p_callback_data.is_null() {
         let data = &*p_callback_data;

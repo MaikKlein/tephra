@@ -52,7 +52,8 @@ impl SwapchainApi for SwapchainData {
                     ::std::u64::MAX,
                     self.context.present_complete_semaphore,
                     vk::Fence::null(),
-                )
+                ).
+                map(|e|e.0)
                 .map_err(|err| match err {
                     vk::Result::ERROR_OUT_OF_DATE_KHR => SwapchainError::OutOfDate,
                     vk::Result::SUBOPTIMAL_KHR => SwapchainError::Suboptimal,
@@ -170,7 +171,7 @@ fn create_swapchain(ctx: &Context, old_swapchain: Option<vk::SwapchainKHR>) -> S
         };
         let pre_transform = if surface_capabilities
             .supported_transforms
-            .subset(vk::SurfaceTransformFlagsKHR::IDENTITY)
+            .contains(vk::SurfaceTransformFlagsKHR::IDENTITY)
         {
             vk::SurfaceTransformFlagsKHR::IDENTITY
         } else {
@@ -185,8 +186,7 @@ fn create_swapchain(ctx: &Context, old_swapchain: Option<vk::SwapchainKHR>) -> S
             .cloned()
             .find(|&mode| mode == vk::PresentModeKHR::MAILBOX)
             .unwrap_or(vk::PresentModeKHR::FIFO);
-        let swapchain_loader = extensions::Swapchain::new(&ctx.instance, &ctx.device)
-            .expect("Unable to load swapchain");
+        let swapchain_loader = extensions::Swapchain::new(&ctx.instance, &ctx.device);
         let swapchain_create_info = vk::SwapchainCreateInfoKHR {
             s_type: vk::StructureType::SWAPCHAIN_CREATE_INFO_KHR,
             p_next: ptr::null(),

@@ -5,7 +5,7 @@ pub struct TaskBuilder<'borrow> {
     pub(crate) framegraph: &'borrow mut Framegraph<Recording>,
 }
 impl<'borrow> TaskBuilder<'borrow> {
-    pub fn create_image(&mut self, name: &'static str, desc: ImageDesc) -> Resource<Image> {
+    pub fn create_image(&mut self, _name: &'static str, desc: ImageDesc) -> Resource<Image> {
         // TODO: Freeze resources or this ins incorrect
         let id = self.framegraph.resources.len() + self.framegraph.state.image_data.len();
         self.framegraph.state.image_data.push((id, desc));

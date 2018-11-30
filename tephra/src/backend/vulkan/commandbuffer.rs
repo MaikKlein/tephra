@@ -14,7 +14,7 @@ pub struct Execute {
 }
 impl ExecuteApi for Execute {
     fn execute_commands(&self, cmds: &[GraphicsCmd]) {
-        let clear_values = [
+        let _clear_values = [
             vk::ClearValue {
                 color: vk::ClearColorValue {
                     float32: [0.0, 0.0, 0.0, 0.0],
@@ -28,15 +28,15 @@ impl ExecuteApi for Execute {
             },
         ];
         //let mut pipelines = Vec::new();
-        super::CommandBuffer::record(&self.ctx, "Execute", |cb| {
-            let device = &self.ctx.device;
-            let mut outer_render: Option<&super::render::Render> = None;
+        super::CommandBuffer::record(&self.ctx, "Execute", |_cb| {
+            let _device = &self.ctx.device;
+            let mut _outer_render: Option<&super::render::Render> = None;
             for cmd in cmds {
                 match cmd {
                     GraphicsCmd::BindPipeline {
-                        state,
-                        stride,
-                        vertex_input_data,
+                        state: _,
+                        stride: _,
+                        vertex_input_data: _,
                     } => {
                         unsafe {
                             // let pipeline = super::render::create_pipeline(

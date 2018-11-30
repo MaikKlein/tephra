@@ -171,8 +171,8 @@ pub struct Descriptor {
 impl CreateDescriptor for Context {
     fn create_descriptor(
         &self,
-        data: &[Binding<DescriptorType>],
-        sizes: DescriptorSizes,
+        _data: &[Binding<DescriptorType>],
+        _sizes: DescriptorSizes,
     ) -> NativeDescriptor {
         unimplemented!()
     }
