@@ -4,10 +4,11 @@ use super::{CommandBuffer, Vulkan};
 use ash::extensions;
 use ash::version::DeviceV1_0;
 use ash::vk;
-use image::{Image, ImageDesc, ImageLayout, Resolution};
+use image::{Image, ImageDesc, ImageLayout, Resolution, Format};
 use std::ops::Drop;
 use std::ptr;
 use swapchain::{CreateSwapchain, Swapchain, SwapchainApi, SwapchainError};
+use super::image::{from_format, into_format};
 
 pub struct SwapchainData {
     pub context: Context,
@@ -85,6 +86,7 @@ impl SwapchainApi for SwapchainData {
     }
 }
 
+
 unsafe fn get_swapchain_images(
     ctx: &Context,
     swapchain: vk::SwapchainKHR,
@@ -125,6 +127,7 @@ unsafe fn get_swapchain_images(
             let desc = ImageDesc {
                 resolution,
                 layout: ImageLayout::Color,
+                format: into_format(ctx.surface_format.format)
             };
             let data = ImageData {
                 context: ctx.clone(),

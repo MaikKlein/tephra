@@ -6,7 +6,7 @@ pub struct TaskBuilder<'borrow> {
 }
 impl<'borrow> TaskBuilder<'borrow> {
     pub fn create_image(&mut self, _name: &'static str, desc: ImageDesc) -> Resource<Image> {
-        // TODO: Freeze resources or this ins incorrect
+        // TODO: Freeze resources or this is incorrect
         let id = self.framegraph.resources.len() + self.framegraph.state.image_data.len();
         self.framegraph.state.image_data.push((id, desc));
         let resource = Resource::new(id, 0);

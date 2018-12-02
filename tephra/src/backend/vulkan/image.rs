@@ -4,10 +4,16 @@ use super::{CommandBuffer, Vulkan};
 use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk;
 use buffer::Buffer;
-use image::{CreateImage, Image, ImageApi, ImageDesc, ImageLayout};
+use image::{CreateImage, Image, ImageApi, ImageDesc, ImageLayout, Format};
 //use renderpass::{Pass, Renderpass};
 use std::ptr;
 // pub struct FramebufferData {}
+pub(crate) fn into_format(vk_format: vk::Format) -> Format {
+    Format(vk_format.as_raw())
+}
+pub(crate) fn from_format(format: Format) -> vk::Format {
+    vk::Format::from_raw(format.as_raw())
+}
 pub struct ImageData {
     pub context: Context,
     pub image: vk::Image,
@@ -213,10 +219,7 @@ impl CreateImage for Context {
             ImageLayout::Color => vk::ImageAspectFlags::COLOR,
             ImageLayout::Depth => vk::ImageAspectFlags::DEPTH,
         };
-        let format = match desc.layout {
-            ImageLayout::Color => vk::Format::R8G8B8A8_UNORM,
-            ImageLayout::Depth => vk::Format::D16_UNORM,
-        };
+        let format = from_format(desc.format);
         let usage = match desc.layout {
             ImageLayout::Color => vk::ImageUsageFlags::COLOR_ATTACHMENT,
             ImageLayout::Depth => vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,

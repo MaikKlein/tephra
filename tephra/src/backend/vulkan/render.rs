@@ -8,6 +8,7 @@ use commandbuffer::{ComputeCmd, GraphicsCmd};
 use descriptor::NativeLayout;
 use framegraph::{Compiled, Framegraph};
 use image::{Image, ImageLayout, Resolution};
+use super::image::{from_format};
 use pipeline::{ComputeState, PipelineState};
 use render::{self, ComputeApi, CreateCompute, CreateRender, RenderApi};
 use renderpass::{VertexInputData, VertexType};
@@ -591,7 +592,7 @@ unsafe fn create_renderpass(ctx: &Context, image_resources: &[&Image]) -> vk::Re
         .iter()
         .map(|image| match image.desc().layout {
             ImageLayout::Color => vk::AttachmentDescription {
-                format: vk::Format::R8G8B8A8_UNORM,
+                format: from_format(image.desc().format),
                 flags: vk::AttachmentDescriptionFlags::empty(),
                 samples: vk::SampleCountFlags::TYPE_1,
                 load_op: vk::AttachmentLoadOp::CLEAR,
@@ -602,7 +603,7 @@ unsafe fn create_renderpass(ctx: &Context, image_resources: &[&Image]) -> vk::Re
                 final_layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
             },
             ImageLayout::Depth => vk::AttachmentDescription {
-                format: vk::Format::D16_UNORM,
+                format: from_format(image.desc().format),
                 flags: vk::AttachmentDescriptionFlags::empty(),
                 samples: vk::SampleCountFlags::TYPE_1,
                 load_op: vk::AttachmentLoadOp::CLEAR,

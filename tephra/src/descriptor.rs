@@ -226,6 +226,7 @@ impl DescriptorInfo for () {
     }
 }
 
+#[derive(Debug)]
 pub enum DescriptorType {
     Uniform,
     Storage,
@@ -234,6 +235,7 @@ pub enum DescriptorResource {
     Uniform(Resource<GenericBuffer>),
     Storage(Resource<GenericBuffer>),
 }
+#[derive(Debug)]
 pub struct Binding<T> {
     pub binding: u32,
     pub data: T,

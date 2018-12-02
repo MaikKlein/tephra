@@ -13,7 +13,7 @@ use tephra::{
         render_task::{Computepass, Renderpass},
         Blackboard, Compiled, Framegraph, GetResource, Recording, Resource,
     },
-    image::{Image, ImageDesc, ImageLayout, Resolution},
+    image::{Image, ImageDesc, ImageLayout, Resolution, Format},
     pipeline::{ComputeState, PipelineState, ShaderStage},
     shader::ShaderModule,
     swapchain::Swapchain,
@@ -116,10 +116,12 @@ impl TrianglePass {
         fg.add_render_pass("Triangle Pass", |builder| {
             let color_desc = ImageDesc {
                 layout: ImageLayout::Color,
+                format: Format::B8G8R8A8_SRGB,
                 resolution,
             };
             let depth_desc = ImageDesc {
                 layout: ImageLayout::Depth,
+                format: Format::D16_UNORM,
                 resolution,
             };
             TrianglePass {
