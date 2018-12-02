@@ -111,6 +111,18 @@ impl<T: Copy> Buffer<T> {
         })
     }
 
+    pub fn update(&self, data: &[T]) -> Result<(), BufferError> {
+        use std::slice::from_raw_parts_mut;
+        let mapping_ptr = self
+            .buffer
+            .map_memory()
+            .map_err(BufferError::MappingError)?;
+        let slice = unsafe { from_raw_parts_mut::<T>(mapping_ptr as *mut T, data.len()) };
+        slice.copy_from_slice(data);
+        self.buffer.unmap_memory();
+        Ok(())
+    }
+
     pub fn from_slice(
         ctx: &Context,
         property: Property,
