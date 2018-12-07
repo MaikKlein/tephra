@@ -26,7 +26,7 @@ pub trait SwapchainApi {
     fn recreate(&mut self);
     fn copy_and_present(
         &self,
-        image: &Image,
+        image: Image,
     );
 }
 

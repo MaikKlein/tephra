@@ -1,49 +1,22 @@
 use super::Context;
 use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk;
-use buffer::{BufferApi, BufferError, BufferUsage, CreateBuffer, MappingError, Property};
+use buffer::{BufferApi, BufferError, BufferHandle, BufferUsage, MappingError, Property};
 use std::ptr;
 
-/// Vulkan specifc data
-pub struct BufferData {
-    pub context: Context,
-    pub buffer: vk::Buffer,
-    pub memory: vk::DeviceMemory,
-    pub size: u64,
-}
-
-impl Drop for BufferData {
-    fn drop(&mut self) {
-        // unsafe {
-        //     // self.context.device.destroy_buffer(self.buffer, None);
-        //     // self.context.device.free_memory(self.memory, None);
-        // }
+impl BufferApi for Context {
+    fn destroy(&self, buffer: BufferHandle) {
+        let data = self.buffers.get(buffer);
+        unsafe {
+            self.device.destroy_buffer(data.buffer, None);
+        }
     }
-}
-
-fn bitflag_to_bufferflags(usage: BufferUsage) -> vk::BufferUsageFlags {
-    match usage {
-        BufferUsage::Vertex => vk::BufferUsageFlags::VERTEX_BUFFER,
-        BufferUsage::Index => vk::BufferUsageFlags::INDEX_BUFFER,
-        BufferUsage::Uniform => vk::BufferUsageFlags::UNIFORM_BUFFER,
-        BufferUsage::Storage => vk::BufferUsageFlags::STORAGE_BUFFER,
-    }
-}
-
-fn property_to_vk_property(property: Property) -> vk::MemoryPropertyFlags {
-    match property {
-        Property::HostVisible => vk::MemoryPropertyFlags::HOST_VISIBLE,
-        Property::DeviceLocal => vk::MemoryPropertyFlags::DEVICE_LOCAL,
-    }
-}
-
-impl CreateBuffer for Context {
     fn allocate(
         &self,
         property: Property,
         usage: BufferUsage,
         size: u64,
-    ) -> Result<Box<dyn BufferApi>, BufferError> {
+    ) -> Result<BufferHandle, BufferError> {
         let context = self;
         unsafe {
             let device_memory_properties = context
@@ -70,12 +43,12 @@ impl CreateBuffer for Context {
             let vertex_input_buffer_memory_req = context
                 .device
                 .get_buffer_memory_requirements(vertex_input_buffer);
-            let vertex_input_buffer_memory_index =
-                find_memorytype_index(
-                    &vertex_input_buffer_memory_req,
-                    &device_memory_properties,
-                    property_to_vk_property(property),
-                ).expect("Unable to find suitable memorytype for the vertex buffer.");
+            let vertex_input_buffer_memory_index = find_memorytype_index(
+                &vertex_input_buffer_memory_req,
+                &device_memory_properties,
+                property_to_vk_property(property),
+            )
+            .expect("Unable to find suitable memorytype for the vertex buffer.");
 
             let vertex_buffer_allocate_info = vk::MemoryAllocateInfo {
                 s_type: vk::StructureType::MEMORY_ALLOCATE_INFO,
@@ -92,60 +65,165 @@ impl CreateBuffer for Context {
                 .bind_buffer_memory(vertex_input_buffer, vertex_input_buffer_memory, 0)
                 .unwrap();
             let inner_buffer = BufferData {
-                context: context.clone(),
                 buffer: vertex_input_buffer,
                 memory: vertex_input_buffer_memory,
                 size,
             };
-            Ok(Box::new(inner_buffer))
+            Ok(self.buffers.insert(inner_buffer))
         }
+    }
+
+    unsafe fn map_memory(&self, buffer: BufferHandle) -> Result<*mut (), MappingError> {
+        let data = self.buffers.get(buffer);
+        let ptr = self
+            .device
+            .map_memory(data.memory, 0, data.size, vk::MemoryMapFlags::empty())
+            .map_err(|_| MappingError::Failed)?;
+        Ok(ptr as *mut ())
+    }
+
+    unsafe fn unmap_memory(&self, buffer: BufferHandle) {
+        let data = self.buffers.get(buffer);
+        self.device.unmap_memory(data.memory);
+    }
+
+    unsafe fn size(&self, buffer: BufferHandle) -> u64 {
+        let data = self.buffers.get(buffer);
+        data.size
     }
 }
-impl BufferApi for BufferData {
-    fn size(&self) -> u64 {
-        self.size
-    }
-    fn map_memory(&self) -> Result<*mut (), MappingError> {
-        unsafe {
-            let ptr = self
-                .context
-                .device
-                .map_memory(self.memory, 0, self.size, vk::MemoryMapFlags::empty())
-                .map_err(|_| MappingError::Failed)?;
-            Ok(ptr as *mut ())
-        }
-    }
-    fn unmap_memory(&self) {
-        unsafe {
-            self.context.device.unmap_memory(self.memory);
-        }
-    }
-    // fn copy_to_device_local(&self) -> Result<Box<dyn BufferApi>, BufferError> {
-    //     let context = &self.buffer.context;
-    //     let dst_buffer =
-    //         ImplBuffer::<T, DeviceLocal, Vulkan>::allocate(context, self.usage, self.buffer.len)?;
-    //     let command_buffer = CommandBuffer::record(context, |command_buffer| unsafe {
-    //         context.device.cmd_copy_buffer(
-    //             command_buffer,
-    //             self.buffer.buffer,
-    //             dst_buffer.buffer.buffer,
-    //             &[vk::BufferCopy {
-    //                 src_offset: 0,
-    //                 dst_offset: 0,
-    //                 size: (self.buffer.len * size_of::<T>()) as _,
-    //             }],
-    //         );
-    //     });
-    //     context.present_queue.submit(
-    //         context,
-    //         &[vk::PipelineStageFlags::TOP_OF_PIPE],
-    //         &[],
-    //         &[],
-    //         command_buffer,
-    //     );
-    //     Ok(dst_buffer)
-    // }
+/// Vulkan specifc data
+pub struct BufferData {
+    pub buffer: vk::Buffer,
+    pub memory: vk::DeviceMemory,
+    pub size: u64,
 }
+
+fn bitflag_to_bufferflags(usage: BufferUsage) -> vk::BufferUsageFlags {
+    match usage {
+        BufferUsage::Vertex => vk::BufferUsageFlags::VERTEX_BUFFER,
+        BufferUsage::Index => vk::BufferUsageFlags::INDEX_BUFFER,
+        BufferUsage::Uniform => vk::BufferUsageFlags::UNIFORM_BUFFER,
+        BufferUsage::Storage => vk::BufferUsageFlags::STORAGE_BUFFER,
+    }
+}
+
+fn property_to_vk_property(property: Property) -> vk::MemoryPropertyFlags {
+    match property {
+        Property::HostVisible => vk::MemoryPropertyFlags::HOST_VISIBLE,
+        Property::DeviceLocal => vk::MemoryPropertyFlags::DEVICE_LOCAL,
+    }
+}
+
+// impl CreateBuffer for Context {
+//     fn allocate(
+//         &self,
+//         property: Property,
+//         usage: BufferUsage,
+//         size: u64,
+//     ) -> Result<Box<dyn BufferApi>, BufferError> {
+//         let context = self;
+//         unsafe {
+//             let device_memory_properties = context
+//                 .instance
+//                 .get_physical_device_memory_properties(context.physical_device);
+//             // make sure we can always copy from and to a buffer
+//             let vk_usage = bitflag_to_bufferflags(usage)
+//                 | vk::BufferUsageFlags::TRANSFER_SRC
+//                 | vk::BufferUsageFlags::TRANSFER_DST;
+//             let vertex_input_buffer_info = vk::BufferCreateInfo {
+//                 s_type: vk::StructureType::BUFFER_CREATE_INFO,
+//                 p_next: ptr::null(),
+//                 flags: vk::BufferCreateFlags::empty(),
+//                 size,
+//                 usage: vk_usage,
+//                 sharing_mode: vk::SharingMode::EXCLUSIVE,
+//                 queue_family_index_count: 0,
+//                 p_queue_family_indices: ptr::null(),
+//             };
+//             let vertex_input_buffer = context
+//                 .device
+//                 .create_buffer(&vertex_input_buffer_info, None)
+//                 .unwrap();
+//             let vertex_input_buffer_memory_req = context
+//                 .device
+//                 .get_buffer_memory_requirements(vertex_input_buffer);
+//             let vertex_input_buffer_memory_index = find_memorytype_index(
+//                 &vertex_input_buffer_memory_req,
+//                 &device_memory_properties,
+//                 property_to_vk_property(property),
+//             )
+//             .expect("Unable to find suitable memorytype for the vertex buffer.");
+
+//             let vertex_buffer_allocate_info = vk::MemoryAllocateInfo {
+//                 s_type: vk::StructureType::MEMORY_ALLOCATE_INFO,
+//                 p_next: ptr::null(),
+//                 allocation_size: vertex_input_buffer_memory_req.size,
+//                 memory_type_index: vertex_input_buffer_memory_index,
+//             };
+//             let vertex_input_buffer_memory = context
+//                 .device
+//                 .allocate_memory(&vertex_buffer_allocate_info, None)
+//                 .unwrap();
+//             context
+//                 .device
+//                 .bind_buffer_memory(vertex_input_buffer, vertex_input_buffer_memory, 0)
+//                 .unwrap();
+//             let inner_buffer = BufferData {
+//                 context: context.clone(),
+//                 buffer: vertex_input_buffer,
+//                 memory: vertex_input_buffer_memory,
+//                 size,
+//             };
+//             Ok(Box::new(inner_buffer))
+//         }
+//     }
+// }
+// impl BufferApi for BufferData {
+//     fn size(&self) -> u64 {
+//         self.size
+//     }
+//     fn map_memory(&self) -> Result<*mut (), MappingError> {
+//         unsafe {
+//             let ptr = self
+//                 .context
+//                 .device
+//                 .map_memory(self.memory, 0, self.size, vk::MemoryMapFlags::empty())
+//                 .map_err(|_| MappingError::Failed)?;
+//             Ok(ptr as *mut ())
+//         }
+//     }
+//     fn unmap_memory(&self) {
+//         unsafe {
+//             self.context.device.unmap_memory(self.memory);
+//         }
+//     }
+//     // fn copy_to_device_local(&self) -> Result<Box<dyn BufferApi>, BufferError> {
+//     //     let context = &self.buffer.context;
+//     //     let dst_buffer =
+//     //         ImplBuffer::<T, DeviceLocal, Vulkan>::allocate(context, self.usage, self.buffer.len)?;
+//     //     let command_buffer = CommandBuffer::record(context, |command_buffer| unsafe {
+//     //         context.device.cmd_copy_buffer(
+//     //             command_buffer,
+//     //             self.buffer.buffer,
+//     //             dst_buffer.buffer.buffer,
+//     //             &[vk::BufferCopy {
+//     //                 src_offset: 0,
+//     //                 dst_offset: 0,
+//     //                 size: (self.buffer.len * size_of::<T>()) as _,
+//     //             }],
+//     //         );
+//     //     });
+//     //     context.present_queue.submit(
+//     //         context,
+//     //         &[vk::PipelineStageFlags::TOP_OF_PIPE],
+//     //         &[],
+//     //         &[],
+//     //         command_buffer,
+//     //     );
+//     //     Ok(dst_buffer)
+//     // }
+// }
 // impl<T> HostVisibleBuffer<T, Vulkan> for ImplBuffer<T, HostVisible, Vulkan>
 // where
 //     T: Copy,

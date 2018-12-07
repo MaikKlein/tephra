@@ -1,27 +1,27 @@
 use std::ops::Deref;
 use std::sync::Arc;
 
-use buffer::CreateBuffer;
 use downcast;
-use image::CreateImage;
+use image::ImageApi;
 // use pipeline::CreatePipeline;
 // use renderpass::CreateRenderpass;
-use descriptor::{CreatePool, CreateDescriptor, CreateLayout};
-use render::{CreateCompute, CreateRender };
+use buffer::BufferApi;
+use descriptor::{CreateLayout, CreatePool, DescriptorApi};
+use render::{CreateCompute, CreateRender};
 use shader::CreateShader;
 use swapchain::CreateSwapchain;
 
 pub trait ContextApi: downcast::Downcast
 where
-    Self: CreateImage
-        + CreateSwapchain
+    Self: CreateSwapchain
         + CreateShader
-        + CreateBuffer
         + CreateRender
-        + CreateDescriptor
+        + DescriptorApi
         + CreateLayout
         + CreatePool
         + CreateCompute
+        + BufferApi
+        + ImageApi
 {
 }
 impl_downcast!(ContextApi);

@@ -103,7 +103,7 @@ impl Renderpass for TrianglePass {
         };
         let r = blackboard.get::<TriangleState>().expect("state");
         let shader = blackboard.get::<TriangleShader>().expect("shader");
-        shader.draw_index(&r.vertex_buffer, &r.index_buffer, &r.state, &color, cmds);
+        shader.draw_index(r.vertex_buffer, r.index_buffer, &r.state, &color, cmds);
     }
 }
 
@@ -178,8 +178,8 @@ impl TriangleShader {
 
     pub fn draw_index<'a>(
         &'a self,
-        vertex_buffer: &'a Buffer<Vertex>,
-        index_buffer: &'a Buffer<u32>,
+        vertex_buffer: Buffer<Vertex>,
+        index_buffer: Buffer<u32>,
         state: &'a PipelineState,
         color: &Color,
         cmds: &mut GraphicsCommandbuffer<'a>,

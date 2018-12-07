@@ -15,11 +15,11 @@ where
 {
     type Context: Clone;
     type Shader: ShaderApi;
-    type Buffer: BufferApi;
+    type Buffer;
     type Render: RenderApi;
     type Compute: ComputeApi;
-    type Image: ImageApi;
+    type Image;
     type Swapchain: SwapchainApi;
-    type Descriptor: DescriptorApi;
+    type Descriptor;
     type Layout: LayoutApi;
 }

@@ -1,14 +1,15 @@
 use super::image::ImageData;
+use super::image::{from_format, into_format};
+use image::ImageApi;
 use super::Context;
 use super::{CommandBuffer, Vulkan};
 use ash::extensions;
 use ash::version::DeviceV1_0;
 use ash::vk;
-use image::{Image, ImageDesc, ImageLayout, Resolution, Format};
+use image::{Format, Image, ImageDesc, ImageLayout, Resolution};
 use std::ops::Drop;
 use std::ptr;
 use swapchain::{CreateSwapchain, Swapchain, SwapchainApi, SwapchainError};
-use super::image::{from_format, into_format};
 
 pub struct SwapchainData {
     pub context: Context,
@@ -28,10 +29,10 @@ impl Drop for SwapchainData {
 }
 
 impl SwapchainApi for SwapchainData {
-    fn copy_and_present(&self, image: &Image) {
+    fn copy_and_present(&self, image: Image) {
         let index = self.aquire_next_image().expect("acquire");
         let present_image = &self.present_images()[index as usize];
-        image.copy_image(present_image);
+        self.context.copy_image(image.handle, present_image.handle);
         self.present(index);
     }
     fn recreate(&mut self) {
@@ -53,8 +54,8 @@ impl SwapchainApi for SwapchainData {
                     ::std::u64::MAX,
                     self.context.present_complete_semaphore,
                     vk::Fence::null(),
-                ).
-                map(|e|e.0)
+                )
+                .map(|e| e.0)
                 .map_err(|err| match err {
                     vk::Result::ERROR_OUT_OF_DATE_KHR => SwapchainError::OutOfDate,
                     vk::Result::SUBOPTIMAL_KHR => SwapchainError::Suboptimal,
@@ -85,7 +86,6 @@ impl SwapchainApi for SwapchainData {
         }
     }
 }
-
 
 unsafe fn get_swapchain_images(
     ctx: &Context,
@@ -127,17 +127,15 @@ unsafe fn get_swapchain_images(
             let desc = ImageDesc {
                 resolution,
                 layout: ImageLayout::Color,
-                format: into_format(ctx.surface_format.format)
+                format: into_format(ctx.surface_format.format),
             };
             let data = ImageData {
-                context: ctx.clone(),
                 image,
                 image_view,
                 desc,
             };
-            Image {
-                data: Box::new(data),
-            }
+            let handle = ctx.images.insert(data);
+            Image { handle }
         })
         .collect()
 }
@@ -219,8 +217,8 @@ fn create_swapchain(ctx: &Context, old_swapchain: Option<vk::SwapchainKHR>) -> S
             height: surface_resolution.height,
         };
         let present_images = get_swapchain_images(ctx, swapchain, resolution);
-        for image in &present_images {
-            let vkimage = image.downcast::<Vulkan>();
+        for &image in &present_images {
+            let vkimage = ctx.images.get(image.handle);
             let command_buffer = CommandBuffer::record(ctx, "SwapchainBarrier", |command_buffer| {
                 let present_barrier = vk::ImageMemoryBarrier {
                     s_type: vk::StructureType::IMAGE_MEMORY_BARRIER,

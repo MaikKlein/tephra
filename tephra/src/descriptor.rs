@@ -1,21 +1,19 @@
 use backend::BackendApi;
-use buffer::GenericBuffer;
+use buffer::BufferHandle;
 use context::Context;
 use downcast::Downcast;
 use framegraph::{Compiled, Framegraph, Resource};
 use parking_lot::{Mutex, MutexGuard};
+use slotmap::new_key_type;
 use std::any::TypeId;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::ops::{Deref, Drop};
 use std::sync::Arc;
-pub trait CreateDescriptor {
-    fn create_descriptor(
-        &self,
-        data: &[Binding<DescriptorType>],
-        sizes: DescriptorSizes,
-    ) -> NativeDescriptor;
-}
+new_key_type!(
+    pub struct DescriptorHandle;
+);
+pub trait CreateDescriptor {}
 
 pub trait CreatePool {
     fn create_pool(
@@ -27,7 +25,7 @@ pub trait CreatePool {
 }
 
 pub trait PoolApi {
-    fn create_descriptor(&self) -> NativeDescriptor;
+    fn create_descriptor(&self) -> DescriptorHandle;
     fn reset(&mut self);
 }
 
@@ -106,11 +104,11 @@ impl<'pool> Allocator<'pool> {
         if allocator_index >= allocator.pools.len() {
             allocator.allocate_additional_pool();
         }
-        let inner_descriptor = allocator.pools[allocator_index].inner.create_descriptor();
+        let handle = allocator.pools[allocator_index].inner.create_descriptor();
         *current_allocation += 1;
 
         Descriptor {
-            inner_descriptor,
+            handle,
             _m: PhantomData,
         }
     }
@@ -177,13 +175,18 @@ where
         }
     }
 }
-pub trait DescriptorApi: Downcast {
-    fn write(&mut self, data: &[Binding<DescriptorResource>], fg: &Framegraph<Compiled>);
-}
-impl_downcast!(DescriptorApi);
-
-pub struct NativeDescriptor {
-    pub inner: Box<dyn DescriptorApi>,
+pub trait DescriptorApi {
+    fn write(
+        &self,
+        handle: DescriptorHandle,
+        data: &[Binding<DescriptorResource>],
+        fg: &Framegraph<Compiled>,
+    );
+    fn create_descriptor(
+        &self,
+        data: &[Binding<DescriptorType>],
+        sizes: DescriptorSizes,
+    ) -> DescriptorHandle;
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -218,7 +221,7 @@ where
     fn layout() -> Vec<Binding<DescriptorType>>;
 }
 impl DescriptorInfo for () {
-    fn descriptor_data(&self) -> Vec<Binding<DescriptorResource>>{
+    fn descriptor_data(&self) -> Vec<Binding<DescriptorResource>> {
         Vec::new()
     }
     fn layout() -> Vec<Binding<DescriptorType>> {
@@ -232,8 +235,8 @@ pub enum DescriptorType {
     Storage,
 }
 pub enum DescriptorResource {
-    Uniform(Resource<GenericBuffer>),
-    Storage(Resource<GenericBuffer>),
+    Uniform(Resource<BufferHandle>),
+    Storage(Resource<BufferHandle>),
 }
 #[derive(Debug)]
 pub struct Binding<T> {
@@ -242,31 +245,14 @@ pub struct Binding<T> {
 }
 
 pub struct Descriptor<'a, T: DescriptorInfo> {
-    pub inner_descriptor: NativeDescriptor,
+    pub handle: DescriptorHandle,
     _m: PhantomData<&'a T>,
 }
 impl<'a, T> Descriptor<'a, T>
 where
     T: DescriptorInfo,
 {
-    pub fn update(&mut self, t: &'a T, fg: &Framegraph<Compiled>) {
-        self.inner_descriptor.inner.write(&t.descriptor_data(), fg);
-    }
-}
-
-impl<'a, T> Deref for Descriptor<'a, T>
-where
-    T: DescriptorInfo,
-{
-    type Target = DescriptorApi;
-    fn deref(&self) -> &Self::Target {
-        self.inner_descriptor.inner.as_ref()
-    }
-}
-
-impl DescriptorApi {
-    pub fn downcast<B: BackendApi>(&self) -> &B::Descriptor {
-        self.downcast_ref::<B::Descriptor>()
-            .expect("Downcast Descriptor Vulkan")
+    pub fn update(&mut self, ctx: &Context, t: &'a T, fg: &Framegraph<Compiled>) {
+        ctx.write(self.handle, &t.descriptor_data(), fg);
     }
 }

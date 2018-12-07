@@ -1,8 +1,25 @@
 use backend::BackendApi;
 use context::Context;
 use downcast::Downcast;
+use slotmap::new_key_type;
 use std::marker::PhantomData;
 use std::mem::size_of;
+new_key_type!(
+    pub struct BufferHandle;
+);
+
+pub trait BufferApi {
+    fn allocate(
+        &self,
+        property: Property,
+        usage: BufferUsage,
+        size: u64,
+    ) -> Result<BufferHandle, BufferError>;
+    fn destroy(&self, buffer: BufferHandle);
+    unsafe fn map_memory(&self, buffer: BufferHandle) -> Result<*mut (), MappingError>;
+    unsafe fn unmap_memory(&self, buffer: BufferHandle);
+    unsafe fn size(&self, buffer: BufferHandle) -> u64;
+}
 
 #[derive(Debug, Fail)]
 pub enum AllocationError {
@@ -43,22 +60,7 @@ pub enum DeviceLocal {}
 //        // F: Fn(&mut [T]) -> R;
 //}
 
-pub trait CreateBuffer {
-    fn allocate(
-        &self,
-        property: Property,
-        usage: BufferUsage,
-        size: u64,
-    ) -> Result<Box<dyn BufferApi>, BufferError>;
-}
-
-pub trait BufferApi: Downcast {
-    fn map_memory(&self) -> Result<*mut (), MappingError>;
-    fn unmap_memory(&self);
-    fn size(&self) -> u64;
-    //fn copy_to_device_local(&self) -> Result<Box<dyn BufferApi>, BufferError>;
-}
-impl_downcast!(BufferApi);
+// impl_downcast!(BufferApi);
 
 pub trait BufferProperty {
     fn property() -> Property;
@@ -81,21 +83,15 @@ impl BufferProperty for DeviceLocal {
         Property::DeviceLocal
     }
 }
-pub type GenericBuffer = Box<dyn BufferApi>;
-
+#[derive(Copy, Clone)]
 pub struct Buffer<T> {
-    _m: PhantomData<T>,
-    pub buffer: Box<dyn BufferApi>,
+    pub _m: PhantomData<T>,
+    pub buffer: BufferHandle,
 }
-impl BufferApi {
-    pub fn downcast<B: BackendApi>(&self) -> &B::Buffer {
-        self.downcast_ref::<B::Buffer>()
-            .expect("Downcast Buffer Vulkan")
-    }
-}
+
 impl<T: Copy> Buffer<T> {
-    pub fn len(&self) -> u32 {
-        (self.buffer.size() / size_of::<T>() as u64) as u32
+    pub fn len(&self, ctx: &Context) -> u32 {
+        unsafe { (ctx.size(self.buffer) / size_of::<T>() as u64) as u32 }
     }
     pub fn allocate(
         context: &Context,
@@ -104,23 +100,24 @@ impl<T: Copy> Buffer<T> {
         elements: u64,
     ) -> Result<Self, BufferError> {
         let size = elements * size_of::<T>() as u64;
-        let buffer = CreateBuffer::allocate(context.context.as_ref(), property, usage, size)?;
+        let buffer = BufferApi::allocate(context.context.as_ref(), property, usage, size)?;
         Ok(Buffer {
             buffer,
             _m: PhantomData,
         })
     }
 
-    pub fn update(&self, data: &[T]) -> Result<(), BufferError> {
+    pub fn update(&self, ctx: &Context, data: &[T]) -> Result<(), BufferError> {
         use std::slice::from_raw_parts_mut;
-        let mapping_ptr = self
-            .buffer
-            .map_memory()
-            .map_err(BufferError::MappingError)?;
-        let slice = unsafe { from_raw_parts_mut::<T>(mapping_ptr as *mut T, data.len()) };
-        slice.copy_from_slice(data);
-        self.buffer.unmap_memory();
-        Ok(())
+        unsafe {
+            let mapping_ptr = ctx
+                .map_memory(self.buffer)
+                .map_err(BufferError::MappingError)?;
+            let slice = unsafe { from_raw_parts_mut::<T>(mapping_ptr as *mut T, data.len()) };
+            slice.copy_from_slice(data);
+            ctx.unmap_memory(self.buffer);
+            Ok(())
+        }
     }
 
     pub fn from_slice(
@@ -130,15 +127,16 @@ impl<T: Copy> Buffer<T> {
         data: &[T],
     ) -> Result<Self, BufferError> {
         use std::slice::from_raw_parts_mut;
-        let buffer = Self::allocate(ctx, property, usage, data.len() as u64)?;
-        let mapping_ptr = buffer
-            .buffer
-            .map_memory()
-            .map_err(BufferError::MappingError)?;
-        let slice = unsafe { from_raw_parts_mut::<T>(mapping_ptr as *mut T, data.len()) };
-        slice.copy_from_slice(data);
-        buffer.buffer.unmap_memory();
-        Ok(buffer)
+        unsafe {
+            let buffer = Self::allocate(ctx, property, usage, data.len() as u64)?;
+            let mapping_ptr = ctx
+                .map_memory(buffer.buffer)
+                .map_err(BufferError::MappingError)?;
+            let slice = unsafe { from_raw_parts_mut::<T>(mapping_ptr as *mut T, data.len()) };
+            slice.copy_from_slice(data);
+            ctx.unmap_memory(buffer.buffer);
+            Ok(buffer)
+        }
     }
 }
 

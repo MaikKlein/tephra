@@ -1,3 +1,6 @@
+use crate::buffer::BufferHandle;
+use crate::descriptor::DescriptorHandle;
+use crate::image::ImageHandle;
 use ash::extensions::{DebugReport, DebugUtils, Surface, Swapchain, XlibSurface};
 use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
 use ash::vk;
@@ -5,7 +8,8 @@ use ash::{Device, Entry, Instance};
 use backend::BackendApi;
 use context;
 use context::ContextApi;
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
+use slotmap::{Key, SlotMap, Slottable};
 use std::cell::RefCell;
 use std::ffi::{CStr, CString};
 use std::marker::PhantomData;
@@ -270,6 +274,12 @@ impl Drop for CommandBuffer {
     }
 }
 
+impl crate::Context for Context {
+    fn create_renderpass(&self) -> crate::renderpass::RenderpassHandle {
+        unimplemented!()
+    }
+}
+
 #[derive(Clone)]
 pub struct Context {
     inner: Arc<InnerContext>,
@@ -281,7 +291,39 @@ impl Deref for Context {
         &self.inner
     }
 }
+pub struct HandleMap<K, D>
+where
+    K: Key,
+    D: Slottable,
+{
+    map: RwLock<SlotMap<K, D>>,
+}
+impl<K, D> HandleMap<K, D>
+where
+    K: Key,
+    D: Slottable,
+{
+    pub fn insert(&self, data: D) -> K {
+        self.map.write().insert(data)
+    }
+
+    pub fn new() -> Self {
+        HandleMap {
+            map: RwLock::new(SlotMap::with_key()),
+        }
+    }
+    pub fn is_valid(&self, key: K) -> bool {
+        self.map.read().get(key).is_some()
+    }
+
+    pub fn get(&self, key: K) -> parking_lot::MappedRwLockReadGuard<D> {
+        parking_lot::RwLockReadGuard::map(self.map.read(), |data| data.get(key).unwrap())
+    }
+}
 pub struct InnerContext {
+    pub buffers: HandleMap<BufferHandle, buffer::BufferData>,
+    pub descriptors: HandleMap<DescriptorHandle, descriptor::Descriptor>,
+    pub images: HandleMap<ImageHandle, image::ImageData>,
     pub entry: Entry,
     pub instance: Instance,
     pub device: Device,
@@ -422,8 +464,7 @@ impl Context {
             let pdevices = instance
                 .enumerate_physical_devices()
                 .expect("Physical device error");
-            let surface_loader =
-                Surface::new(&entry, &instance);
+            let surface_loader = Surface::new(&entry, &instance);
             let (pdevice, queue_family_index) = pdevices
                 .iter()
                 .map(|pdevice| {
@@ -482,7 +523,8 @@ impl Context {
                 p_enabled_features: &features,
             };
             let device: Device = instance
-                .create_device(pdevice, &device_create_info, None).expect("Unable to create device");
+                .create_device(pdevice, &device_create_info, None)
+                .expect("Unable to create device");
             let present_queue = device.get_device_queue(queue_family_index as u32, 0);
             let present_queue = Queue::new(present_queue);
 
@@ -510,8 +552,7 @@ impl Context {
                 },
                 _ => surface_capabilities.current_extent,
             };
-            let swapchain_loader =
-                Swapchain::new(&instance, &device);
+            let swapchain_loader = Swapchain::new(&instance, &device);
             // let swapchain_create_info = vk::SwapchainCreateInfoKHR {
             //     s_type: vk::StructureType::SWAPCHAIN_CREATE_INFO_KHR,
             //     p_next: ptr::null(),
@@ -608,12 +649,12 @@ impl Context {
             };
             let depth_image = device.create_image(&depth_image_create_info, None).unwrap();
             let depth_image_memory_req = device.get_image_memory_requirements(depth_image);
-            let depth_image_memory_index =
-                buffer::find_memorytype_index(
-                    &depth_image_memory_req,
-                    &device_memory_properties,
-                    vk::MemoryPropertyFlags::DEVICE_LOCAL,
-                ).expect("Unable to find suitable memory index for depth image.");
+            let depth_image_memory_index = buffer::find_memorytype_index(
+                &depth_image_memory_req,
+                &device_memory_properties,
+                vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            )
+            .expect("Unable to find suitable memory index for depth image.");
 
             let depth_image_allocate_info = vk::MemoryAllocateInfo {
                 s_type: vk::StructureType::MEMORY_ALLOCATE_INFO,
@@ -705,6 +746,9 @@ impl Context {
                 .create_pipeline_cache(&pipeline_cache_create_info, None)
                 .expect("pipeline cache");
             let context = InnerContext {
+                buffers: HandleMap::new(),
+                descriptors: HandleMap::new(),
+                images: HandleMap::new(),
                 command_pool: ThreadLocalCommandPool::new(queue_family_index),
                 entry,
                 physical_device: pdevice,
@@ -778,8 +822,7 @@ unsafe fn create_surface<E: EntryV1_0, I: InstanceV1_0>(
         window: x11_window as vk::Window,
         dpy: x11_display as *mut vk::Display,
     };
-    let xlib_surface_loader =
-        XlibSurface::new(entry, instance);
+    let xlib_surface_loader = XlibSurface::new(entry, instance);
     xlib_surface_loader.create_xlib_surface_khr(&x11_create_info, None)
 }
 
@@ -896,15 +939,12 @@ unsafe extern "system" fn debug_utils_callback(
             let obj = data.p_objects.offset(i as isize).read();
             let obj_name = if obj.p_object_name.is_null() {
                 "Unknown"
-            }
-            else{
+            } else {
                 CStr::from_ptr(obj.p_object_name).to_str().unwrap()
             };
             println!(
                 "Object: [{}] {} 0x{:x}",
-                obj.object_type,
-                obj_name,
-                obj.object_handle
+                obj.object_type, obj_name, obj.object_handle
             );
         }
         println!("Message ID: {:?}", CStr::from_ptr(data.p_message_id_name));

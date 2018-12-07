@@ -1,4 +1,5 @@
 use super::buffer::BufferData;
+use super::image::from_format;
 use super::Context;
 use super::{CommandBuffer, Vulkan};
 use ash::version::DeviceV1_0;
@@ -8,7 +9,6 @@ use commandbuffer::{ComputeCmd, GraphicsCmd};
 use descriptor::NativeLayout;
 use framegraph::{Compiled, Framegraph};
 use image::{Image, ImageLayout, Resolution};
-use super::image::{from_format};
 use pipeline::{ComputeState, PipelineState};
 use render::{self, ComputeApi, CreateCompute, CreateRender, RenderApi};
 use renderpass::{VertexInputData, VertexType};
@@ -27,7 +27,7 @@ impl ComputeApi for Compute {
                 for cmd in cmds {
                     match cmd {
                         ComputeCmd::BindDescriptor(descriptor) => {
-                            let vk_descriptor = descriptor.inner.as_ref().downcast::<Vulkan>();
+                            let vk_descriptor = self.ctx.descriptors.get(*descriptor);
                             unsafe {
                                 self.ctx.device.cmd_bind_descriptor_sets(
                                     draw_command_buffer,
@@ -144,7 +144,7 @@ impl RenderApi for Render {
                     for cmd in cmds {
                         match cmd {
                             GraphicsCmd::BindDescriptor(descriptor) => {
-                                let vk_descriptor = descriptor.inner.as_ref().downcast::<Vulkan>();
+                                let vk_descriptor = self.ctx.descriptors.get(*descriptor);
                                 device.cmd_bind_descriptor_sets(
                                     draw_command_buffer,
                                     vk::PipelineBindPoint::GRAPHICS,
@@ -155,8 +155,7 @@ impl RenderApi for Render {
                                 );
                             }
                             GraphicsCmd::BindVertex(buffer) => {
-                                let vk_vertex_buffer = buffer.as_ref().downcast::<Vulkan>();
-
+                                let vk_vertex_buffer = self.ctx.buffers.get(*buffer);
                                 device.cmd_bind_vertex_buffers(
                                     draw_command_buffer,
                                     0,
@@ -165,7 +164,7 @@ impl RenderApi for Render {
                                 );
                             }
                             GraphicsCmd::BindIndex(buffer) => {
-                                let vk_index_buffer = buffer.as_ref().downcast::<Vulkan>();
+                                let vk_index_buffer = self.ctx.buffers.get(*buffer);
                                 device.cmd_bind_index_buffer(
                                     draw_command_buffer,
                                     vk_index_buffer.buffer,
@@ -317,7 +316,7 @@ impl CreateRender for Context {
     fn create_render(
         &self,
         resolution: Resolution,
-        images: &[&Image],
+        images: &[Image],
         layout: &NativeLayout,
     ) -> render::Render {
         unsafe {
@@ -342,11 +341,11 @@ impl CreateRender for Context {
 fn create_framebuffer(
     ctx: &Context,
     renderpass: vk::RenderPass,
-    image_resources: &[&Image],
+    image_resources: &[Image],
 ) -> vk::Framebuffer {
     let framebuffer_attachments: Vec<_> = image_resources
         .iter()
-        .map(|image| image.downcast::<Vulkan>().image_view)
+        .map(|image| ctx.images.get(image.handle).image_view)
         .collect();
     let frame_buffer_create_info = vk::FramebufferCreateInfo {
         s_type: vk::StructureType::FRAMEBUFFER_CREATE_INFO,
@@ -587,12 +586,14 @@ pub unsafe fn create_pipeline(
         .expect("Unable to create graphics pipeline");
     graphics_pipelines[0]
 }
-unsafe fn create_renderpass(ctx: &Context, image_resources: &[&Image]) -> vk::RenderPass {
+unsafe fn create_renderpass(ctx: &Context, image_resources: &[Image]) -> vk::RenderPass {
     let renderpass_attachments: Vec<_> = image_resources
         .iter()
-        .map(|image| match image.desc().layout {
+        .map(|image| {
+            let image_data = ctx.images.get(image.handle);
+            match image_data.desc.layout {
             ImageLayout::Color => vk::AttachmentDescription {
-                format: from_format(image.desc().format),
+                format: from_format(image_data.desc.format),
                 flags: vk::AttachmentDescriptionFlags::empty(),
                 samples: vk::SampleCountFlags::TYPE_1,
                 load_op: vk::AttachmentLoadOp::CLEAR,
@@ -603,7 +604,7 @@ unsafe fn create_renderpass(ctx: &Context, image_resources: &[&Image]) -> vk::Re
                 final_layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
             },
             ImageLayout::Depth => vk::AttachmentDescription {
-                format: from_format(image.desc().format),
+                format: from_format(image_data.desc.format),
                 flags: vk::AttachmentDescriptionFlags::empty(),
                 samples: vk::SampleCountFlags::TYPE_1,
                 load_op: vk::AttachmentLoadOp::CLEAR,
@@ -613,13 +614,13 @@ unsafe fn create_renderpass(ctx: &Context, image_resources: &[&Image]) -> vk::Re
                 initial_layout: vk::ImageLayout::UNDEFINED,
                 final_layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
             },
-        })
+        } })
         .collect();
 
     let color_attachments: Vec<_> = image_resources
         .iter()
         .enumerate()
-        .filter_map(|(idx, image)| match image.desc().layout {
+        .filter_map(|(idx, image)| match ctx.images.get(image.handle).desc.layout {
             ImageLayout::Color => {
                 let color_attachment_ref = vk::AttachmentReference {
                     attachment: idx as _,
@@ -633,7 +634,7 @@ unsafe fn create_renderpass(ctx: &Context, image_resources: &[&Image]) -> vk::Re
     let depth_attachments: Vec<_> = image_resources
         .iter()
         .enumerate()
-        .filter_map(|(idx, image)| match image.desc().layout {
+        .filter_map(|(idx, image)| match ctx.images.get(image.handle).desc.layout {
             ImageLayout::Depth => {
                 let depth_attachment_ref = vk::AttachmentReference {
                     attachment: idx as _,

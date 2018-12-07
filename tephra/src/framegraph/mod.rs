@@ -1,4 +1,4 @@
-use buffer::{Buffer, BufferApi, GenericBuffer};
+use buffer::{Buffer, BufferApi, BufferHandle};
 use commandbuffer::{ComputeCommandbuffer, GraphicsCommandbuffer};
 use context::Context;
 use descriptor::{Layout, NativeLayout, Pool};
@@ -34,11 +34,6 @@ pub type ResourceIndex = usize;
 
 impl<T> Copy for Resource<T> {}
 
-impl<T> Resource<Buffer<T>> {
-    pub fn to_generic_buffer(self) -> Resource<GenericBuffer> {
-        Resource::new(self.id, self.version)
-    }
-}
 impl<T> Clone for Resource<T> {
     fn clone(&self) -> Self {
         Resource {
@@ -54,6 +49,16 @@ impl<T> Resource<T> {
             id,
             version,
             _m: PhantomData,
+        }
+    }
+}
+
+impl<T> Resource<Buffer<T>> {
+    pub fn to_buffer_handle(self) -> Resource<BufferHandle> {
+        Resource{
+            _m: PhantomData,
+            id: self.id,
+            version: self.version,
         }
     }
 }
@@ -79,18 +84,18 @@ pub enum ResourceAccess {
 }
 
 pub enum ResourceType {
-    Buffer(GenericBuffer),
+    Buffer(BufferHandle),
     Image(Image),
 }
 impl ResourceType {
-    pub fn as_buffer(&self) -> &GenericBuffer {
-        match self {
+    pub fn as_buffer(&self) -> BufferHandle {
+        match *self {
             ResourceType::Buffer(buffer) => buffer,
             _ => panic!(""),
         }
     }
-    pub fn as_image(&self) -> &Image {
-        match self {
+    pub fn as_image(&self) -> Image {
+        match *self {
             ResourceType::Image(image) => image,
             _ => panic!(""),
         }
@@ -136,18 +141,26 @@ pub struct Framegraph<T = Recording> {
 }
 
 pub trait GetResource<T> {
-    fn get_resource(&self, resource: Resource<T>) -> &T;
+    fn get_resource(&self, resource: Resource<T>) -> T;
 }
 
 impl<T> GetResource<Image> for Framegraph<T> {
-    fn get_resource(&self, resource: Resource<Image>) -> &Image {
+    fn get_resource(&self, resource: Resource<Image>) -> Image {
         self.resources[resource.id].as_image()
     }
 }
 
-impl<T> GetResource<GenericBuffer> for Framegraph<T> {
-    fn get_resource(&self, resource: Resource<GenericBuffer>) -> &GenericBuffer {
+impl<T> GetResource<BufferHandle> for Framegraph<T> {
+    fn get_resource(&self, resource: Resource<BufferHandle>) -> BufferHandle {
         self.resources[resource.id].as_buffer()
+    }
+}
+impl<D, T> GetResource<Buffer<D>> for Framegraph<T> {
+    fn get_resource(&self, resource: Resource<Buffer<D>>) -> Buffer<D> {
+        Buffer {
+            buffer: self.resources[resource.id].as_buffer(),
+            _m: PhantomData,
+        }
     }
 }
 impl<T> Framegraph<T> {
@@ -306,7 +319,7 @@ impl Framegraph {
             .frame_buffer_layout
             .iter()
             .map(|(&handle, image_resources)| {
-                let images: Vec<&Image> = image_resources
+                let images: Vec<Image> = image_resources
                     .iter()
                     .map(|&resource| self.get_resource(resource))
                     .collect();
@@ -353,7 +366,8 @@ impl Framegraph<Compiled> {
             .find(|&idx| {
                 self.graph
                     .neighbors_directed(idx, Direction::Outgoing)
-                    .count() == 0
+                    .count()
+                    == 0
             })
             .expect("Unable to find backbuffer");
         // We start from the backbuffer and traverse the graph backwards. After
@@ -408,10 +422,10 @@ impl Framegraph<Compiled> {
     }
 }
 impl<T> Framegraph<T> {
-    pub fn get_image(&self, id: ResourceIndex) -> &Image {
+    pub fn get_image(&self, id: ResourceIndex) -> Image {
         self.resources[id].as_image()
     }
-    pub fn get_buffer(&self, id: ResourceIndex) -> &GenericBuffer {
+    pub fn get_buffer(&self, id: ResourceIndex) -> BufferHandle {
         self.resources[id].as_buffer()
     }
 }

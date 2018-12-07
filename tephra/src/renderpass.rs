@@ -1,16 +1,31 @@
+use slotmap::{new_key_type, SlotMap};
+use std::marker::PhantomData;
 use std::mem::size_of;
+use image::Format;
+new_key_type!(pub struct RenderpassHandle;);
 
-// pub trait Descriptor{
-//     fn get_descriptor_data(&self) -> DescriptorData;
-// }
-// pub enum DescriptorType {
-//     Uniform,
-//     Sampler
-// }
-// pub struct DescriptorData<'a> {
-//     pub binding: u32,
-//     pub ty: DescriptorType,
-// }
+pub trait Attachment {
+    fn attachment_data() -> Vec<AttachmentData>;
+}
+
+pub enum AttachmentLayout {
+    Color,
+    DepthStencil,
+}
+pub struct AttachmentData {
+    pub format: Format,
+    pub layout: AttachmentLayout,
+}
+
+
+pub struct Renderpass<A>
+where
+    A: Attachment,
+{
+    handle: RenderpassHandle,
+    _m: PhantomData<A>,
+}
+
 #[derive(Debug, Copy, Clone)]
 pub enum VertexType {
     F32(usize),

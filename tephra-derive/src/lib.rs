@@ -28,12 +28,12 @@ fn gen_descriptor_info(ident: &Ident, input: &DataStruct) -> TokenStream {
             let ty = match desc.ty {
                 DescriptorType::Storage => {
                     quote!{
-                        #path::DescriptorResource::Storage(self.#field.to_generic_buffer())
+                        #path::DescriptorResource::Storage(self.#field.to_buffer_handle())
                     }
                 }
                 DescriptorType::Uniform => {
                     quote!{
-                        #path::DescriptorResource::Uniform(self.#field.to_generic_buffer())
+                        #path::DescriptorResource::Uniform(self.#field.to_buffer_handle())
                     }
                 }
             };

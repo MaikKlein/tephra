@@ -1,7 +1,7 @@
-#![feature(rust_2018_preview)]
-//#![feature(nll)]
 extern crate parking_lot;
 extern crate rspirv;
+extern crate slotmap;
+extern crate smallvec;
 extern crate spirv_headers;
 extern crate thread_local_object;
 #[macro_use]
@@ -15,6 +15,7 @@ extern crate failure_derive;
 extern crate downcast_rs as downcast;
 extern crate anymap;
 extern crate petgraph;
+use crate::buffer::BufferHandle;
 pub mod backend;
 pub mod buffer;
 pub mod commandbuffer;
@@ -33,4 +34,8 @@ pub struct Viewport {
     pub origin: (f32, f32),
     pub dimensions: (f32, f32),
     pub depth_range: (f32, f32),
+}
+
+pub trait Context {
+    fn create_renderpass(&self) -> renderpass::RenderpassHandle;
 }

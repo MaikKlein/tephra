@@ -1,12 +1,12 @@
-use framegraph::{Framegraph, Compiled};
 use super::{Context, Vulkan};
 use ash::version::DeviceV1_0;
 use ash::vk;
 use descriptor::{
-    Binding, CreateDescriptor, CreateLayout, CreatePool, DescriptorApi, DescriptorInfo,
-    DescriptorResource, DescriptorSizes, DescriptorType, LayoutApi, NativeDescriptor, NativeLayout,
-    NativePool, PoolApi,
+    Binding, CreateLayout, CreatePool, DescriptorApi, DescriptorHandle, DescriptorInfo,
+    DescriptorResource, DescriptorSizes, DescriptorType, LayoutApi, NativeLayout, NativePool,
+    PoolApi,
 };
+use framegraph::{Compiled, Framegraph};
 pub struct Pool {
     pub ctx: Context,
     pub pool: vk::DescriptorPool,
@@ -21,7 +21,7 @@ impl PoolApi for Pool {
                 .reset_descriptor_pool(self.pool, vk::DescriptorPoolResetFlags::empty());
         }
     }
-    fn create_descriptor(&self) -> NativeDescriptor {
+    fn create_descriptor(&self) -> DescriptorHandle {
         let desc_alloc_info = vk::DescriptorSetAllocateInfo {
             descriptor_pool: self.pool,
             descriptor_set_count: self.layouts.len() as u32,
@@ -34,13 +34,8 @@ impl PoolApi for Pool {
                 .allocate_descriptor_sets(&desc_alloc_info)
                 .unwrap()[0]
         };
-        let inner = Descriptor {
-            ctx: self.ctx.clone(),
-            descriptor_set,
-        };
-        NativeDescriptor {
-            inner: Box::new(inner),
-        }
+        let inner = Descriptor { descriptor_set };
+        self.ctx.descriptors.insert(inner)
     }
 }
 impl CreatePool for Context {
@@ -164,33 +159,35 @@ impl CreateLayout for Context {
     }
 }
 pub struct Descriptor {
-    pub ctx: Context,
     pub descriptor_set: vk::DescriptorSet,
 }
 
-impl CreateDescriptor for Context {
+impl DescriptorApi for Context {
     fn create_descriptor(
         &self,
-        _data: &[Binding<DescriptorType>],
-        _sizes: DescriptorSizes,
-    ) -> NativeDescriptor {
+        data: &[Binding<DescriptorType>],
+        sizes: DescriptorSizes,
+    ) -> DescriptorHandle {
         unimplemented!()
     }
-}
-
-impl DescriptorApi for Descriptor {
-    fn write(&mut self, data: &[Binding<DescriptorResource>], fg: &Framegraph<Compiled>) {
+    fn write(
+        &self,
+        handle: DescriptorHandle,
+        data: &[Binding<DescriptorResource>],
+        fg: &Framegraph<Compiled>,
+    ) {
+        let descriptor = self.descriptors.get(handle);
         use framegraph::GetResource;
-        let buffer_infos: Vec<_> = data
+        let buffer_infos: Vec<Binding<vk::DescriptorBufferInfo>> = data
             .iter()
             .map(|resource| match resource.data {
                 DescriptorResource::Uniform(buffer) | DescriptorResource::Storage(buffer) => {
                     let generic_buffer = fg.get_resource(buffer);
-                    let vkbuffer = generic_buffer.as_ref().downcast::<Vulkan>();
+                    let vkbuffer = self.buffers.get(generic_buffer);
                     let buffer_info = vk::DescriptorBufferInfo {
                         buffer: vkbuffer.buffer,
                         offset: 0,
-                        range: generic_buffer.size(),
+                        range: vkbuffer.size,
                     };
                     Binding {
                         data: buffer_info,
@@ -211,7 +208,7 @@ impl DescriptorApi for Descriptor {
                 vk::WriteDescriptorSet {
                     s_type: vk::StructureType::WRITE_DESCRIPTOR_SET,
                     p_next: std::ptr::null(),
-                    dst_set: self.descriptor_set,
+                    dst_set: descriptor.descriptor_set,
                     dst_binding: info.binding,
                     dst_array_element: 0,
                     descriptor_count: 1,
@@ -223,7 +220,7 @@ impl DescriptorApi for Descriptor {
             })
             .collect();
         unsafe {
-            self.ctx.device.update_descriptor_sets(&writes, &[]);
+            self.device.update_descriptor_sets(&writes, &[]);
         }
     }
 }

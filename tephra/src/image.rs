@@ -4,6 +4,10 @@ use context::Context;
 use downcast::Downcast;
 use std::marker::PhantomData;
 use std::ops::Deref;
+use slotmap::new_key_type;
+new_key_type!(
+    pub struct ImageHandle;
+);
 //use renderpass::{Pass, Renderpass};
 #[derive(Debug, Copy, Clone)]
 pub enum ImageLayout {
@@ -17,25 +21,18 @@ pub struct Resolution {
 }
 
 pub trait CreateImage {
-    fn allocate(&self, desc: ImageDesc) -> Image;
-    fn from_buffer(&self, buffer: Buffer<u8>) -> Image;
 }
 
-pub trait ImageApi: Downcast {
-    fn desc(&self) -> &ImageDesc;
-    fn copy_image(&self, target: &Image);
+pub trait ImageApi {
+    fn allocate_image(&self, desc: ImageDesc) -> ImageHandle;
+    fn from_buffer(&self, buffer: Buffer<u8>) -> ImageHandle;
+    fn desc(&self, handle: ImageHandle) -> ImageDesc;
+    fn copy_image(&self,src: ImageHandle, dst: ImageHandle);
 }
 
-impl_downcast!(ImageApi);
-
+#[derive(Copy, Clone)]
 pub struct Image {
-    pub data: Box<dyn ImageApi>,
-}
-impl Deref for Image {
-    type Target = ImageApi;
-    fn deref(&self) -> &Self::Target {
-        self.data.as_ref()
-    }
+    pub handle: ImageHandle,
 }
 
 #[derive(Debug, Clone)]
@@ -46,13 +43,11 @@ pub struct ImageDesc {
 }
 
 impl Image {
-    pub fn downcast<B: BackendApi>(&self) -> &B::Image {
-        self.data
-            .downcast_ref::<B::Image>()
-            .expect("Downcast Image Vulkan")
-    }
     pub fn allocate(ctx: &Context, desc: ImageDesc) -> Image {
-        CreateImage::allocate(ctx.context.as_ref(), desc)
+        let handle = ctx.allocate_image(desc);
+        Image {
+            handle,
+        }
     }
 }
 

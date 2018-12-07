@@ -14,7 +14,7 @@ pub trait CreateRender {
     fn create_render(
         &self,
         resolution: Resolution,
-        images: &[&Image],
+        images: &[Image],
         layout: &NativeLayout,
     ) -> Render;
 }
@@ -68,7 +68,7 @@ impl Render {
     pub fn new(
         ctx: &Context,
         resolution: Resolution,
-        images: &[&Image],
+        images: &[Image],
         layout: &NativeLayout,
     ) -> Render {
         ctx.create_render(resolution, images, layout)
