@@ -1,12 +1,10 @@
-use super::image::ImageData;
-use super::image::{from_format, into_format};
-use image::ImageApi;
+use super::image::{from_format, into_format, ImageData};
 use super::Context;
 use super::{CommandBuffer, Vulkan};
 use ash::extensions;
 use ash::version::DeviceV1_0;
 use ash::vk;
-use image::{Format, Image, ImageDesc, ImageLayout, Resolution};
+use image::{Format, Image, ImageApi, ImageDesc, ImageLayout, Resolution};
 use std::ops::Drop;
 use std::ptr;
 use swapchain::{CreateSwapchain, Swapchain, SwapchainApi, SwapchainError};
@@ -29,6 +27,9 @@ impl Drop for SwapchainData {
 }
 
 impl SwapchainApi for SwapchainData {
+    fn format(&self) -> Format {
+        into_format(self.context.surface_format.format)
+    }
     fn copy_and_present(&self, image: Image) {
         let index = self.aquire_next_image().expect("acquire");
         let present_image = &self.present_images()[index as usize];

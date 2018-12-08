@@ -13,7 +13,7 @@ use tephra::{
         render_task::{Computepass, Renderpass},
         Blackboard, Compiled, Framegraph, GetResource, Recording, Resource,
     },
-    image::{Image, ImageDesc, ImageLayout, Resolution, Format},
+    image::{Format, Image, ImageDesc, ImageLayout, Resolution},
     pipeline::{ComputeState, PipelineState, ShaderStage},
     shader::ShaderModule,
     swapchain::Swapchain,
@@ -45,7 +45,8 @@ impl TriangleCompute {
             Property::HostVisible,
             BufferUsage::Storage,
             &[[1.0f32, 0.0, 0.0, 1.0]],
-        ).expect("Buffer");
+        )
+        .expect("Buffer");
         let compute_shader =
             ShaderModule::load(&fg.ctx, "shader/triangle/comp.spv").expect("compute shader");
         let storage_buffer = fg.add_buffer(buffer);
@@ -112,11 +113,12 @@ impl TrianglePass {
         fg: &mut Framegraph<Recording>,
         storage_buffer: Resource<Buffer<[f32; 4]>>,
         resolution: Resolution,
+        format: Format,
     ) -> Arc<TrianglePass> {
         fg.add_render_pass("Triangle Pass", |builder| {
             let color_desc = ImageDesc {
                 layout: ImageLayout::Color,
-                format: Format::B8G8R8A8_SRGB,
+                format,
                 resolution,
             };
             let depth_desc = ImageDesc {
@@ -159,9 +161,14 @@ impl Presentpass {
     }
 }
 
-pub fn render_pass(fg: &mut Framegraph<Recording>, resolution: Resolution) {
+pub fn render_pass(fg: &mut Framegraph<Recording>, resolution: Resolution, swapchain: &Swapchain) {
     let triangle_compute = TriangleCompute::add_pass(fg);
-    let triangle_data = TrianglePass::add_pass(fg, triangle_compute.storage_buffer, resolution);
+    let triangle_data = TrianglePass::add_pass(
+        fg,
+        triangle_compute.storage_buffer,
+        resolution,
+        swapchain.format(),
+    );
     Presentpass::add_pass(fg, triangle_data.color);
 }
 
@@ -204,7 +211,8 @@ fn main() {
         .with_vertex_shader(ShaderStage {
             shader_module: vertex_shader_module,
             entry_name: "main".into(),
-        }).with_fragment_shader(ShaderStage {
+        })
+        .with_fragment_shader(ShaderStage {
             shader_module: fragment_shader_module,
             entry_name: "main".into(),
         });
@@ -214,7 +222,8 @@ fn main() {
         Property::HostVisible,
         BufferUsage::Index,
         &index_buffer_data,
-    ).expect("index buffer");
+    )
+    .expect("index buffer");
     let vertices = [
         Vertex {
             pos: [-1.0, 1.0, 0.0, 1.0],
@@ -235,8 +244,6 @@ fn main() {
             .expect("Failed to create vertex buffer");
 
     let triangle_shader = TriangleShader::new();
-    blackboard.add(triangle_shader);
-    blackboard.add(swapchain);
     let mut fg = Framegraph::new(&ctx);
     let triangle_state = TriangleState {
         vertex_buffer,
@@ -244,7 +251,9 @@ fn main() {
         state,
     };
     blackboard.add(triangle_state);
-    render_pass(&mut fg, resolution);
+    render_pass(&mut fg, resolution, &swapchain);
+    blackboard.add(triangle_shader);
+    blackboard.add(swapchain);
     let mut fg = fg.compile(resolution, &ctx);
     fg.export_graphviz("graph.dot");
     loop {

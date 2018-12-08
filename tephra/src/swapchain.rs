@@ -1,5 +1,5 @@
 use context::Context;
-use image::{Image, Resolution};
+use image::{Image, Resolution, Format};
 use std::ops::Deref;
 
 #[derive(Debug, Fail)]
@@ -28,6 +28,7 @@ pub trait SwapchainApi {
         &self,
         image: Image,
     );
+    fn format(&self) -> Format;
 }
 
 pub struct Swapchain {
