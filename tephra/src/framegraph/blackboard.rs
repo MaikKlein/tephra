@@ -15,4 +15,8 @@ impl Blackboard {
     pub fn get<'a, T: 'static>(&self) -> Option<&T> {
         self.any_map.get::<T>()
     }
+
+    pub fn get_mut<'a, T: 'static>(&mut self) -> Option<&mut T> {
+        self.any_map.get_mut::<T>()
+    }
 }

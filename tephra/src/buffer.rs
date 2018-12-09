@@ -1,6 +1,4 @@
-use backend::BackendApi;
 use context::Context;
-use downcast::Downcast;
 use slotmap::new_key_type;
 use std::marker::PhantomData;
 use std::mem::size_of;
