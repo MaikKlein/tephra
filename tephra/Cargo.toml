@@ -2,9 +2,10 @@
 name = "tephra"
 version = "0.1.0"
 authors = ["maik"]
+edition = "2018"
 
 [dependencies]
-
+derive_builder = "0.7"
 failure = "0.1.2"
 failure_derive = "0.1.2"
 serde = "1.0.70"
@@ -20,6 +21,7 @@ image = "0.19"
 rspirv = "0.5"
 spirv_headers = "1.3"
 smallvec = "0.6"
+itertools = "0.8"
 
 [dependencies.slotmap]
 version = "0.3.0"

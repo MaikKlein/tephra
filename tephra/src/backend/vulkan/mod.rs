@@ -1,13 +1,14 @@
+use crate::backend::BackendApi;
 use crate::buffer::BufferHandle;
+use crate::context;
+use crate::context::ContextApi;
 use crate::descriptor::DescriptorHandle;
 use crate::image::ImageHandle;
+use crate::renderpass::{RenderTarget};
 use ash::extensions::{DebugReport, DebugUtils, Surface, Swapchain, XlibSurface};
 use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
 use ash::vk;
 use ash::{Device, Entry, Instance};
-use backend::BackendApi;
-use context;
-use context::ContextApi;
 use parking_lot::{Mutex, RwLock};
 use slotmap::{Key, SlotMap, Slottable};
 use std::cell::RefCell;
@@ -213,6 +214,24 @@ pub struct RecordCommandBuffer {
     sender: Sender<vk::CommandBuffer>,
     _m: PhantomData<*const ()>,
 }
+impl RecordCommandBuffer {
+    pub fn submit(&self) {}
+    pub fn release(self) {
+        self.sender.send(self.inner).expect("unable to send");
+    }
+}
+impl Deref for RecordCommandBuffer {
+    type Target = vk::CommandBuffer;
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+// impl Drop for RecordCommandBuffer {
+//     fn drop(&mut self) {
+//         // Reclaim the command buffer by sending it to the correct pool
+//         self.sender.send(self.inner).expect("unable to send");
+//     }
+// }
 
 #[derive(Debug)]
 pub struct CommandBuffer {
@@ -274,12 +293,6 @@ impl Drop for CommandBuffer {
     }
 }
 
-impl crate::Context for Context {
-    fn create_renderpass(&self) -> crate::renderpass::RenderpassHandle {
-        unimplemented!()
-    }
-}
-
 #[derive(Clone)]
 pub struct Context {
     inner: Arc<InnerContext>,
@@ -324,6 +337,7 @@ pub struct InnerContext {
     pub buffers: HandleMap<BufferHandle, buffer::BufferData>,
     pub descriptors: HandleMap<DescriptorHandle, descriptor::Descriptor>,
     pub images: HandleMap<ImageHandle, image::ImageData>,
+    pub render_targets: HandleMap<RenderTarget, renderpass::RenderTargetData>,
     pub entry: Entry,
     pub instance: Instance,
     pub device: Device,
@@ -746,9 +760,10 @@ impl Context {
                 .create_pipeline_cache(&pipeline_cache_create_info, None)
                 .expect("pipeline cache");
             let context = InnerContext {
+                render_targets: HandleMap::new(),
                 buffers: HandleMap::new(),
-                descriptors: HandleMap::new(),
                 images: HandleMap::new(),
+                descriptors: HandleMap::new(),
                 command_pool: ThreadLocalCommandPool::new(queue_family_index),
                 entry,
                 physical_device: pdevice,

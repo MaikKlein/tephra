@@ -1,94 +1,156 @@
-use buffer::{Buffer, BufferApi, BufferHandle};
-use descriptor::{Allocator, Descriptor, DescriptorHandle, DescriptorInfo};
-use framegraph::{Compiled, Framegraph, Resource, ResourceIndex};
-use image::Image;
-use pipeline::{ComputeState, PipelineState};
-use render::RenderApi;
-use renderpass::{VertexInput, VertexInputData};
+use crate::buffer::{Buffer, BufferApi, BufferHandle};
+use crate::descriptor::{Allocator, Descriptor, DescriptorHandle, DescriptorInfo};
+use crate::framegraph::{Compiled, Framegraph, Resource, ResourceIndex};
+use crate::image::{Image, ImageHandle};
+use crate::pipeline::{ComputeState, PipelineState};
+use crate::render::RenderApi;
+use crate::renderpass::{VertexInput, VertexInputData};
 use smallvec::SmallVec;
 use std::marker::PhantomData;
 
-// pub struct ShaderArgument;
-// const MAX_SHADER_ARGS: usize = 4;
-// pub type ShaderArguments = SmallVec<[ShaderArgument; MAX_SHADER_ARGS]>;
+pub struct ShaderArgument;
+const MAX_SHADER_ARGS: usize = 4;
+pub type ShaderArguments = SmallVec<[ShaderArgument; MAX_SHADER_ARGS]>;
 
-// // TODO: Implement properly
-// pub struct PipelineInfo {
-//     pub pipeline: PipelineState,
-//     pub stride: u32,
-//     pub vertex_input_data: Vec<VertexInputData>,
-// }
-// pub struct DrawCommand {
-//     pub pipeline_info: PipelineInfo,
-//     pub vertex: Resource<BufferHandle>,
-//     pub index: Resource<Buffer<u32>>,
-//     pub shader_arguments: DescriptorHandle,
-// }
+// TODO: Implement properly
+pub struct PipelineInfo {
+    pub pipeline: PipelineState,
+    pub stride: u32,
+    pub vertex_input_data: Vec<VertexInputData>,
+}
+pub struct CopyImage {
+    pub src: ImageHandle,
+    pub dst: ImageHandle,
+}
 
-// pub struct DispatchCommand {
-//     pub pipeline: ComputeState,
-//     pub shader_arguments: DescriptorHandle,
-//     pub x: u32,
-//     pub y: u32,
-//     pub z: u32,
-// }
+pub struct DrawCommand {
+    pub pipeline_info: PipelineInfo,
+    pub vertex: BufferHandle,
+    pub index: Buffer<u32>,
+    pub shader_arguments: DescriptorHandle,
+}
 
-// pub struct CommandList {
-//     commands: Vec<Command>,
-// }
+pub struct DispatchCommand {
+    pub pipeline: ComputeState,
+    pub shader_arguments: DescriptorHandle,
+    pub x: u32,
+    pub y: u32,
+    pub z: u32,
+}
 
-// impl CommandList {
-//     pub fn dispatch<'alloc, ShaderArgument>(
-//         &mut self,
-//         pipeline: ComputeState,
-//         descriptor: Descriptor<'alloc, ShaderArgument>,
-//         x: u32,
-//         y: u32,
-//         z: u32,
-//     ) where
-//         ShaderArgument: DescriptorInfo,
-//     {
-//         let cmd = DispatchCommand {
-//             pipeline,
-//             shader_arguments: descriptor.handle,
-//             x,
-//             y,
-//             z,
-//         };
-//         self.commands.push(Command::Dispatch(cmd));
-//     }
-//     pub fn draw_indexed<'alloc, Vertex, ShaderArgument>(
-//         &mut self,
-//         pipeline: PipelineState,
-//         descriptor: Descriptor<'alloc, ShaderArgument>,
-//         vertex_buffer: Resource<Buffer<Vertex>>,
-//         index_buffer: Resource<Buffer<u32>>,
-//     ) where
-//         Vertex: VertexInput,
-//         ShaderArgument: DescriptorInfo,
-//     {
-//         let pipeline_info = PipelineInfo {
-//             pipeline,
-//             stride: std::mem::size_of::<Vertex>() as u32,
-//             vertex_input_data: Vertex::vertex_input_data(),
-//         };
-//         let cmd = DrawCommand {
-//             pipeline_info,
-//             shader_arguments: descriptor.handle,
-//             vertex: vertex_buffer.buffer,
-//             index: index_buffer,
-//         };
-//         self.commands.push(Command::Draw(cmd));
-//     }
-// }
+pub enum QueueType {
+    Graphics,
+    Compute,
+    Transfer,
+}
+pub trait GetQueueType {
+    const TYPE: QueueType;
+}
+pub enum Graphics {}
+impl GetQueueType for Graphics {
+    const TYPE: QueueType = QueueType::Graphics;
+}
 
-// pub enum Command {
-//     Draw(DrawCommand),
-//     Dispatch(DispatchCommand),
-// }
+pub enum Compute {}
+impl GetQueueType for Compute {
+    const TYPE: QueueType = QueueType::Compute;
+}
+pub enum Transfer {}
+impl GetQueueType for Transfer {
+    const TYPE: QueueType = QueueType::Transfer;
+}
+pub struct Submit {
+    pub queue_ty: QueueType,
+    pub commands: Vec<Command>,
+}
 
-pub struct Graphics;
-pub struct Compute;
+pub struct CommandList {
+    pub submits: Vec<Submit>,
+}
+impl CommandList {
+    pub fn record<Q>(&mut self) -> RecordCommandList<Q> {
+        RecordCommandList {
+            command_list: self,
+            commands: Vec::new(),
+            _m: PhantomData,
+        }
+    }
+}
+pub struct RecordCommandList<'a, Q> {
+    command_list: &'a mut CommandList,
+    commands: Vec<Command>,
+    _m: PhantomData<Q>,
+}
+
+impl<Q> RecordCommandList<'_, Q>
+where
+    Q: GetQueueType,
+{
+    pub fn submit(self) {
+        let submit = Submit {
+            queue_ty: Q::TYPE,
+            commands: self.commands,
+        };
+        self.command_list.submits.push(submit);
+    }
+}
+impl RecordCommandList<'_, Transfer> {}
+impl RecordCommandList<'_, Graphics> {
+    pub fn draw_indexed<'alloc, Vertex, ShaderArgument>(
+        mut self,
+        pipeline: PipelineState,
+        descriptor: Descriptor<'alloc, ShaderArgument>,
+        vertex_buffer: Buffer<Vertex>,
+        index_buffer: Buffer<u32>,
+    ) where
+        Vertex: VertexInput,
+        ShaderArgument: DescriptorInfo,
+    {
+        let pipeline_info = PipelineInfo {
+            pipeline,
+            stride: std::mem::size_of::<Vertex>() as u32,
+            vertex_input_data: Vertex::vertex_input_data(),
+        };
+        let cmd = DrawCommand {
+            pipeline_info,
+            shader_arguments: descriptor.handle,
+            vertex: vertex_buffer.buffer,
+            index: index_buffer,
+        };
+        self.commands.push(Command::Draw(cmd));
+    }
+}
+impl RecordCommandList<'_, Compute> {
+    pub fn dispatch<'alloc, ShaderArgument>(
+        mut self,
+        pipeline: ComputeState,
+        descriptor: Descriptor<'alloc, ShaderArgument>,
+        x: u32,
+        y: u32,
+        z: u32,
+    ) where
+        ShaderArgument: DescriptorInfo,
+    {
+        let cmd = DispatchCommand {
+            pipeline,
+            shader_arguments: descriptor.handle,
+            x,
+            y,
+            z,
+        };
+        self.commands.push(Command::Dispatch(cmd));
+    }
+}
+
+pub enum Command {
+    CopyImage(CopyImage),
+    Draw(DrawCommand),
+    Dispatch(DispatchCommand),
+}
+pub trait SubmitApi {
+    unsafe fn submit_commands(&self, commands: &CommandList);
+}
+
 pub trait ExecuteApi {
     fn execute_commands(&self, cmds: &[GraphicsCmd]);
 }

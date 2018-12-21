@@ -1,12 +1,18 @@
-use buffer::{Buffer, BufferApi, BufferHandle};
-use commandbuffer::{ComputeCommandbuffer, GraphicsCommandbuffer};
-use context::Context;
-use descriptor::{Layout, NativeLayout, Pool};
-use framegraph::render_task::ExecuteGraphics;
-use image::{Image, ImageApi, ImageDesc, Resolution};
+use crate::{
+    buffer::{Buffer, BufferApi, BufferHandle},
+    commandbuffer::{ComputeCommandbuffer, GraphicsCommandbuffer},
+    context::Context,
+    descriptor::{Layout, NativeLayout, Pool},
+    framegraph::{
+        render_task::{Computepass, ExecuteCompute, ExecuteGraphics, Renderpass},
+        task_builder::{RenderTargetState, TaskBuilder},
+    },
+    image::{Image, ImageApi, ImageDesc, Resolution},
+    render::{Compute, Render},
+    renderpass::RenderTarget,
+};
 use petgraph::Direction;
 use petgraph::{self, Graph};
-use render::{Compute, Render};
 use std::clone::Clone;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -19,8 +25,6 @@ pub mod blackboard;
 pub mod render_task;
 pub mod task_builder;
 pub use self::blackboard::Blackboard;
-use self::render_task::{Computepass, ExecuteCompute, Renderpass};
-use self::task_builder::TaskBuilder;
 
 pub trait ResourceBase {}
 #[derive(Debug)]
@@ -55,7 +59,7 @@ impl<T> Resource<T> {
 
 impl<T> Resource<Buffer<T>> {
     pub fn to_buffer_handle(self) -> Resource<BufferHandle> {
-        Resource{
+        Resource {
             _m: PhantomData,
             id: self.id,
             version: self.version,
@@ -86,6 +90,7 @@ pub enum ResourceAccess {
 pub enum ResourceType {
     Buffer(BufferHandle),
     Image(Image),
+    RenderTarget(RenderTarget),
 }
 impl ResourceType {
     pub fn as_buffer(&self) -> BufferHandle {
@@ -119,6 +124,50 @@ impl fmt::Display for Access {
     }
 }
 
+pub struct Registry {
+    resources: HashMap<ResourceIndex, ResourceType>,
+    free_id: usize,
+}
+impl Registry {
+    pub fn reserve_index(&mut self) -> ResourceIndex {
+        let id = self.free_id;
+        self.free_id += 1;
+        id
+    }
+    pub fn add_render_target(&mut self, rt: RenderTarget) -> Resource<RenderTarget> {
+        let id = self.reserve_index();
+        self.resources.insert(id, ResourceType::RenderTarget(rt));
+        Resource::new(id, 0)
+    }
+    pub fn add_buffer(&mut self, buffer: BufferHandle) -> Resource<BufferHandle> {
+        let id = self.reserve_index();
+        self.resources.insert(id, ResourceType::Buffer(buffer));
+        Resource::new(id, 0)
+    }
+    pub fn add_image(&mut self, image: Image) -> Resource<Image> {
+        let id = self.reserve_index();
+        self.resources.insert(id, ResourceType::Image(image));
+        Resource::new(id, 0)
+    }
+    pub fn get_render_target(&self, resource: Resource<RenderTarget>) -> RenderTarget {
+        match self.resources[&resource.id] {
+            ResourceType::RenderTarget(rt) => rt,
+            _ => unreachable!(),
+        }
+    }
+    pub fn get_buffer(&self, resource: Resource<BufferHandle>) -> BufferHandle {
+        match self.resources[&resource.id] {
+            ResourceType::Buffer(buffer) => buffer,
+            _ => unreachable!(),
+        }
+    }
+    pub fn get_image(&self, resource: Resource<Image>) -> Image {
+        match self.resources[&resource.id] {
+            ResourceType::Image(image) => image,
+            _ => unreachable!(),
+        }
+    }
+}
 pub struct Compiled {
     render: HashMap<Handle, Render>,
     compute: HashMap<Handle, Compute>,
@@ -126,6 +175,7 @@ pub struct Compiled {
 
 pub struct Recording {
     image_data: Vec<(ResourceIndex, ImageDesc)>,
+    render_targets: Vec<(ResourceIndex, RenderTargetState)>,
     frame_buffer_layout: HashMap<Handle, Vec<Resource<Image>>>,
     layouts: HashMap<Handle, NativeLayout>,
 }
@@ -190,6 +240,7 @@ impl Framegraph {
         Framegraph {
             ctx: ctx.clone(),
             state: Recording {
+                render_targets: Vec::new(),
                 image_data: Vec::new(),
                 frame_buffer_layout: HashMap::new(),
                 layouts: HashMap::new(),
@@ -250,106 +301,106 @@ impl Framegraph {
     //         .insert(pass_handle, image_resources);
     //     task
     // }
-    pub fn add_compute_pass<F, P>(&mut self, name: &'static str, mut f: F) -> Arc<P>
-    where
-        F: FnMut(&mut TaskBuilder<'_>) -> P,
-        P: Computepass + 'static,
-    {
-        let layout = Layout::<P::Layout>::new(&self.ctx);
-        let (pass_handle, task) = {
-            let renderpass = Pass {
-                name,
-                ty: PassType::Compute,
-            };
-            let pass_handle = self.graph.add_node(renderpass);
-            let renderpass = {
-                let mut builder = TaskBuilder {
-                    pass_handle,
-                    framegraph: self,
-                };
-                f(&mut builder)
-            };
-            (pass_handle, Arc::new(renderpass))
-        };
-        self.execute_compute.insert(pass_handle, task.clone());
-        self.state.layouts.insert(pass_handle, layout.inner_layout);
-        task
-    }
-    pub fn add_render_pass<F, P>(&mut self, name: &'static str, mut f: F) -> Arc<P>
-    where
-        F: FnMut(&mut TaskBuilder<'_>) -> P,
-        P: Renderpass + 'static,
-    {
-        let layout = Layout::<P::Layout>::new(&self.ctx);
-        let (pass_handle, image_resources, task) = {
-            let renderpass = Pass {
-                name,
-                ty: PassType::Graphics,
-            };
-            let pass_handle = self.graph.add_node(renderpass);
-            let renderpass = {
-                let mut builder = TaskBuilder {
-                    pass_handle,
-                    framegraph: self,
-                };
-                f(&mut builder)
-            };
-            let image_resources = renderpass.framebuffer();
-            (pass_handle, image_resources, Arc::new(renderpass))
-        };
-        self.execute_fns.insert(pass_handle, task.clone());
-        self.state
-            .frame_buffer_layout
-            .insert(pass_handle, image_resources);
-        self.state.layouts.insert(pass_handle, layout.inner_layout);
-        task
-    }
-    pub fn compile(mut self, resolution: Resolution, ctx: &Context) -> Framegraph<Compiled> {
-        let images: Vec<_> = self
-            .state
-            .image_data
-            .iter()
-            .map(|(id, image_desc)| (*id, Image::allocate(ctx, image_desc.clone())))
-            .collect();
-        for (id, image) in images {
-            self.resources.insert(id, ResourceType::Image(image));
-        }
-        let render: HashMap<_, _> = self
-            .state
-            .frame_buffer_layout
-            .iter()
-            .map(|(&handle, image_resources)| {
-                let images: Vec<Image> = image_resources
-                    .iter()
-                    .map(|&resource| self.get_resource(resource))
-                    .collect();
-                let layout = self.state.layouts.get(&handle).expect("layout");
-                (handle, Render::new(ctx, resolution, &images, layout))
-            })
-            .collect();
-        let compute: HashMap<_, _> = self
-            .execute_compute
-            .keys()
-            .map(|compute_handle| {
-                let layout = self
-                    .state
-                    .layouts
-                    .get(compute_handle)
-                    .expect("compute layout");
-                (*compute_handle, Compute::new(ctx, layout))
-            })
-            .collect();
-        let state = Compiled { render, compute };
-        Framegraph {
-            ctx: self.ctx,
-            execute_fns: self.execute_fns,
-            execute_compute: self.execute_compute,
-            resources: self.resources,
-            graph: self.graph,
-            state,
-            pass_map: self.pass_map,
-        }
-    }
+    // pub fn add_compute_pass<F, P>(&mut self, name: &'static str, mut f: F) -> Arc<P>
+    // where
+    //     F: FnMut(&mut TaskBuilder<'_>) -> P,
+    //     P: Computepass + 'static,
+    // {
+    //     let layout = Layout::<P::Layout>::new(&self.ctx);
+    //     let (pass_handle, task) = {
+    //         let renderpass = Pass {
+    //             name,
+    //             ty: PassType::Compute,
+    //         };
+    //         let pass_handle = self.graph.add_node(renderpass);
+    //         let renderpass = {
+    //             let mut builder = TaskBuilder {
+    //                 pass_handle,
+    //                 framegraph: self,
+    //             };
+    //             f(&mut builder)
+    //         };
+    //         (pass_handle, Arc::new(renderpass))
+    //     };
+    //     self.execute_compute.insert(pass_handle, task.clone());
+    //     self.state.layouts.insert(pass_handle, layout.inner_layout);
+    //     task
+    // }
+    // pub fn add_render_pass<F, P>(&mut self, name: &'static str, mut f: F) -> Arc<P>
+    // where
+    //     F: FnMut(&mut TaskBuilder<'_>) -> P,
+    //     P: Renderpass + 'static,
+    // {
+    //     let layout = Layout::<P::Layout>::new(&self.ctx);
+    //     let (pass_handle, image_resources, task) = {
+    //         let renderpass = Pass {
+    //             name,
+    //             ty: PassType::Graphics,
+    //         };
+    //         let pass_handle = self.graph.add_node(renderpass);
+    //         let renderpass = {
+    //             let mut builder = TaskBuilder {
+    //                 pass_handle,
+    //                 framegraph: self,
+    //             };
+    //             f(&mut builder)
+    //         };
+    //         let image_resources = renderpass.framebuffer();
+    //         (pass_handle, image_resources, Arc::new(renderpass))
+    //     };
+    //     self.execute_fns.insert(pass_handle, task.clone());
+    //     self.state
+    //         .frame_buffer_layout
+    //         .insert(pass_handle, image_resources);
+    //     self.state.layouts.insert(pass_handle, layout.inner_layout);
+    //     task
+    // }
+    // pub fn compile(mut self, resolution: Resolution, ctx: &Context) -> Framegraph<Compiled> {
+    //     let images: Vec<_> = self
+    //         .state
+    //         .image_data
+    //         .iter()
+    //         .map(|(id, image_desc)| (*id, Image::allocate(ctx, image_desc.clone())))
+    //         .collect();
+    //     for (id, image) in images {
+    //         self.resources.insert(id, ResourceType::Image(image));
+    //     }
+    //     let render: HashMap<_, _> = self
+    //         .state
+    //         .frame_buffer_layout
+    //         .iter()
+    //         .map(|(&handle, image_resources)| {
+    //             let images: Vec<Image> = image_resources
+    //                 .iter()
+    //                 .map(|&resource| self.get_resource(resource))
+    //                 .collect();
+    //             let layout = self.state.layouts.get(&handle).expect("layout");
+    //             (handle, Render::new(ctx, resolution, &images, layout))
+    //         })
+    //         .collect();
+    //     let compute: HashMap<_, _> = self
+    //         .execute_compute
+    //         .keys()
+    //         .map(|compute_handle| {
+    //             let layout = self
+    //                 .state
+    //                 .layouts
+    //                 .get(compute_handle)
+    //                 .expect("compute layout");
+    //             (*compute_handle, Compute::new(ctx, layout))
+    //         })
+    //         .collect();
+    //     let state = Compiled { render, compute };
+    //     Framegraph {
+    //         ctx: self.ctx,
+    //         execute_fns: self.execute_fns,
+    //         execute_compute: self.execute_compute,
+    //         resources: self.resources,
+    //         graph: self.graph,
+    //         state,
+    //         pass_map: self.pass_map,
+    //     }
+    // }
 }
 
 impl Framegraph<Compiled> {
@@ -429,18 +480,3 @@ impl<T> Framegraph<T> {
         self.resources[id].as_buffer()
     }
 }
-
-// pub struct ResourceStore {
-//     images: Vec<Image>,
-// }
-
-// impl ResourceStore {
-//     pub fn new() -> Self {
-//         ResourceStore{
-//             images: Vec::new(),
-//         }
-//     }
-//     pub fn get_image(&self, id: usize) -> &Image {
-//         &self.images[id]
-//     }
-// }

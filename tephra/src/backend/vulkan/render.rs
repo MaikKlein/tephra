@@ -2,16 +2,16 @@ use super::buffer::BufferData;
 use super::image::from_format;
 use super::Context;
 use super::{CommandBuffer, Vulkan};
+use crate::buffer::BufferApi;
+use crate::commandbuffer::{ComputeCmd, GraphicsCmd};
+use crate::descriptor::NativeLayout;
+use crate::framegraph::{Compiled, Framegraph};
+use crate::image::{Image, ImageLayout, Resolution};
+use crate::pipeline::{ComputeState, PipelineState};
+use crate::render::{self, ComputeApi, CreateCompute, CreateRender, RenderApi};
+use crate::renderpass::{VertexInputData, VertexType};
 use ash::version::DeviceV1_0;
 use ash::vk;
-use buffer::BufferApi;
-use commandbuffer::{ComputeCmd, GraphicsCmd};
-use descriptor::NativeLayout;
-use framegraph::{Compiled, Framegraph};
-use image::{Image, ImageLayout, Resolution};
-use pipeline::{ComputeState, PipelineState};
-use render::{self, ComputeApi, CreateCompute, CreateRender, RenderApi};
-use renderpass::{VertexInputData, VertexType};
 use std::ffi::CString;
 use std::ptr;
 
@@ -592,58 +592,63 @@ unsafe fn create_renderpass(ctx: &Context, image_resources: &[Image]) -> vk::Ren
         .map(|image| {
             let image_data = ctx.images.get(image.handle);
             match image_data.desc.layout {
-            ImageLayout::Color => vk::AttachmentDescription {
-                format: from_format(image_data.desc.format),
-                flags: vk::AttachmentDescriptionFlags::empty(),
-                samples: vk::SampleCountFlags::TYPE_1,
-                load_op: vk::AttachmentLoadOp::CLEAR,
-                store_op: vk::AttachmentStoreOp::STORE,
-                stencil_load_op: vk::AttachmentLoadOp::DONT_CARE,
-                stencil_store_op: vk::AttachmentStoreOp::DONT_CARE,
-                initial_layout: vk::ImageLayout::UNDEFINED,
-                final_layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-            },
-            ImageLayout::Depth => vk::AttachmentDescription {
-                format: from_format(image_data.desc.format),
-                flags: vk::AttachmentDescriptionFlags::empty(),
-                samples: vk::SampleCountFlags::TYPE_1,
-                load_op: vk::AttachmentLoadOp::CLEAR,
-                store_op: vk::AttachmentStoreOp::DONT_CARE,
-                stencil_load_op: vk::AttachmentLoadOp::DONT_CARE,
-                stencil_store_op: vk::AttachmentStoreOp::DONT_CARE,
-                initial_layout: vk::ImageLayout::UNDEFINED,
-                final_layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-            },
-        } })
+                ImageLayout::Color => vk::AttachmentDescription {
+                    format: from_format(image_data.desc.format),
+                    flags: vk::AttachmentDescriptionFlags::empty(),
+                    samples: vk::SampleCountFlags::TYPE_1,
+                    load_op: vk::AttachmentLoadOp::CLEAR,
+                    store_op: vk::AttachmentStoreOp::STORE,
+                    stencil_load_op: vk::AttachmentLoadOp::DONT_CARE,
+                    stencil_store_op: vk::AttachmentStoreOp::DONT_CARE,
+                    initial_layout: vk::ImageLayout::UNDEFINED,
+                    final_layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+                },
+                ImageLayout::Depth => vk::AttachmentDescription {
+                    format: from_format(image_data.desc.format),
+                    flags: vk::AttachmentDescriptionFlags::empty(),
+                    samples: vk::SampleCountFlags::TYPE_1,
+                    load_op: vk::AttachmentLoadOp::CLEAR,
+                    store_op: vk::AttachmentStoreOp::DONT_CARE,
+                    stencil_load_op: vk::AttachmentLoadOp::DONT_CARE,
+                    stencil_store_op: vk::AttachmentStoreOp::DONT_CARE,
+                    initial_layout: vk::ImageLayout::UNDEFINED,
+                    final_layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                },
+            }
+        })
         .collect();
 
     let color_attachments: Vec<_> = image_resources
         .iter()
         .enumerate()
-        .filter_map(|(idx, image)| match ctx.images.get(image.handle).desc.layout {
-            ImageLayout::Color => {
-                let color_attachment_ref = vk::AttachmentReference {
-                    attachment: idx as _,
-                    layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-                };
-                Some(color_attachment_ref)
-            }
-            _ => None,
-        })
+        .filter_map(
+            |(idx, image)| match ctx.images.get(image.handle).desc.layout {
+                ImageLayout::Color => {
+                    let color_attachment_ref = vk::AttachmentReference {
+                        attachment: idx as _,
+                        layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+                    };
+                    Some(color_attachment_ref)
+                }
+                _ => None,
+            },
+        )
         .collect();
     let depth_attachments: Vec<_> = image_resources
         .iter()
         .enumerate()
-        .filter_map(|(idx, image)| match ctx.images.get(image.handle).desc.layout {
-            ImageLayout::Depth => {
-                let depth_attachment_ref = vk::AttachmentReference {
-                    attachment: idx as _,
-                    layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-                };
-                Some(depth_attachment_ref)
-            }
-            _ => None,
-        })
+        .filter_map(
+            |(idx, image)| match ctx.images.get(image.handle).desc.layout {
+                ImageLayout::Depth => {
+                    let depth_attachment_ref = vk::AttachmentReference {
+                        attachment: idx as _,
+                        layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                    };
+                    Some(depth_attachment_ref)
+                }
+                _ => None,
+            },
+        )
         .collect();
 
     let dependency = vk::SubpassDependency {

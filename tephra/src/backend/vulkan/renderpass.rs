@@ -1,4 +1,129 @@
-// use super::Context;
+use super::image::from_format;
+use super::Context;
+use crate::renderpass::{Attachment, RenderTarget, RenderTargetApi, RenderTargetBuilder};
+use ash::{version::DeviceV1_0, vk};
+use itertools::Itertools;
+pub struct RenderTargetData {
+    pub render_pass: vk::RenderPass,
+    pub framebuffer: vk::Framebuffer,
+}
+impl RenderTargetApi for Context {
+    unsafe fn create_render_target(&self, builder: &RenderTargetBuilder) -> RenderTarget {
+        fn build_attachment(
+            ctx: &Context,
+            attachment: &Attachment,
+            layout: vk::ImageLayout,
+        ) -> vk::AttachmentDescription {
+            let image_data = ctx.images.get(attachment.image.handle);
+            // TODO: Add more configs
+            vk::AttachmentDescription {
+                format: from_format(image_data.desc.format),
+                flags: vk::AttachmentDescriptionFlags::empty(),
+                samples: vk::SampleCountFlags::TYPE_1,
+                load_op: vk::AttachmentLoadOp::CLEAR,
+                store_op: vk::AttachmentStoreOp::STORE,
+                stencil_load_op: vk::AttachmentLoadOp::DONT_CARE,
+                stencil_store_op: vk::AttachmentStoreOp::DONT_CARE,
+                initial_layout: vk::ImageLayout::UNDEFINED,
+                final_layout: layout,
+            }
+        }
+        let mut attachments: Vec<_> = builder
+            .color_attachments
+            .iter()
+            .map(|attachment| {
+                build_attachment(self, attachment, vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+            })
+            .collect();
+        if let Some(depth_attachment) = builder.depth_attachment.as_ref() {
+            attachments.push(build_attachment(
+                self,
+                depth_attachment,
+                vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+            ));
+        }
+
+        let color_attachments: Vec<_> = builder
+            .color_attachments
+            .iter()
+            .map(|attachment| vk::AttachmentReference {
+                attachment: attachment.index,
+                layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+            })
+            .collect();
+        let depth_attachment =
+            builder
+                .depth_attachment
+                .as_ref()
+                .map(|attachment| vk::AttachmentReference {
+                    attachment: attachment.index,
+                    layout: vk::ImageLayout::DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL,
+                });
+        let mut dst_access_mask = vk::AccessFlags::empty();
+        if builder.color_attachments.len() > 0 {
+            dst_access_mask |= vk::AccessFlags::COLOR_ATTACHMENT_WRITE;
+        }
+        if builder.depth_attachment.is_some() {
+            dst_access_mask |= vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE;
+        }
+        let dependency = vk::SubpassDependency {
+            dependency_flags: Default::default(),
+            src_subpass: vk::SUBPASS_EXTERNAL,
+            dst_subpass: Default::default(),
+            src_stage_mask: vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+            dst_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+            src_access_mask: vk::AccessFlags::empty(),
+            dst_access_mask: vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+        };
+        let mut subpass = vk::SubpassDescription {
+            color_attachment_count: color_attachments.len() as _,
+            p_color_attachments: color_attachments.as_ptr(),
+            pipeline_bind_point: vk::PipelineBindPoint::GRAPHICS,
+            ..Default::default()
+        };
+        if let Some(ref depth_attachment) = depth_attachment {
+            subpass.p_depth_stencil_attachment = depth_attachment;
+        }
+        let renderpass_create_info = vk::RenderPassCreateInfo {
+            attachment_count: attachments.len() as u32,
+            p_attachments: attachments.as_ptr(),
+            subpass_count: 1,
+            p_subpasses: &subpass,
+            dependency_count: 1,
+            p_dependencies: &dependency,
+            ..Default::default()
+        };
+        let render_pass = self
+            .device
+            .create_render_pass(&renderpass_create_info, None)
+            .unwrap();
+        let framebuffer_attachments = builder
+            .color_attachments
+            .iter()
+            .chain(builder.depth_attachment.as_ref())
+            .sorted_by(|l, r| l.index.cmp(&r.index))
+            .map(|attachment| self.images.get(attachment.image.handle).image_view)
+            .collect_vec();
+        // TODO: Proper resolution
+        let frame_buffer_create_info = vk::FramebufferCreateInfo {
+            render_pass,
+            attachment_count: framebuffer_attachments.len() as u32,
+            p_attachments: framebuffer_attachments.as_ptr(),
+            width: self.surface_resolution.width,
+            height: self.surface_resolution.height,
+            layers: 1,
+            ..Default::default()
+        };
+        let framebuffer = self
+            .device
+            .create_framebuffer(&frame_buffer_create_info, None)
+            .unwrap();
+        self.render_targets.insert(RenderTargetData {
+            render_pass,
+            framebuffer,
+        })
+    }
+}
 // use super::{CommandBuffer, Vulkan};
 // use ash::version::DeviceV1_0;
 // use ash::vk;

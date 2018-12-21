@@ -1,7 +1,7 @@
-use backend::BackendApi;
-use buffer::Buffer;
-use context::Context;
-use downcast::Downcast;
+use crate::backend::BackendApi;
+use crate::buffer::Buffer;
+use crate::context::Context;
+use crate::downcast::Downcast;
 use std::marker::PhantomData;
 use std::ops::Deref;
 use slotmap::new_key_type;

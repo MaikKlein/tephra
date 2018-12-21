@@ -1,29 +1,56 @@
+use crate::context::Context;
+use derive_builder::Builder;
+use crate::image::{Format, Image};
 use slotmap::{new_key_type, SlotMap};
+use smallvec::SmallVec;
 use std::marker::PhantomData;
 use std::mem::size_of;
-use image::Format;
-new_key_type!(pub struct RenderpassHandle;);
+use crate::framegraph::Resource;
+new_key_type!(
+    pub struct RenderTarget;
+);
 
-pub trait Attachment {
-    fn attachment_data() -> Vec<AttachmentData>;
+impl RenderTarget {
+    pub fn builder() -> RenderTargetBuilder {
+        RenderTargetBuilder {
+            color_attachments: Attachments::new(),
+            depth_attachment: None,
+        }
+    }
 }
 
-pub enum AttachmentLayout {
-    Color,
-    DepthStencil,
-}
-pub struct AttachmentData {
-    pub format: Format,
-    pub layout: AttachmentLayout,
+#[derive(Builder)]
+pub struct Attachment {
+    pub image: Image,
+    pub index: u32,
 }
 
+impl Attachment {
+    pub fn builder() -> AttachmentBuilder {
+        AttachmentBuilder::default()
+    }
+}
 
-pub struct Renderpass<A>
-where
-    A: Attachment,
-{
-    handle: RenderpassHandle,
-    _m: PhantomData<A>,
+pub type Attachments = SmallVec<[Attachment; 10]>;
+pub struct RenderTargetBuilder {
+    pub color_attachments: Attachments,
+    pub depth_attachment: Option<Attachment>,
+}
+
+impl RenderTargetBuilder {
+    pub fn color_attachment(self) -> Self {
+        self
+    }
+    pub fn depth_attachment(self) -> Self {
+        self
+    }
+
+    pub fn build(_ctx: &Context) -> Resource<RenderTarget> {
+        unimplemented!()
+    }
+}
+pub trait RenderTargetApi {
+    unsafe fn create_render_target(&self, builder: &RenderTargetBuilder) -> RenderTarget;
 }
 
 #[derive(Debug, Copy, Clone)]

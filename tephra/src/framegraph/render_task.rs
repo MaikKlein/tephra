@@ -1,10 +1,10 @@
-use commandbuffer::{ComputeCommandbuffer, GraphicsCommandbuffer};
-use descriptor::DescriptorInfo;
-use framegraph::blackboard::Blackboard;
-use framegraph::{Compiled, Framegraph, Resource, TaskBuilder};
-use image::Image;
-use render::Render;
-use renderpass::VertexInput;
+use crate::commandbuffer::{ComputeCommandbuffer, GraphicsCommandbuffer};
+use crate::descriptor::DescriptorInfo;
+use crate::framegraph::blackboard::Blackboard;
+use crate::framegraph::{Compiled, Framegraph, Resource, TaskBuilder};
+use crate::image::Image;
+use crate::render::Render;
+use crate::renderpass::VertexInput;
 use std::ops::Deref;
 use std::sync::Arc;
 
@@ -14,7 +14,7 @@ pub trait Renderpass {
     fn framebuffer(&self) -> Vec<Resource<Image>>;
     fn execute<'cmd>(
         &'cmd self,
-        &'cmd Blackboard,
+        _: &'cmd Blackboard,
         cmds: &mut GraphicsCommandbuffer<'cmd>,
         fg: &Framegraph<Compiled>,
     );

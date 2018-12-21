@@ -1,7 +1,7 @@
 use super::Context;
+use crate::buffer::{BufferApi, BufferError, BufferHandle, BufferUsage, MappingError, Property};
 use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk;
-use buffer::{BufferApi, BufferError, BufferHandle, BufferUsage, MappingError, Property};
 use std::ptr;
 
 impl BufferApi for Context {

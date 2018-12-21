@@ -1,7 +1,7 @@
 use super::Context;
+use crate::shader::{CreateShader, ShaderApi, ShaderError, ShaderModule};
 use ash::version::DeviceV1_0;
 use ash::vk;
-use shader::{CreateShader, ShaderApi, ShaderError, ShaderModule};
 use std::ops::Drop;
 use std::ptr;
 use std::sync::Arc;

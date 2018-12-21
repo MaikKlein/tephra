@@ -1,10 +1,10 @@
 use super::buffer;
 use super::Context;
 use super::{CommandBuffer, Vulkan};
+use crate::buffer::Buffer;
+use crate::image::{CreateImage, Format, Image, ImageApi, ImageDesc, ImageHandle, ImageLayout};
 use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk;
-use buffer::Buffer;
-use image::{CreateImage, Format, Image, ImageApi, ImageDesc, ImageHandle, ImageLayout};
 //use renderpass::{Pass, Renderpass};
 use std::ptr;
 // pub struct FramebufferData {}
@@ -17,6 +17,7 @@ pub(crate) fn from_format(format: Format) -> vk::Format {
 pub struct ImageData {
     pub image: vk::Image,
     pub image_view: vk::ImageView,
+    pub layout: vk::ImageLayout,
     pub desc: ImageDesc,
 }
 
@@ -145,6 +146,7 @@ impl ImageApi for Context {
                 .create_image_view(&depth_image_view_info, None)
                 .unwrap();
             let data = ImageData {
+                layout: get_image_layout(&desc),
                 image_view,
                 image: depth_image,
                 desc,
@@ -152,7 +154,7 @@ impl ImageApi for Context {
             self.images.insert(data)
         }
     }
-    fn from_buffer(&self, buffer: Buffer<u8>) -> ImageHandle {
+    fn from_buffer(&self, _buffer: Buffer<u8>) -> ImageHandle {
         unimplemented!()
     }
     fn desc(&self, handle: ImageHandle) -> ImageDesc {
@@ -341,7 +343,7 @@ fn get_image_layout(desc: &ImageDesc) -> vk::ImageLayout {
         ImageLayout::Depth => vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
     }
 }
-fn get_aspect_mask(desc: &ImageDesc) -> vk::ImageAspectFlags {
+pub(crate) fn get_aspect_mask(desc: &ImageDesc) -> vk::ImageAspectFlags {
     match desc.layout {
         ImageLayout::Color => vk::ImageAspectFlags::COLOR,
         ImageLayout::Depth => vk::ImageAspectFlags::DEPTH,

@@ -1,3 +1,5 @@
+extern crate derive_builder;
+extern crate itertools;
 extern crate parking_lot;
 extern crate rspirv;
 extern crate slotmap;
@@ -33,8 +35,4 @@ pub struct Viewport {
     pub origin: (f32, f32),
     pub dimensions: (f32, f32),
     pub depth_range: (f32, f32),
-}
-
-pub trait Context {
-    fn create_renderpass(&self) -> renderpass::RenderpassHandle;
 }

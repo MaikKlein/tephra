@@ -1,5 +1,13 @@
 //use renderpass::{Pass, Renderpass};
-use shader::ShaderModule;
+use crate::shader::ShaderModule;
+use slotmap::new_key_type;
+
+
+new_key_type!(
+    pub struct GraphicsPipeline;
+    pub struct ComputePipeline;
+);
+
 
 // pub trait CreatePipeline {
 //     fn from_pipeline_builder(&self, pipline_builder: PipelineState) -> Pipeline;

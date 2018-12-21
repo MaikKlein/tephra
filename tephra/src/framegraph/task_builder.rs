@@ -1,10 +1,38 @@
-use super::{Access, Framegraph, Handle, Recording, Resource, ResourceAccess, ResourceType};
-use image::{Image, ImageDesc};
+use crate::{
+    context::Context,
+    framegraph::{Access, Framegraph, Handle, Recording, Resource, ResourceAccess, ResourceType},
+    renderpass::{Attachment, Attachments, RenderTarget},
+};
+pub struct RenderTargetBuilder<'a> {
+    recording: &'a mut Recording,
+    state: RenderTargetState,
+}
+pub struct RenderTargetState {
+    pub color_attachments: Attachments,
+    pub depth_attachment: Option<Attachment>,
+}
+
+impl RenderTargetBuilder<'_> {
+    pub fn color_attachment(self) -> Self {
+        self
+    }
+    pub fn depth_attachment(self) -> Self {
+        self
+    }
+
+    pub fn build(self) -> Resource<RenderTarget> {
+        unimplemented!()
+    }
+}
+use crate::image::{Image, ImageDesc};
 pub struct TaskBuilder<'borrow> {
     pub(crate) pass_handle: Handle,
     pub(crate) framegraph: &'borrow mut Framegraph<Recording>,
 }
 impl<'borrow> TaskBuilder<'borrow> {
+    pub fn create_render_target(&mut self) -> RenderTargetBuilder<'borrow> {
+        unimplemented!()
+    }
     pub fn create_image(&mut self, _name: &'static str, desc: ImageDesc) -> Resource<Image> {
         // TODO: Freeze resources or this is incorrect
         let id = self.framegraph.resources.len() + self.framegraph.state.image_data.len();

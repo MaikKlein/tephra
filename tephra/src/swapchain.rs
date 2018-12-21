@@ -1,5 +1,5 @@
-use context::Context;
-use image::{Image, Resolution, Format};
+use crate::context::Context;
+use crate::image::{Image, Resolution, Format};
 use std::ops::Deref;
 
 #[derive(Debug, Fail)]

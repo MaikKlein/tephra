@@ -1,12 +1,12 @@
-use backend::BackendApi;
-use context::Context;
-use reflect;
+use crate::backend::BackendApi;
+use crate::context::Context;
+use crate::reflect;
 use std::fs::File;
 use std::io::{self, Read};
 use std::path::Path;
 use std::sync::Arc;
 
-use downcast::Downcast;
+use crate::downcast::Downcast;
 
 pub trait CreateShader {
     fn load(

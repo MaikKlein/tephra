@@ -1,13 +1,13 @@
 use super::image::{from_format, into_format, ImageData};
 use super::Context;
 use super::{CommandBuffer, Vulkan};
+use crate::image::{Format, Image, ImageApi, ImageDesc, ImageLayout, Resolution};
+use crate::swapchain::{CreateSwapchain, Swapchain, SwapchainApi, SwapchainError};
 use ash::extensions;
 use ash::version::DeviceV1_0;
 use ash::vk;
-use image::{Format, Image, ImageApi, ImageDesc, ImageLayout, Resolution};
 use std::ops::Drop;
 use std::ptr;
-use swapchain::{CreateSwapchain, Swapchain, SwapchainApi, SwapchainError};
 
 pub struct SwapchainData {
     pub context: Context,
@@ -131,6 +131,7 @@ unsafe fn get_swapchain_images(
                 format: into_format(ctx.surface_format.format),
             };
             let data = ImageData {
+                layout: vk::ImageLayout::PRESENT_SRC_KHR,
                 image,
                 image_view,
                 desc,
