@@ -14,7 +14,7 @@ use tephra::{
         Recording, Resource,
     },
     image::{Format, Image, ImageDesc, ImageLayout, Resolution},
-    pipeline::{ComputeState, GraphicsPipeline, PipelineState, ShaderStage},
+    pipeline::{GraphicsPipeline, ShaderStage},
     renderpass::RenderTarget,
     shader::ShaderModule,
     swapchain::Swapchain,
@@ -34,13 +34,12 @@ pub struct ComputeDesc {
     pub buffer: Resource<Buffer<[f32; 4]>>,
 }
 
-// pub struct TriangleCompute {
-//     pub storage_buffer: Resource<Buffer<[f32; 4]>>,
-//     pub state: ComputeState,
-// }
+pub struct TriangleCompute {
+    pub storage_buffer: Resource<Buffer<[f32; 4]>>,
+}
 
 // impl TriangleCompute {
-//     pub fn add_pass(fg: &mut Framegraph<Recording>) -> Arc<TriangleCompute> {
+//     pub fn add_pass(fg: &mut Framegraph<Recording>) -> TriangleCompute {
 //         let buffer = Buffer::from_slice(
 //             &fg.ctx,
 //             Property::HostVisible,
@@ -192,7 +191,7 @@ impl TrianglePass {
 // pub fn render_pass(
 //     fg: &mut Framegraph<Recording>,
 //     resolution: Resolution,
-//     swapchain: &Swapchain,
+//     //swapchain: &Swapchain,
 // ) {
 //     let triangle_compute = TriangleCompute::add_pass(fg);
 //     let triangle_data = TrianglePass::add_pass(

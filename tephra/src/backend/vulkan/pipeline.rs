@@ -1,7 +1,9 @@
 use super::{Context, Vulkan};
 use crate::{
     descriptor::{Binding, DescriptorType},
-    pipeline::{GraphicsPipeline, PipelineApi, PipelineState},
+    pipeline::{
+        ComputePipeline, ComputePipelineState, GraphicsPipeline, GraphicsPipelineState, PipelineApi,
+    },
     renderpass::{VertexInputData, VertexType},
 };
 use std::{ffi::CString, ptr};
@@ -63,7 +65,16 @@ pub unsafe fn create_pipeline_layout(
         .unwrap()
 }
 impl PipelineApi for Context {
-    unsafe fn create_graphics_pipeline(&self, state: &PipelineState) -> GraphicsPipeline {
+    unsafe fn create_compute_pipeline(
+        &self,
+        state: &ComputePipelineState,
+    ) -> ComputePipeline {
+        unimplemented!()
+    }
+    unsafe fn create_graphics_pipeline(
+        &self,
+        state: &GraphicsPipelineState,
+    ) -> GraphicsPipeline {
         let vertex_shader = &state.vertex_shader;
         let vk_vertex = self.shader_modules.get(state.vertex_shader.shader_module);
         let vk_fragment = self.shader_modules.get(state.fragment_shader.shader_module);
@@ -249,23 +260,27 @@ impl PipelineApi for Context {
 }
 pub fn vertex_format(ty: VertexType) -> vk::Format {
     match ty {
-        VertexType::F32(size) => match size {
-            1 => vk::Format::R32_SFLOAT,
-            2 => vk::Format::R32G32_SFLOAT,
-            3 => vk::Format::R32G32B32_SFLOAT,
-            4 => vk::Format::R32G32B32A32_SFLOAT,
-            _ => unreachable!(),
-        },
+        VertexType::F32(size) => {
+            match size {
+                1 => vk::Format::R32_SFLOAT,
+                2 => vk::Format::R32G32_SFLOAT,
+                3 => vk::Format::R32G32B32_SFLOAT,
+                4 => vk::Format::R32G32B32A32_SFLOAT,
+                _ => unreachable!(),
+            }
+        }
     }
 }
 pub fn vertex_input(vertex_input: &[VertexInputData]) -> Vec<vk::VertexInputAttributeDescription> {
     vertex_input
         .iter()
-        .map(|input| vk::VertexInputAttributeDescription {
-            location: input.location,
-            binding: input.binding,
-            offset: input.offset,
-            format: vertex_format(input.vertex_type),
+        .map(|input| {
+            vk::VertexInputAttributeDescription {
+                location: input.location,
+                binding: input.binding,
+                offset: input.offset,
+                format: vertex_format(input.vertex_type),
+            }
         })
         .collect()
 }

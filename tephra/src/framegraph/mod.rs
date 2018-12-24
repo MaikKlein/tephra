@@ -1,11 +1,9 @@
 use crate::{
     buffer::{Buffer, BufferApi, BufferHandle},
-    commandbuffer::{CommandList, ComputeCommandbuffer, GraphicsCommandbuffer},
+    commandbuffer::{CommandList},
     context::Context,
     descriptor::{Allocator, Layout, NativeLayout, Pool},
-    framegraph::{
-        task_builder::{deferred, TaskBuilder},
-    },
+    framegraph::task_builder::{deferred, TaskBuilder},
     image::{Image, ImageApi, ImageDesc, Resolution},
     pipeline::GraphicsPipeline,
     renderpass::{RenderTarget, RenderTargetApi, RenderTargetState},
@@ -47,7 +45,10 @@ impl<T> Clone for Resource<T> {
     }
 }
 impl<T> Resource<T> {
-    pub fn new(id: usize, version: u32) -> Self {
+    pub fn new(
+        id: usize,
+        version: u32,
+    ) -> Self {
         Resource {
             id,
             version,
@@ -113,12 +114,18 @@ pub struct Access {
 }
 
 impl fmt::Display for Pass {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(
+        &self,
+        f: &mut fmt::Formatter,
+    ) -> fmt::Result {
         write!(f, "{:#?}", self)
     }
 }
 impl fmt::Display for Access {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(
+        &self,
+        f: &mut fmt::Formatter,
+    ) -> fmt::Result {
         write!(f, "{:#?}", self)
     }
 }
@@ -139,40 +146,61 @@ impl Registry {
         self.free_id += 1;
         id
     }
-    pub fn add_render_target(&mut self, rt: RenderTarget) -> Resource<RenderTarget> {
+    pub fn add_render_target(
+        &mut self,
+        rt: RenderTarget,
+    ) -> Resource<RenderTarget> {
         let id = self.reserve_index();
         self.resources.insert(id, ResourceType::RenderTarget(rt));
         Resource::new(id, 0)
     }
-    pub fn add_buffer(&mut self, buffer: BufferHandle) -> Resource<BufferHandle> {
+    pub fn add_buffer(
+        &mut self,
+        buffer: BufferHandle,
+    ) -> Resource<BufferHandle> {
         let id = self.reserve_index();
         self.resources.insert(id, ResourceType::Buffer(buffer));
         Resource::new(id, 0)
     }
-    pub fn add_image(&mut self, image: Image) -> Resource<Image> {
+    pub fn add_image(
+        &mut self,
+        image: Image,
+    ) -> Resource<Image> {
         let id = self.reserve_index();
         self.resources.insert(id, ResourceType::Image(image));
         Resource::new(id, 0)
     }
-    pub fn get_render_target(&self, resource: Resource<RenderTarget>) -> RenderTarget {
+    pub fn get_render_target(
+        &self,
+        resource: Resource<RenderTarget>,
+    ) -> RenderTarget {
         match self.resources[&resource.id] {
             ResourceType::RenderTarget(rt) => rt,
             _ => unreachable!(),
         }
     }
-    pub fn get_graphics_pipeline(&self, resource: Resource<GraphicsPipeline>) -> GraphicsPipeline {
+    pub fn get_graphics_pipeline(
+        &self,
+        resource: Resource<GraphicsPipeline>,
+    ) -> GraphicsPipeline {
         match self.resources[&resource.id] {
             ResourceType::GraphicsPipeline(pipeline) => pipeline,
             _ => unreachable!(),
         }
     }
-    pub fn get_buffer(&self, resource: Resource<BufferHandle>) -> BufferHandle {
+    pub fn get_buffer(
+        &self,
+        resource: Resource<BufferHandle>,
+    ) -> BufferHandle {
         match self.resources[&resource.id] {
             ResourceType::Buffer(buffer) => buffer,
             _ => unreachable!(),
         }
     }
-    pub fn get_image(&self, resource: Resource<Image>) -> Image {
+    pub fn get_image(
+        &self,
+        resource: Resource<Image>,
+    ) -> Image {
         match self.resources[&resource.id] {
             ResourceType::Image(image) => image,
             _ => unreachable!(),
@@ -184,11 +212,24 @@ pub struct Compiled {}
 pub struct Recording {
     image_data: Vec<(ResourceIndex, ImageDesc)>,
     render_targets: Vec<(ResourceIndex, deferred::RenderTargetState)>,
-    pipeline_states: Vec<(ResourceIndex, deferred::PipelineState)>,
+    pipeline_states: Vec<(ResourceIndex, deferred::GraphicsPipelineState)>,
 }
 
-pub type ExecuteFn =
-    dyn for<'pool> Fn(&Framegraph<Compiled>, &Blackboard, &mut Allocator<'pool>) -> CommandList + 'static;
+/// Rust doesn't have type alias yet, so this is a work around
+macro_rules! define_fn {
+    (pub type $name: ident = $($tts:tt)*) => {
+        pub trait $name: $($tts)* {}
+        impl<T> $name for T
+        where T: $($tts)* {
+
+        }
+    }
+}
+define_fn! {
+    pub type ExecuteFn =
+        Fn(&Framegraph<Compiled>, &Blackboard, &mut Allocator) -> CommandList + 'static
+}
+
 pub struct Framegraph<T = Recording> {
     pub ctx: Context,
     execute_fns: HashMap<Handle, Box<ExecuteFn>>,
@@ -199,7 +240,10 @@ pub struct Framegraph<T = Recording> {
 }
 
 pub trait GetResource<T> {
-    fn get_resource(&self, resource: Resource<T>) -> T;
+    fn get_resource(
+        &self,
+        resource: Resource<T>,
+    ) -> T;
 }
 
 // impl<T> GetResource<Image> for Framegraph<T> {
@@ -222,11 +266,18 @@ pub trait GetResource<T> {
 //     }
 // }
 impl<T> Framegraph<T> {
-    pub fn insert_pass_handle<D>(&mut self, resource: Resource<D>, handle: Handle) {
+    pub fn insert_pass_handle<D>(
+        &mut self,
+        resource: Resource<D>,
+        handle: Handle,
+    ) {
         self.pass_map
             .insert((resource.id, resource.version), handle);
     }
-    pub fn get_pass_handle<D>(&self, resource: Resource<D>) -> Option<Handle> {
+    pub fn get_pass_handle<D>(
+        &self,
+        resource: Resource<D>,
+    ) -> Option<Handle> {
         self.pass_map.get(&(resource.id, resource.version)).cloned()
     }
 }
@@ -369,10 +420,15 @@ impl Framegraph {
     //     self.state.layouts.insert(pass_handle, layout.inner_layout);
     //     task
     // }
-    pub fn add_pass<Setup, Execute, P>(&mut self, name: &'static str, mut setup: Setup) -> P
+    pub fn add_pass<Setup, Execute, P>(
+        &mut self,
+        name: &'static str,
+        mut setup: Setup,
+    ) -> P
     where
         Setup: FnMut(&mut TaskBuilder<'_>) -> (P, Execute),
-        Execute: for<'pool> Fn(&Framegraph<Compiled>, &Blackboard, &mut Allocator<'pool>) -> CommandList+ 'static,
+        Execute:
+            Fn(&Framegraph<Compiled>, &Blackboard, &mut Allocator<'_>) -> CommandList + 'static,
     {
         let (pass_handle, execute, data) = {
             let pass = Pass { name };
@@ -466,7 +522,10 @@ impl Framegraph<Compiled> {
         }
     }
 
-    pub fn execute(&mut self, blackboard: &Blackboard) {
+    pub fn execute(
+        &mut self,
+        blackboard: &Blackboard,
+    ) {
         let mut pool = Pool::new(&self.ctx);
         let mut allocator = pool.allocate();
         self.submission_order().for_each(|idx| {
@@ -475,13 +534,26 @@ impl Framegraph<Compiled> {
             execute(self, blackboard, &mut allocator);
         });
     }
-    pub fn export_graphviz<P: AsRef<Path>>(&self, path: P) {
+    pub fn export_graphviz<P: AsRef<Path>>(
+        &self,
+        path: P,
+    ) {
         use std::io::Write;
         let mut file = File::create(path.as_ref()).expect("path");
         let dot = petgraph::dot::Dot::with_config(&self.graph, &[]);
         write!(&mut file, "{}", dot);
     }
 }
+
+pub struct PassRunner {
+    execute_fn: Option<Box<ExecuteFn>>,
+}
+// impl PassRunner {
+//     pub fn execute(mut self, f: ExecuteFn) {
+        
+//     }
+    
+// }
 // impl<T> Framegraph<T> {
 //     pub fn get_image(&self, id: ResourceIndex) -> Image {
 //         self.resources[id].as_image()

@@ -1,4 +1,3 @@
-//use renderpass::{Pass, Renderpass};
 use crate::{
     descriptor::{Binding, DescriptorInfo, DescriptorResource, DescriptorType},
     renderpass::{self, RenderTarget, VertexInput, VertexInputData},
@@ -21,11 +20,14 @@ new_key_type!(
 // impl_downcast!(PipelineApi);
 
 pub trait PipelineApi {
-    unsafe fn create_graphics_pipeline(&self, state: &PipelineState) -> GraphicsPipeline;
+    unsafe fn create_graphics_pipeline(&self, state: &GraphicsPipelineState) -> GraphicsPipeline;
+    unsafe fn create_compute_pipeline(&self, state: &ComputePipelineState) -> ComputePipeline;
 }
 #[derive(Clone)]
-pub struct ComputeState {
-    pub compute_shader: Option<ShaderModule>,
+#[derive(Builder)]
+#[builder(pattern = "owned")]
+pub struct ComputePipelineState {
+    pub compute_shader: ShaderModule,
 }
 
 #[derive(Clone)]
@@ -36,7 +38,7 @@ pub struct ShaderStage {
 pub type Stride = u32;
 #[derive(Builder)]
 #[builder(pattern = "owned")]
-pub struct PipelineState {
+pub struct GraphicsPipelineState {
     pub vertex_shader: ShaderStage,
     pub fragment_shader: ShaderStage,
     pub render_target: RenderTarget,
@@ -46,7 +48,7 @@ pub struct PipelineState {
     // TODO: Default to SoA not AoS
     pub vertex_input: (Stride, Vec<VertexInputData>),
 }
-impl PipelineStateBuilder {
+impl GraphicsPipelineStateBuilder {
     pub fn layout<D: DescriptorInfo>(mut self) -> Self {
         self.layout = Some(D::layout());
         self

@@ -33,7 +33,7 @@ pub mod deferred {
     pub type Stride = u32;
     #[derive(Builder)]
     #[builder(pattern = "owned")]
-    pub struct PipelineState {
+    pub struct GraphicsPipelineState {
         pub vertex_shader: ShaderStage,
         pub fragment_shader: ShaderStage,
         pub render_target: Resource<RenderTarget>,
@@ -44,13 +44,13 @@ pub mod deferred {
         pub vertex_input: (Stride, Vec<VertexInputData>),
     }
     impl pipeline::GraphicsPipeline {
-        pub fn deferred() -> PipelineStateBuilder {
+        pub fn deferred() -> GraphicsPipelineStateBuilder {
             Default::default()
         }
     }
-    impl PipelineState {
-        pub fn into_non_deferred(self, registry: &Registry) -> pipeline::PipelineState {
-            pipeline::PipelineState {
+    impl GraphicsPipelineState {
+        pub fn into_non_deferred(self, registry: &Registry) -> pipeline::GraphicsPipelineState {
+            pipeline::GraphicsPipelineState {
                 vertex_shader: self.vertex_shader,
                 fragment_shader: self.fragment_shader,
                 render_target: registry.get_render_target(self.render_target),
@@ -60,7 +60,7 @@ pub mod deferred {
         }
     }
 
-    impl PipelineStateBuilder {
+    impl GraphicsPipelineStateBuilder {
         pub fn build_deferred<'task>(
             self,
             builder: &mut TaskBuilder<'task>,

@@ -1,8 +1,5 @@
 use super::{Context, Vulkan};
-use crate::commandbuffer::{
-    self, Command, CommandList, Compute, CreateExecute, ExecuteApi, Graphics, GraphicsCmd, Submit,
-    SubmitApi,
-};
+use crate::commandbuffer::{self, Command, CommandList, Compute, Graphics, Submit, SubmitApi};
 use crate::image::ImageHandle;
 use ash::{version::DeviceV1_0, vk};
 use std::ptr;
@@ -92,7 +89,10 @@ enum Sync {
 // }
 
 impl SubmitApi for Context {
-    unsafe fn submit_commands(&self, commands: &CommandList) {
+    unsafe fn submit_commands(
+        &self,
+        commands: &CommandList,
+    ) {
         let mut fences = Vec::new();
         let mut buffers = Vec::new();
         let device = &self.device;
