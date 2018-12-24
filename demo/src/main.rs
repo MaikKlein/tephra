@@ -114,6 +114,32 @@ impl TrianglePass {
         storage_buffer: Resource<Buffer<[f32; 4]>>,
         resolution: Resolution,
         format: Format,
+    ) -> TrianglePass {
+        fg.add_pass("Triangle Pass", |builder| {
+            let color_desc = ImageDesc {
+                layout: ImageLayout::Color,
+                format,
+                resolution,
+            };
+            let depth_desc = ImageDesc {
+                layout: ImageLayout::Depth,
+                format: Format::D16_UNORM,
+                resolution,
+            };
+            TrianglePass {
+                color: builder.create_image("Color", color_desc),
+                depth: builder.create_image("Depth", depth_desc),
+                storage_buffer: builder.read(storage_buffer),
+            }
+        })
+    }
+}
+impl TrianglePass {
+    pub fn add_pass(
+        fg: &mut Framegraph<Recording>,
+        storage_buffer: Resource<Buffer<[f32; 4]>>,
+        resolution: Resolution,
+        format: Format,
     ) -> Arc<TrianglePass> {
         fg.add_render_pass("Triangle Pass", |builder| {
             let color_desc = ImageDesc {

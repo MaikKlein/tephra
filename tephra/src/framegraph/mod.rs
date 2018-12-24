@@ -1,15 +1,15 @@
 use crate::{
     buffer::{Buffer, BufferApi, BufferHandle},
-    commandbuffer::{ComputeCommandbuffer, GraphicsCommandbuffer},
+    commandbuffer::{CommandList, ComputeCommandbuffer, GraphicsCommandbuffer},
     context::Context,
-    descriptor::{Layout, NativeLayout, Pool},
+    descriptor::{Allocator, Layout, NativeLayout, Pool},
     framegraph::{
         render_task::{Computepass, ExecuteCompute, ExecuteGraphics, Renderpass},
-        task_builder::{RenderTargetState, TaskBuilder},
+        task_builder::{deferred, TaskBuilder},
     },
     image::{Image, ImageApi, ImageDesc, Resolution},
-    render::{Compute, Render},
-    renderpass::RenderTarget,
+    pipeline::GraphicsPipeline,
+    renderpass::{RenderTarget, RenderTargetApi, RenderTargetState},
 };
 use petgraph::Direction;
 use petgraph::{self, Graph};
@@ -77,7 +77,6 @@ pub enum PassType {
 #[derive(Debug, Copy, Clone)]
 pub struct Pass {
     name: &'static str,
-    ty: PassType,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -91,6 +90,7 @@ pub enum ResourceType {
     Buffer(BufferHandle),
     Image(Image),
     RenderTarget(RenderTarget),
+    GraphicsPipeline(GraphicsPipeline),
 }
 impl ResourceType {
     pub fn as_buffer(&self) -> BufferHandle {
@@ -129,6 +129,12 @@ pub struct Registry {
     free_id: usize,
 }
 impl Registry {
+    pub fn new() -> Self {
+        Registry {
+            resources: HashMap::new(),
+            free_id: 0,
+        }
+    }
     pub fn reserve_index(&mut self) -> ResourceIndex {
         let id = self.free_id;
         self.free_id += 1;
@@ -168,25 +174,23 @@ impl Registry {
         }
     }
 }
-pub struct Compiled {
-    render: HashMap<Handle, Render>,
-    compute: HashMap<Handle, Compute>,
-}
+pub struct Compiled {}
 
 pub struct Recording {
     image_data: Vec<(ResourceIndex, ImageDesc)>,
-    render_targets: Vec<(ResourceIndex, RenderTargetState)>,
-    frame_buffer_layout: HashMap<Handle, Vec<Resource<Image>>>,
-    layouts: HashMap<Handle, NativeLayout>,
+    render_targets: Vec<(ResourceIndex, deferred::RenderTargetState)>,
+    pipeline_states: Vec<(ResourceIndex, deferred::PipelineState)>,
 }
 
+pub type ExecuteFn =
+    dyn for<'pool> Fn(&Framegraph<Compiled>, &Blackboard, &mut Allocator<'pool>) + 'static;
 pub struct Framegraph<T = Recording> {
     pub ctx: Context,
-    execute_fns: HashMap<Handle, Arc<dyn ExecuteGraphics>>,
+    execute_fns: HashMap<Handle, Box<ExecuteFn>>,
     execute_compute: HashMap<Handle, Arc<dyn ExecuteCompute>>,
     state: T,
     graph: Graph<Pass, Access>,
-    resources: Vec<ResourceType>,
+    pub registry: Registry,
     pass_map: HashMap<(ResourceIndex, u32), Handle>,
 }
 
@@ -194,25 +198,25 @@ pub trait GetResource<T> {
     fn get_resource(&self, resource: Resource<T>) -> T;
 }
 
-impl<T> GetResource<Image> for Framegraph<T> {
-    fn get_resource(&self, resource: Resource<Image>) -> Image {
-        self.resources[resource.id].as_image()
-    }
-}
+// impl<T> GetResource<Image> for Framegraph<T> {
+//     fn get_resource(&self, resource: Resource<Image>) -> Image {
+//         self.resources[resource.id].as_image()
+//     }
+// }
 
-impl<T> GetResource<BufferHandle> for Framegraph<T> {
-    fn get_resource(&self, resource: Resource<BufferHandle>) -> BufferHandle {
-        self.resources[resource.id].as_buffer()
-    }
-}
-impl<D, T> GetResource<Buffer<D>> for Framegraph<T> {
-    fn get_resource(&self, resource: Resource<Buffer<D>>) -> Buffer<D> {
-        Buffer {
-            buffer: self.resources[resource.id].as_buffer(),
-            _m: PhantomData,
-        }
-    }
-}
+// impl<T> GetResource<BufferHandle> for Framegraph<T> {
+//     fn get_resource(&self, resource: Resource<BufferHandle>) -> BufferHandle {
+//         self.resources[resource.id].as_buffer()
+//     }
+// }
+// impl<D, T> GetResource<Buffer<D>> for Framegraph<T> {
+//     fn get_resource(&self, resource: Resource<Buffer<D>>) -> Buffer<D> {
+//         Buffer {
+//             buffer: self.resources[resource.id].as_buffer(),
+//             _m: PhantomData,
+//         }
+//     }
+// }
 impl<T> Framegraph<T> {
     pub fn insert_pass_handle<D>(&mut self, resource: Resource<D>, handle: Handle) {
         self.pass_map
@@ -222,31 +226,38 @@ impl<T> Framegraph<T> {
         self.pass_map.get(&(resource.id, resource.version)).cloned()
     }
 }
+impl<T> Framegraph<T> {
+    pub fn registry(&self) -> &Registry {
+        &self.registry
+    }
+    pub fn ctx(&self) -> &Context {
+        &self.ctx
+    }
+}
 impl Framegraph {
-    pub fn add_resource(&mut self, ty: ResourceType) -> ResourceIndex {
-        let id = self.resources.len();
-        self.resources.push(ty);
-        id
-    }
-    pub fn add_image(&mut self, image: Image) -> Resource<Image> {
-        let id = self.add_resource(ResourceType::Image(image));
-        Resource::new(id, 0)
-    }
-    pub fn add_buffer<T>(&mut self, buffer: Buffer<T>) -> Resource<Buffer<T>> {
-        let id = self.add_resource(ResourceType::Buffer(buffer.buffer));
-        Resource::new(id, 0)
-    }
+    // pub fn add_resource(&mut self, ty: ResourceType) -> ResourceIndex {
+    //     let id = self.resources.len();
+    //     self.resources.push(ty);
+    //     id
+    // }
+    // pub fn add_image(&mut self, image: Image) -> Resource<Image> {
+    //     let id = self.add_resource(ResourceType::Image(image));
+    //     Resource::new(id, 0)
+    // }
+    // pub fn add_buffer<T>(&mut self, buffer: Buffer<T>) -> Resource<Buffer<T>> {
+    //     let id = self.add_resource(ResourceType::Buffer(buffer.buffer));
+    //     Resource::new(id, 0)
+    // }
     pub fn new(ctx: &Context) -> Self {
         Framegraph {
             ctx: ctx.clone(),
             state: Recording {
                 render_targets: Vec::new(),
                 image_data: Vec::new(),
-                frame_buffer_layout: HashMap::new(),
-                layouts: HashMap::new(),
+                pipeline_states: Vec::new(),
             },
             graph: Graph::new(),
-            resources: Vec::new(),
+            registry: Registry::new(),
             execute_fns: HashMap::new(),
             execute_compute: HashMap::new(),
             pass_map: HashMap::new(),
@@ -355,52 +366,61 @@ impl Framegraph {
     //     self.state.layouts.insert(pass_handle, layout.inner_layout);
     //     task
     // }
-    // pub fn compile(mut self, resolution: Resolution, ctx: &Context) -> Framegraph<Compiled> {
-    //     let images: Vec<_> = self
-    //         .state
-    //         .image_data
-    //         .iter()
-    //         .map(|(id, image_desc)| (*id, Image::allocate(ctx, image_desc.clone())))
-    //         .collect();
-    //     for (id, image) in images {
-    //         self.resources.insert(id, ResourceType::Image(image));
-    //     }
-    //     let render: HashMap<_, _> = self
-    //         .state
-    //         .frame_buffer_layout
-    //         .iter()
-    //         .map(|(&handle, image_resources)| {
-    //             let images: Vec<Image> = image_resources
-    //                 .iter()
-    //                 .map(|&resource| self.get_resource(resource))
-    //                 .collect();
-    //             let layout = self.state.layouts.get(&handle).expect("layout");
-    //             (handle, Render::new(ctx, resolution, &images, layout))
-    //         })
-    //         .collect();
-    //     let compute: HashMap<_, _> = self
-    //         .execute_compute
-    //         .keys()
-    //         .map(|compute_handle| {
-    //             let layout = self
-    //                 .state
-    //                 .layouts
-    //                 .get(compute_handle)
-    //                 .expect("compute layout");
-    //             (*compute_handle, Compute::new(ctx, layout))
-    //         })
-    //         .collect();
-    //     let state = Compiled { render, compute };
-    //     Framegraph {
-    //         ctx: self.ctx,
-    //         execute_fns: self.execute_fns,
-    //         execute_compute: self.execute_compute,
-    //         resources: self.resources,
-    //         graph: self.graph,
-    //         state,
-    //         pass_map: self.pass_map,
-    //     }
-    // }
+    pub fn add_pass<Setup, Execute, P>(&mut self, name: &'static str, mut setup: Setup) -> P
+    where
+        Setup: FnMut(&mut TaskBuilder<'_>) -> (Execute, P),
+        Execute: for<'pool> Fn(&Framegraph<Compiled>, &Blackboard, &mut Allocator<'pool>) + 'static,
+    {
+        let (pass_handle, execute, data) = {
+            let pass = Pass { name };
+            let pass_handle = self.graph.add_node(pass);
+            let (execute, data) = {
+                let mut builder = TaskBuilder {
+                    pass_handle,
+                    framegraph: self,
+                };
+                setup(&mut builder)
+            };
+            (pass_handle, Box::new(execute), data)
+        };
+        self.execute_fns.insert(pass_handle, execute);
+        data
+    }
+    pub fn compile(mut self) -> Framegraph<Compiled> {
+        unsafe {
+            for (id, image_desc) in &self.state.image_data {
+                let image = Image::allocate(&self.ctx, image_desc.clone());
+                self.registry
+                    .resources
+                    .insert(*id, ResourceType::Image(image));
+            }
+            for (id, deferred_render_target_state) in self.state.render_targets {
+                let render_target_state =
+                    deferred_render_target_state.into_non_deferred(&self.registry);
+                let render_target = self.ctx.create_render_target(&render_target_state);
+                self.registry
+                    .resources
+                    .insert(id, ResourceType::RenderTarget(render_target));
+            }
+            for (id, deferred_pipeline) in self.state.pipeline_states {
+                let pipeline_state = deferred_pipeline.into_non_deferred(&self.registry);
+                let pipeline = self.ctx.create_graphics_pipeline(&pipeline_state);
+                self.registry
+                    .resources
+                    .insert(id, ResourceType::GraphicsPipeline(pipeline));
+            }
+        }
+
+        Framegraph {
+            ctx: self.ctx,
+            execute_fns: self.execute_fns,
+            execute_compute: self.execute_compute,
+            registry: self.registry,
+            graph: self.graph,
+            state: Compiled {},
+            pass_map: self.pass_map,
+        }
+    }
 }
 
 impl Framegraph<Compiled> {
@@ -446,23 +466,11 @@ impl Framegraph<Compiled> {
 
     pub fn execute(&mut self, blackboard: &Blackboard) {
         let mut pool = Pool::new(&self.ctx);
+        let mut allocator = pool.allocate();
         self.submission_order().for_each(|idx| {
             // TODO: Improve pass execution
-            if let Some(execute) = self.execute_fns.get(&idx) {
-                let pool_allocator = pool.allocate();
-                let render = self.state.render.get(&idx).expect("render");
-                let mut cmds = GraphicsCommandbuffer::new(self, pool_allocator);
-                execute.execute(blackboard, &mut cmds, self);
-                render.execute_commands(&cmds.cmds);
-            } else {
-                if let Some(execute) = self.execute_compute.get(&idx) {
-                    let pool_allocator = pool.allocate();
-                    let compute = self.state.compute.get(&idx).expect("compute");
-                    let mut cmds = ComputeCommandbuffer::new(pool_allocator, self);
-                    execute.execute(blackboard, &mut cmds, self);
-                    compute.execute_commands(&cmds.cmds);
-                }
-            }
+            let execute = self.execute_fns.get(&idx).unwrap();
+            execute(self, blackboard, &mut allocator);
         });
     }
     pub fn export_graphviz<P: AsRef<Path>>(&self, path: P) {
@@ -472,11 +480,11 @@ impl Framegraph<Compiled> {
         write!(&mut file, "{}", dot);
     }
 }
-impl<T> Framegraph<T> {
-    pub fn get_image(&self, id: ResourceIndex) -> Image {
-        self.resources[id].as_image()
-    }
-    pub fn get_buffer(&self, id: ResourceIndex) -> BufferHandle {
-        self.resources[id].as_buffer()
-    }
-}
+// impl<T> Framegraph<T> {
+//     pub fn get_image(&self, id: ResourceIndex) -> Image {
+//         self.resources[id].as_image()
+//     }
+//     pub fn get_buffer(&self, id: ResourceIndex) -> BufferHandle {
+//         self.resources[id].as_buffer()
+//     }
+// }

@@ -11,8 +11,8 @@ new_key_type!(
 );
 
 impl RenderTarget {
-    pub fn builder() -> RenderTargetBuilder {
-        RenderTargetBuilder {
+    pub fn builder() -> RenderTargetState {
+        RenderTargetState {
             color_attachments: Attachments::new(),
             depth_attachment: None,
         }
@@ -32,25 +32,13 @@ impl Attachment {
 }
 
 pub type Attachments = SmallVec<[Attachment; 10]>;
-pub struct RenderTargetBuilder {
+pub struct RenderTargetState {
     pub color_attachments: Attachments,
     pub depth_attachment: Option<Attachment>,
 }
 
-impl RenderTargetBuilder {
-    pub fn color_attachment(self) -> Self {
-        self
-    }
-    pub fn depth_attachment(self) -> Self {
-        self
-    }
-
-    pub fn build(_ctx: &Context) -> Resource<RenderTarget> {
-        unimplemented!()
-    }
-}
 pub trait RenderTargetApi {
-    unsafe fn create_render_target(&self, builder: &RenderTargetBuilder) -> RenderTarget;
+    unsafe fn create_render_target(&self, builder: &RenderTargetState) -> RenderTarget;
 }
 
 #[derive(Debug, Copy, Clone)]

@@ -5,6 +5,7 @@ use crate::downcast::Downcast;
 use std::marker::PhantomData;
 use std::ops::Deref;
 use slotmap::new_key_type;
+use derive_builder::Builder;
 new_key_type!(
     pub struct ImageHandle;
 );
@@ -35,7 +36,8 @@ pub struct Image {
     pub handle: ImageHandle,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Builder)]
+#[builder(pattern = "owned")]
 pub struct ImageDesc {
     pub resolution: Resolution,
     pub layout: ImageLayout,

@@ -1,6 +1,6 @@
 use super::image::from_format;
 use super::Context;
-use crate::renderpass::{Attachment, RenderTarget, RenderTargetApi, RenderTargetBuilder};
+use crate::renderpass::{Attachment, RenderTarget, RenderTargetApi, RenderTargetState};
 use ash::{version::DeviceV1_0, vk};
 use itertools::Itertools;
 pub struct RenderTargetData {
@@ -8,7 +8,7 @@ pub struct RenderTargetData {
     pub framebuffer: vk::Framebuffer,
 }
 impl RenderTargetApi for Context {
-    unsafe fn create_render_target(&self, builder: &RenderTargetBuilder) -> RenderTarget {
+    unsafe fn create_render_target(&self, builder: &RenderTargetState) -> RenderTarget {
         fn build_attachment(
             ctx: &Context,
             attachment: &Attachment,

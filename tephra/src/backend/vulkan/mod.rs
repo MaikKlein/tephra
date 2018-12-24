@@ -1,23 +1,24 @@
-use crate::backend::BackendApi;
-use crate::buffer::BufferHandle;
-use crate::context;
-use crate::context::ContextApi;
-use crate::descriptor::DescriptorHandle;
-use crate::image::ImageHandle;
-use crate::renderpass::{RenderTarget};
-use ash::extensions::{DebugReport, DebugUtils, Surface, Swapchain, XlibSurface};
-use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
-use ash::vk;
-use ash::{Device, Entry, Instance};
+use crate::{
+    backend::BackendApi, buffer::BufferHandle, context, context::ContextApi,
+    descriptor::DescriptorHandle, image::ImageHandle, pipeline::GraphicsPipeline,
+    renderpass::RenderTarget,
+};
+use ash::{
+    extensions::{DebugReport, DebugUtils, Surface, Swapchain, XlibSurface},
+    version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
+    vk, Device, Entry, Instance,
+};
 use parking_lot::{Mutex, RwLock};
 use slotmap::{Key, SlotMap, Slottable};
-use std::cell::RefCell;
-use std::ffi::{CStr, CString};
-use std::marker::PhantomData;
-use std::ops::{Deref, Drop};
-use std::ptr;
-use std::sync::mpsc::{channel, Receiver, Sender};
-use std::sync::Arc;
+use std::{
+    cell::RefCell,
+    ffi::{CStr, CString},
+    marker::PhantomData,
+    ops::{Deref, Drop},
+    ptr,
+    sync::mpsc::{channel, Receiver, Sender},
+    sync::Arc,
+};
 use thread_local_object::ThreadLocal;
 use winit;
 pub mod buffer;
@@ -334,6 +335,7 @@ where
     }
 }
 pub struct InnerContext {
+    pub graphic_pipelines: HandleMap<GraphicsPipeline, pipeline::GraphicsPipelineData>,
     pub buffers: HandleMap<BufferHandle, buffer::BufferData>,
     pub descriptors: HandleMap<DescriptorHandle, descriptor::Descriptor>,
     pub images: HandleMap<ImageHandle, image::ImageData>,
@@ -760,6 +762,7 @@ impl Context {
                 .create_pipeline_cache(&pipeline_cache_create_info, None)
                 .expect("pipeline cache");
             let context = InnerContext {
+                graphic_pipelines: HandleMap::new(),
                 render_targets: HandleMap::new(),
                 buffers: HandleMap::new(),
                 images: HandleMap::new(),

@@ -182,7 +182,7 @@ impl DescriptorApi for Context {
             .iter()
             .map(|resource| match resource.data {
                 DescriptorResource::Uniform(buffer) | DescriptorResource::Storage(buffer) => {
-                    let generic_buffer = fg.get_resource(buffer);
+                    let generic_buffer = fg.registry.get_buffer(buffer);
                     let vkbuffer = self.buffers.get(generic_buffer);
                     let buffer_info = vk::DescriptorBufferInfo {
                         buffer: vkbuffer.buffer,

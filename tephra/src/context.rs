@@ -1,15 +1,17 @@
 use std::ops::Deref;
 use std::sync::Arc;
 
-use crate::downcast;
-use crate::image::ImageApi;
-// use pipeline::CreatePipeline;
-// use renderpass::CreateRenderpass;
-use crate::buffer::BufferApi;
-use crate::descriptor::{CreateLayout, CreatePool, DescriptorApi};
-use crate::render::{CreateCompute, CreateRender};
-use crate::shader::CreateShader;
-use crate::swapchain::CreateSwapchain;
+use crate::{
+    buffer::BufferApi,
+    descriptor::{CreateLayout, CreatePool, DescriptorApi},
+    downcast,
+    image::ImageApi,
+    pipeline::PipelineApi,
+    render::{CreateCompute, CreateRender},
+    renderpass::RenderTargetApi,
+    shader::CreateShader,
+    swapchain::CreateSwapchain,
+};
 
 pub trait ContextApi: downcast::Downcast
 where
@@ -22,6 +24,8 @@ where
         + CreateCompute
         + BufferApi
         + ImageApi
+        + RenderTargetApi
+        + PipelineApi,
 {
 }
 impl_downcast!(ContextApi);

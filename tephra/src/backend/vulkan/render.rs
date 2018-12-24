@@ -412,9 +412,9 @@ pub unsafe fn create_pipeline(
     renderpass: vk::RenderPass,
     pipeline_layout: vk::PipelineLayout,
 ) -> vk::Pipeline {
-    let vertex_shader = state.vertex_shader.as_ref().expect("vertex");
+    let vertex_shader = &state.vertex_shader;
     let vk_vertex = vertex_shader.shader_module.downcast::<Vulkan>();
-    let fragment_shader = state.fragment_shader.as_ref().expect("vertex");
+    let fragment_shader = &state.fragment_shader;
     let vk_fragment = fragment_shader.shader_module.downcast::<Vulkan>();
 
     let vertex_name = CString::new(vertex_shader.entry_name.as_str()).unwrap();
