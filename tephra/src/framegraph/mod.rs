@@ -4,7 +4,6 @@ use crate::{
     context::Context,
     descriptor::{Allocator, Layout, NativeLayout, Pool},
     framegraph::{
-        render_task::{Computepass, ExecuteCompute, ExecuteGraphics, Renderpass},
         task_builder::{deferred, TaskBuilder},
     },
     image::{Image, ImageApi, ImageDesc, Resolution},
@@ -161,6 +160,12 @@ impl Registry {
             _ => unreachable!(),
         }
     }
+    pub fn get_graphics_pipeline(&self, resource: Resource<GraphicsPipeline>) -> GraphicsPipeline {
+        match self.resources[&resource.id] {
+            ResourceType::GraphicsPipeline(pipeline) => pipeline,
+            _ => unreachable!(),
+        }
+    }
     pub fn get_buffer(&self, resource: Resource<BufferHandle>) -> BufferHandle {
         match self.resources[&resource.id] {
             ResourceType::Buffer(buffer) => buffer,
@@ -183,11 +188,10 @@ pub struct Recording {
 }
 
 pub type ExecuteFn =
-    dyn for<'pool> Fn(&Framegraph<Compiled>, &Blackboard, &mut Allocator<'pool>) + 'static;
+    dyn for<'pool> Fn(&Framegraph<Compiled>, &Blackboard, &mut Allocator<'pool>) -> CommandList + 'static;
 pub struct Framegraph<T = Recording> {
     pub ctx: Context,
     execute_fns: HashMap<Handle, Box<ExecuteFn>>,
-    execute_compute: HashMap<Handle, Arc<dyn ExecuteCompute>>,
     state: T,
     graph: Graph<Pass, Access>,
     pub registry: Registry,
@@ -259,7 +263,6 @@ impl Framegraph {
             graph: Graph::new(),
             registry: Registry::new(),
             execute_fns: HashMap::new(),
-            execute_compute: HashMap::new(),
             pass_map: HashMap::new(),
         }
     }
@@ -368,13 +371,13 @@ impl Framegraph {
     // }
     pub fn add_pass<Setup, Execute, P>(&mut self, name: &'static str, mut setup: Setup) -> P
     where
-        Setup: FnMut(&mut TaskBuilder<'_>) -> (Execute, P),
-        Execute: for<'pool> Fn(&Framegraph<Compiled>, &Blackboard, &mut Allocator<'pool>) + 'static,
+        Setup: FnMut(&mut TaskBuilder<'_>) -> (P, Execute),
+        Execute: for<'pool> Fn(&Framegraph<Compiled>, &Blackboard, &mut Allocator<'pool>) -> CommandList+ 'static,
     {
         let (pass_handle, execute, data) = {
             let pass = Pass { name };
             let pass_handle = self.graph.add_node(pass);
-            let (execute, data) = {
+            let (data, execute) = {
                 let mut builder = TaskBuilder {
                     pass_handle,
                     framegraph: self,
@@ -414,7 +417,6 @@ impl Framegraph {
         Framegraph {
             ctx: self.ctx,
             execute_fns: self.execute_fns,
-            execute_compute: self.execute_compute,
             registry: self.registry,
             graph: self.graph,
             state: Compiled {},

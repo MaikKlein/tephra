@@ -65,12 +65,11 @@ pub unsafe fn create_pipeline_layout(
 impl PipelineApi for Context {
     unsafe fn create_graphics_pipeline(&self, state: &PipelineState) -> GraphicsPipeline {
         let vertex_shader = &state.vertex_shader;
-        let vk_vertex = vertex_shader.shader_module.downcast::<Vulkan>();
-        let fragment_shader = &state.fragment_shader;
-        let vk_fragment = fragment_shader.shader_module.downcast::<Vulkan>();
+        let vk_vertex = self.shader_modules.get(state.vertex_shader.shader_module);
+        let vk_fragment = self.shader_modules.get(state.fragment_shader.shader_module);
 
         let vertex_name = CString::new(vertex_shader.entry_name.as_str()).unwrap();
-        let fragment_name = CString::new(fragment_shader.entry_name.as_str()).unwrap();
+        let fragment_name = CString::new(state.fragment_shader.entry_name.as_str()).unwrap();
         let shader_stage_create_infos = [
             vk::PipelineShaderStageCreateInfo {
                 s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,

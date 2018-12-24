@@ -1,15 +1,19 @@
 use crate::backend::BackendApi;
 use crate::context::Context;
 use crate::reflect;
+use slotmap::new_key_type;
 use std::fs::File;
 use std::io::{self, Read};
 use std::path::Path;
 use std::sync::Arc;
 
+new_key_type! {
+    pub struct ShaderModule;
+}
 use crate::downcast::Downcast;
 
-pub trait CreateShader {
-    fn load(
+pub trait ShaderApi {
+    unsafe fn create_shader(
         &self,
         bytes: &[u8],
     ) -> Result<ShaderModule, ShaderError>;
@@ -38,29 +42,36 @@ impl GetShaderType for Fragment {
         ShaderType::Fragment
     }
 }
-
-pub trait ShaderApi: Downcast {}
-impl_downcast!(ShaderApi);
-
-#[derive(Clone)]
-pub struct ShaderModule {
-    pub data: Arc<dyn ShaderApi>,
-}
 impl ShaderModule {
-    pub fn load<P: AsRef<Path>>(
-        context: &Context,
+    pub unsafe fn load<P: AsRef<Path>>(
+        ctx: &Context,
         p: P,
     ) -> Result<ShaderModule, ShaderError> {
         let file = File::open(p.as_ref()).map_err(ShaderError::IoError)?;
         let bytes: Vec<_> = file.bytes().filter_map(Result::ok).collect();
-        CreateShader::load(context.context.as_ref(), &bytes)
-    }
-    pub fn downcast<B: BackendApi>(&self) -> &B::Shader {
-        self.data
-            .downcast_ref::<B::Shader>()
-            .expect("Downcast Shader Vulkan")
+        ctx.create_shader(&bytes)
     }
 }
+
+// #[derive(Clone)]
+// pub struct ShaderModule {
+//     pub data: Arc<dyn ShaderApi>,
+// }
+// impl ShaderModule {
+//     pub fn load<P: AsRef<Path>>(
+//         context: &Context,
+//         p: P,
+//     ) -> Result<ShaderModule, ShaderError> {
+//         let file = File::open(p.as_ref()).map_err(ShaderError::IoError)?;
+//         let bytes: Vec<_> = file.bytes().filter_map(Result::ok).collect();
+//         ShaderApi::create_shader(context.context.as_ref(), &bytes)
+//     }
+//     pub fn downcast<B: BackendApi>(&self) -> &B::Shader {
+//         self.data
+//             .downcast_ref::<B::Shader>()
+//             .expect("Downcast Shader Vulkan")
+//     }
+// }
 
 #[derive(Debug, Fail)]
 pub enum ShaderError {

@@ -1,10 +1,11 @@
-use crate::buffer::{Buffer, BufferApi, BufferHandle};
-use crate::descriptor::{Allocator, Descriptor, DescriptorHandle, DescriptorInfo};
-use crate::framegraph::{Compiled, Framegraph, Resource, ResourceIndex};
-use crate::image::{Image, ImageHandle};
-use crate::pipeline::{ComputeState, PipelineState};
-use crate::render::RenderApi;
-use crate::renderpass::{VertexInput, VertexInputData};
+use crate::{
+    buffer::{Buffer, BufferApi, BufferHandle},
+    descriptor::{Allocator, Descriptor, DescriptorHandle, DescriptorInfo},
+    framegraph::{Compiled, Framegraph, Resource, ResourceIndex},
+    image::{Image, ImageHandle},
+    pipeline::{ComputeState, GraphicsPipeline, PipelineState},
+    renderpass::{VertexInput, VertexInputData},
+};
 use smallvec::SmallVec;
 use std::marker::PhantomData;
 
@@ -24,7 +25,7 @@ pub struct CopyImage {
 }
 
 pub struct DrawCommand {
-    pub pipeline_info: PipelineInfo,
+    pub graphics_pipeline: GraphicsPipeline,
     pub vertex: BufferHandle,
     pub index: Buffer<u32>,
     pub shader_arguments: DescriptorHandle,
@@ -68,6 +69,11 @@ pub struct CommandList {
     pub submits: Vec<Submit>,
 }
 impl CommandList {
+    pub fn new() -> Self {
+        CommandList {
+            submits: Vec::new(),
+        }
+    }
     pub fn record<Q>(&mut self) -> RecordCommandList<Q> {
         RecordCommandList {
             command_list: self,
@@ -98,26 +104,23 @@ impl RecordCommandList<'_, Transfer> {}
 impl RecordCommandList<'_, Graphics> {
     pub fn draw_indexed<'alloc, Vertex, ShaderArgument>(
         mut self,
-        pipeline: PipelineState,
+        graphics_pipeline: GraphicsPipeline,
         descriptor: Descriptor<'alloc, ShaderArgument>,
         vertex_buffer: Buffer<Vertex>,
         index_buffer: Buffer<u32>,
-    ) where
+    ) -> Self
+    where
         Vertex: VertexInput,
         ShaderArgument: DescriptorInfo,
     {
-        let pipeline_info = PipelineInfo {
-            pipeline,
-            stride: std::mem::size_of::<Vertex>() as u32,
-            vertex_input_data: Vertex::vertex_input_data(),
-        };
         let cmd = DrawCommand {
-            pipeline_info,
+            graphics_pipeline,
             shader_arguments: descriptor.handle,
             vertex: vertex_buffer.buffer,
             index: index_buffer,
         };
         self.commands.push(Command::Draw(cmd));
+        self
     }
 }
 impl RecordCommandList<'_, Compute> {
@@ -148,11 +151,17 @@ pub enum Command {
     Dispatch(DispatchCommand),
 }
 pub trait SubmitApi {
-    unsafe fn submit_commands(&self, commands: &CommandList);
+    unsafe fn submit_commands(
+        &self,
+        commands: &CommandList,
+    );
 }
 
 pub trait ExecuteApi {
-    fn execute_commands(&self, cmds: &[GraphicsCmd]);
+    fn execute_commands(
+        &self,
+        cmds: &[GraphicsCmd],
+    );
 }
 pub trait CreateExecute {
     fn create_execute(&self) -> Execute;
@@ -173,7 +182,10 @@ pub struct ComputeCommandbuffer<'a> {
     pub(crate) cmds: Vec<ComputeCmd<'a>>,
 }
 impl<'a> ComputeCommandbuffer<'a> {
-    pub fn new(pool_allocator: Allocator<'a>, fg: &'a Framegraph<Compiled>) -> Self {
+    pub fn new(
+        pool_allocator: Allocator<'a>,
+        fg: &'a Framegraph<Compiled>,
+    ) -> Self {
         ComputeCommandbuffer {
             fg,
             cmds: Vec::new(),
@@ -181,17 +193,27 @@ impl<'a> ComputeCommandbuffer<'a> {
         }
     }
 
-    pub fn dispatch(&mut self, x: u32, y: u32, z: u32) {
+    pub fn dispatch(
+        &mut self,
+        x: u32,
+        y: u32,
+        z: u32,
+    ) {
         let cmd = ComputeCmd::Dispatch { x, y, z };
         self.cmds.push(cmd);
     }
 
-    pub fn bind_pipeline(&mut self, state: &'a ComputeState) {
+    pub fn bind_pipeline(
+        &mut self,
+        state: &'a ComputeState,
+    ) {
         let cmd = ComputeCmd::BindPipeline { state };
         self.cmds.push(cmd);
     }
-    pub fn bind_descriptor<T>(&mut self, descriptor: &T)
-    where
+    pub fn bind_descriptor<T>(
+        &mut self,
+        descriptor: &T,
+    ) where
         T: DescriptorInfo,
     {
         let mut d = self.pool_allocator.allocate::<T>();
@@ -221,22 +243,34 @@ pub struct GraphicsCommandbuffer<'a> {
 }
 
 impl<'a> GraphicsCommandbuffer<'a> {
-    pub fn new(fg: &'a Framegraph<Compiled>, pool_allocator: Allocator<'a>) -> Self {
+    pub fn new(
+        fg: &'a Framegraph<Compiled>,
+        pool_allocator: Allocator<'a>,
+    ) -> Self {
         GraphicsCommandbuffer {
             fg,
             cmds: Vec::new(),
             pool_allocator,
         }
     }
-    pub fn bind_vertex<T>(&mut self, buffer: Buffer<T>) {
+    pub fn bind_vertex<T>(
+        &mut self,
+        buffer: Buffer<T>,
+    ) {
         let cmd = GraphicsCmd::BindVertex(buffer.buffer);
         self.cmds.push(cmd);
     }
-    pub fn bind_index(&mut self, buffer: Buffer<u32>) {
+    pub fn bind_index(
+        &mut self,
+        buffer: Buffer<u32>,
+    ) {
         let cmd = GraphicsCmd::BindIndex(buffer.buffer);
         self.cmds.push(cmd);
     }
-    pub fn bind_pipeline<T: VertexInput>(&mut self, state: &'a PipelineState) {
+    pub fn bind_pipeline<T: VertexInput>(
+        &mut self,
+        state: &'a PipelineState,
+    ) {
         let cmd = GraphicsCmd::BindPipeline {
             state,
             stride: std::mem::size_of::<T>() as u32,
@@ -244,13 +278,18 @@ impl<'a> GraphicsCommandbuffer<'a> {
         };
         self.cmds.push(cmd);
     }
-    pub fn draw_index(&mut self, len: usize) {
+    pub fn draw_index(
+        &mut self,
+        len: usize,
+    ) {
         let cmd = GraphicsCmd::DrawIndex { len: len as u32 };
         self.cmds.push(cmd);
     }
 
-    pub fn bind_descriptor<T>(&mut self, descriptor: &T)
-    where
+    pub fn bind_descriptor<T>(
+        &mut self,
+        descriptor: &T,
+    ) where
         T: DescriptorInfo,
     {
         let mut d = self.pool_allocator.allocate::<T>();

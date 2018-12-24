@@ -1,7 +1,7 @@
 use crate::{
     backend::BackendApi, buffer::BufferHandle, context, context::ContextApi,
     descriptor::DescriptorHandle, image::ImageHandle, pipeline::GraphicsPipeline,
-    renderpass::RenderTarget,
+    renderpass::RenderTarget, shader::ShaderModule,
 };
 use ash::{
     extensions::{DebugReport, DebugUtils, Surface, Swapchain, XlibSurface},
@@ -26,7 +26,6 @@ pub mod commandbuffer;
 pub mod descriptor;
 pub mod image;
 pub mod pipeline;
-pub mod render;
 pub mod renderpass;
 pub mod shader;
 pub mod swapchain;
@@ -34,13 +33,11 @@ pub mod swapchain;
 #[derive(Copy, Clone)]
 pub struct Vulkan;
 impl BackendApi for Vulkan {
-    type Shader = shader::ShaderData;
+    type Shader = shader::ShaderModuleData;
     type Context = Context;
     type Buffer = buffer::BufferData;
     type Image = image::ImageData;
     type Swapchain = swapchain::SwapchainData;
-    type Render = render::Render;
-    type Compute = render::Compute;
     type Descriptor = descriptor::Descriptor;
     type Layout = descriptor::Layout;
 }
@@ -59,7 +56,10 @@ impl ThreadLocalCommandPool {
         }
     }
 
-    fn get_command_buffer(&self, context: &Context) -> RecordCommandBuffer {
+    fn get_command_buffer(
+        &self,
+        context: &Context,
+    ) -> RecordCommandBuffer {
         let has_local_value = self.thread_local_command_pool.get(|value| value.is_some());
         if !has_local_value {
             let _ = self
@@ -83,7 +83,10 @@ pub struct CommandPool {
 }
 
 impl CommandPool {
-    fn new(context: &Context, queue_family_index: u32) -> Self {
+    fn new(
+        context: &Context,
+        queue_family_index: u32,
+    ) -> Self {
         let pool_create_info = vk::CommandPoolCreateInfo {
             s_type: vk::StructureType::COMMAND_POOL_CREATE_INFO,
             p_next: ptr::null(),
@@ -107,7 +110,11 @@ impl CommandPool {
         }
     }
 
-    fn allocate_command_buffers(&mut self, context: &Context, count: u32) {
+    fn allocate_command_buffers(
+        &mut self,
+        context: &Context,
+        count: u32,
+    ) {
         let alloc_info = vk::CommandBufferAllocateInfo {
             s_type: vk::StructureType::COMMAND_BUFFER_ALLOCATE_INFO,
             p_next: ptr::null(),
@@ -123,7 +130,10 @@ impl CommandPool {
             self.command_buffers.extend(v.into_iter());
         }
     }
-    pub fn get_command_buffer(&mut self, context: &Context) -> RecordCommandBuffer {
+    pub fn get_command_buffer(
+        &mut self,
+        context: &Context,
+    ) -> RecordCommandBuffer {
         {
             let reset_command_buffer_iter = self.receiver.try_iter().map(|command_buffer| {
                 unsafe {
@@ -241,7 +251,11 @@ pub struct CommandBuffer {
 }
 
 impl CommandBuffer {
-    pub fn record<F>(context: &Context, name: &str, mut f: F) -> Self
+    pub fn record<F>(
+        context: &Context,
+        name: &str,
+        mut f: F,
+    ) -> Self
     where
         F: FnMut(vk::CommandBuffer),
     {
@@ -317,7 +331,10 @@ where
     K: Key,
     D: Slottable,
 {
-    pub fn insert(&self, data: D) -> K {
+    pub fn insert(
+        &self,
+        data: D,
+    ) -> K {
         self.map.write().insert(data)
     }
 
@@ -326,15 +343,22 @@ where
             map: RwLock::new(SlotMap::with_key()),
         }
     }
-    pub fn is_valid(&self, key: K) -> bool {
+    pub fn is_valid(
+        &self,
+        key: K,
+    ) -> bool {
         self.map.read().get(key).is_some()
     }
 
-    pub fn get(&self, key: K) -> parking_lot::MappedRwLockReadGuard<D> {
+    pub fn get(
+        &self,
+        key: K,
+    ) -> parking_lot::MappedRwLockReadGuard<D> {
         parking_lot::RwLockReadGuard::map(self.map.read(), |data| data.get(key).unwrap())
     }
 }
 pub struct InnerContext {
+    pub shader_modules: HandleMap<ShaderModule, shader::ShaderModuleData>,
     pub graphic_pipelines: HandleMap<GraphicsPipeline, pipeline::GraphicsPipelineData>,
     pub buffers: HandleMap<BufferHandle, buffer::BufferData>,
     pub descriptors: HandleMap<DescriptorHandle, descriptor::Descriptor>,
@@ -549,12 +573,16 @@ impl Context {
                 .unwrap();
             let surface_format = surface_formats
                 .iter()
-                .map(|sfmt| match sfmt.format {
-                    vk::Format::UNDEFINED => vk::SurfaceFormatKHR {
-                        format: vk::Format::B8G8R8_UNORM,
-                        color_space: sfmt.color_space,
-                    },
-                    _ => *sfmt,
+                .map(|sfmt| {
+                    match sfmt.format {
+                        vk::Format::UNDEFINED => {
+                            vk::SurfaceFormatKHR {
+                                format: vk::Format::B8G8R8_UNORM,
+                                color_space: sfmt.color_space,
+                            }
+                        }
+                        _ => *sfmt,
+                    }
                 })
                 .nth(0)
                 .expect("Unable to find suitable surface format.");
@@ -562,10 +590,12 @@ impl Context {
                 .get_physical_device_surface_capabilities_khr(pdevice, surface)
                 .unwrap();
             let surface_resolution = match surface_capabilities.current_extent.width {
-                ::std::u32::MAX => vk::Extent2D {
-                    width: window_width,
-                    height: window_height,
-                },
+                ::std::u32::MAX => {
+                    vk::Extent2D {
+                        width: window_width,
+                        height: window_height,
+                    }
+                }
                 _ => surface_capabilities.current_extent,
             };
             let swapchain_loader = Swapchain::new(&instance, &device);
@@ -762,6 +792,7 @@ impl Context {
                 .create_pipeline_cache(&pipeline_cache_create_info, None)
                 .expect("pipeline cache");
             let context = InnerContext {
+                shader_modules: HandleMap::new(),
                 graphic_pipelines: HandleMap::new(),
                 render_targets: HandleMap::new(),
                 buffers: HandleMap::new(),

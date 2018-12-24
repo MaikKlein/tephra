@@ -7,21 +7,18 @@ use crate::{
     downcast,
     image::ImageApi,
     pipeline::PipelineApi,
-    render::{CreateCompute, CreateRender},
     renderpass::RenderTargetApi,
-    shader::CreateShader,
+    shader::ShaderApi,
     swapchain::CreateSwapchain,
 };
 
 pub trait ContextApi: downcast::Downcast
 where
     Self: CreateSwapchain
-        + CreateShader
-        + CreateRender
+        + ShaderApi
         + DescriptorApi
         + CreateLayout
         + CreatePool
-        + CreateCompute
         + BufferApi
         + ImageApi
         + RenderTargetApi

@@ -1,12 +1,10 @@
 use crate::{
-    context::Context,
-    framegraph::{Access, Framegraph, Handle, Recording, Resource, ResourceAccess, ResourceType},
-    renderpass::{Attachment, Attachments, RenderTarget, RenderTargetState},
+    framegraph::{Access, Framegraph, Handle, Recording, Resource, ResourceAccess},
 };
 pub mod deferred {
     use super::TaskBuilder;
     use crate::{
-        descriptor::{Binding, DescriptorInfo, DescriptorResource, DescriptorType},
+        descriptor::{Binding, DescriptorInfo, DescriptorType},
         framegraph::{Registry, Resource},
         image::{Image, ImageDescBuilder},
         pipeline::{self, ShaderStage},
@@ -39,13 +37,13 @@ pub mod deferred {
         pub vertex_shader: ShaderStage,
         pub fragment_shader: ShaderStage,
         pub render_target: Resource<RenderTarget>,
-        #[builder(setter(skip = "false"))]
+        #[builder(setter(skip = "false"), private)]
         pub layout: Vec<Binding<DescriptorType>>,
         #[builder(setter(skip = "false"))]
         // TODO: Default to SoA not AoS
         pub vertex_input: (Stride, Vec<VertexInputData>),
     }
-    impl pipeline::PipelineState {
+    impl pipeline::GraphicsPipeline {
         pub fn deferred() -> PipelineStateBuilder {
             Default::default()
         }
@@ -66,7 +64,7 @@ pub mod deferred {
         pub fn build_deferred<'task>(
             self,
             builder: &mut TaskBuilder<'task>,
-        ) -> Resource<PipelineState> {
+        ) -> Resource<pipeline::GraphicsPipeline> {
             let id = builder.framegraph.registry.reserve_index();
             let pipeline_state = self.build().unwrap();
             builder
@@ -92,6 +90,7 @@ pub mod deferred {
     }
 
     #[derive(Builder)]
+    #[builder(pattern = "owned")]
     pub struct Attachment {
         pub image: Resource<Image>,
         pub index: u32,
@@ -146,11 +145,10 @@ pub mod deferred {
             self.state.color_attachments.push(attachment);
             self
         }
-        pub fn set_depth_attachment(mut self, attachment: Attachment) -> Self {
+        pub fn with_depth_attachment(mut self, attachment: Attachment) -> Self {
             self.state.depth_attachment = Some(attachment);
             self
         }
-
         pub fn build_deferred<'task>(
             self,
             builder: &mut TaskBuilder<'task>,
