@@ -1,6 +1,7 @@
 use crate::{
+    buffer::Buffer,
     framegraph::{Access, Framegraph, Handle, Recording, Resource, ResourceAccess},
-    renderpass::Framebuffer,
+    renderpass::{Framebuffer, Renderpass},
 };
 pub mod deferred {
     use super::TaskBuilder;
@@ -175,9 +176,22 @@ pub struct TaskBuilder<'frame> {
     pub framegraph: &'frame mut Framegraph<Recording>,
 }
 impl<'frame> TaskBuilder<'frame> {
-    pub fn create_framebuffer(&mut self, images: Vec<Resource<Image>>) -> Resource<Framebuffer> {
+    pub fn add_buffer<T>(&mut self, buffer: Buffer<T>) -> Resource<Buffer<T>> {
+        let resource = self.framegraph.registry.add_buffer(buffer);
+        self.framegraph
+            .insert_pass_handle(resource, self.pass_handle);
+        resource
+    }
+    pub fn create_framebuffer(
+        &mut self,
+        renderpass: Renderpass,
+        images: Vec<Resource<Image>>,
+    ) -> Resource<Framebuffer> {
         let id = self.framegraph.registry.reserve_index();
-        self.framegraph.state.frambuffer_data.push((id, images));
+        self.framegraph
+            .state
+            .framebuffer_data
+            .push((id, (renderpass, images)));
         let resource = Resource::new(id, 0);
         self.framegraph
             .insert_pass_handle(resource, self.pass_handle);

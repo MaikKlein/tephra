@@ -170,7 +170,7 @@ pub struct Compiled {}
 
 pub struct Recording {
     image_data: Vec<(ResourceIndex, ImageDesc)>,
-    frambuffer_data: Vec<(ResourceIndex, Vec<Resource<Image>>)>,
+    framebuffer_data: Vec<(ResourceIndex, (Renderpass, Vec<Resource<Image>>))>,
 }
 
 /// Rust doesn't have type alias yet, so this is a work around
@@ -256,7 +256,7 @@ impl Framegraph {
             ctx: ctx.clone(),
             state: Recording {
                 image_data: Vec::new(),
-                frambuffer_data: Vec::new(),
+                framebuffer_data: Vec::new(),
             },
             graph: Graph::new(),
             registry: Registry::new(),
@@ -396,21 +396,16 @@ impl Framegraph {
                     .resources
                     .insert(*id, ResourceType::Image(image));
             }
-            // for (id, deferred_render_target_state) in self.state.render_targets {
-            //     let render_target_state =
-            //         deferred_render_target_state.into_non_deferred(&self.registry);
-            //     let render_target = self.ctx.create_renderpass(&render_target_state);
-            //     self.registry
-            //         .resources
-            //         .insert(id, ResourceType::RenderTarget(render_target));
-            // }
-            // for (id, deferred_pipeline) in self.state.pipeline_states {
-            //     let pipeline_state = deferred_pipeline.into_non_deferred(&self.registry);
-            //     let pipeline = self.ctx.create_graphics_pipeline(&pipeline_state);
-            //     self.registry
-            //         .resources
-            //         .insert(id, ResourceType::GraphicsPipeline(pipeline));
-            // }
+            for (id, (renderpass, images)) in &self.state.framebuffer_data {
+                let images: Vec<_> = images
+                    .iter()
+                    .map(|&image_resource| self.registry.get_image(image_resource))
+                    .collect();
+                let framebuffer = self.ctx.create_framebuffer(*renderpass, &images);
+                self.registry
+                    .resources
+                    .insert(*id, ResourceType::Framebuffer(framebuffer));
+            }
         }
 
         Framegraph {

@@ -47,7 +47,7 @@ impl TriangleCompute {
                     &[[1.0f32, 0.0, 0.0, 1.0]],
                 )
                 .expect("Buffer");
-                builder.framegraph.registry.add_buffer(buffer)
+                builder.add_buffer(buffer)
             };
 
             let compute_shader =
@@ -138,7 +138,7 @@ impl TrianglePass {
                 .layout::<Color>()
                 .vertex::<Vertex>()
                 .create(ctx);
-            let framebuffer = builder.create_framebuffer(vec![pass.color, pass.depth]);
+            let framebuffer = builder.create_framebuffer(renderpass, vec![pass.color, pass.depth]);
             (pass, move |fg, blackbox, pool| {
                 let mut cmds = CommandList::new();
                 let state = blackbox.get::<TriangleState>().expect("State");
@@ -201,49 +201,19 @@ pub unsafe fn render_pass(
         resolution,
         swapchain.format(),
     );
-    //Presentpass::add_pass(fg, triangle_data.color);
+    Presentpass::add_pass(fg, triangle_data.color);
 }
 
 struct TriangleState {
     vertex_buffer: Buffer<Vertex>,
     index_buffer: Buffer<u32>,
 }
-// pub struct TriangleShader {}
-// impl TriangleShader {
-//     pub fn new() -> Self {
-//         TriangleShader {}
-//     }
-
-//     pub fn draw_index<'a>(
-//         &'a self,
-//         vertex_buffer: Buffer<Vertex>,
-//         index_buffer: Buffer<u32>,
-//         state: &'a PipelineState,
-//         color: &Color,
-//         cmds: &mut GraphicsCommandbuffer<'a>,
-//     ) {
-//         cmds.bind_vertex(vertex_buffer);
-//         cmds.bind_index(index_buffer);
-//         cmds.bind_pipeline::<Vertex>(state);
-//         cmds.bind_descriptor(color);
-//         cmds.draw_index(3);
-//     }
-// }
 fn main() {
     unsafe {
         let ctx = vulkan::Context::new();
         let mut blackboard = Blackboard::new();
         let swapchain = Swapchain::new(&ctx);
         let resolution = swapchain.resolution();
-        // let state = PipelineState::new()
-        //     .with_vertex_shader(ShaderStage {
-        //         shader_module: vertex_shader_module,
-        //         entry_name: "main".into(),
-        //     })
-        //     .with_fragment_shader(ShaderStage {
-        //         shader_module: fragment_shader_module,
-        //         entry_name: "main".into(),
-        //     });
         let index_buffer_data = [0u32, 1, 2];
         let index_buffer = Buffer::from_slice(
             &ctx,

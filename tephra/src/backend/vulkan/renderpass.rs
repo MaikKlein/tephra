@@ -94,7 +94,7 @@ impl RenderpassApi for Context {
         let depth_attachment = builder.depth_attachment.as_ref().map(|attachment| {
             vk::AttachmentReference {
                 attachment: attachment.index,
-                layout: vk::ImageLayout::DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL,
+                layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
             }
         });
         let mut dst_access_mask = vk::AccessFlags::empty();

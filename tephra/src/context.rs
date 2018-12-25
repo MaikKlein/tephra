@@ -7,7 +7,7 @@ use crate::{
     downcast,
     image::ImageApi,
     pipeline::PipelineApi,
-    renderpass::RenderpassApi,
+    renderpass::{FramebufferApi, RenderpassApi},
     shader::ShaderApi,
     swapchain::CreateSwapchain,
 };
@@ -22,7 +22,8 @@ where
         + BufferApi
         + ImageApi
         + RenderpassApi
-        + PipelineApi,
+        + PipelineApi
+        + FramebufferApi,
 {
 }
 impl_downcast!(ContextApi);
