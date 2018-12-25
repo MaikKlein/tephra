@@ -1,23 +1,61 @@
 use super::image::from_format;
 use super::Context;
-use crate::renderpass::{Attachment, RenderTarget, RenderTargetApi, RenderTargetState};
+use crate::{
+    image::Image,
+    renderpass::{
+        Attachment, Framebuffer, FramebufferApi, Renderpass, RenderpassApi, RenderpassState,
+    },
+};
 use ash::{version::DeviceV1_0, vk};
 use itertools::Itertools;
-pub struct RenderTargetData {
-    pub render_pass: vk::RenderPass,
+pub struct FramebufferData {
     pub framebuffer: vk::Framebuffer,
 }
-impl RenderTargetApi for Context {
-    unsafe fn create_render_target(&self, builder: &RenderTargetState) -> RenderTarget {
+impl FramebufferApi for Context {
+    unsafe fn create_framebuffer(
+        &self,
+        renderpass: Renderpass,
+        images: &[Image],
+    ) -> Framebuffer {
+        let renderpass_data = self.renderpasses.get(renderpass);
+        // TODO: Proper resolution
+        let framebuffer_attachments: Vec<_> = images
+            .iter()
+            .map(|&image| self.images.get(image.handle).image_view)
+            .collect();
+        let frame_buffer_create_info = vk::FramebufferCreateInfo {
+            render_pass: renderpass_data.render_pass,
+            attachment_count: framebuffer_attachments.len() as u32,
+            p_attachments: framebuffer_attachments.as_ptr(),
+            width: self.surface_resolution.width,
+            height: self.surface_resolution.height,
+            layers: 1,
+            ..Default::default()
+        };
+        let framebuffer = self
+            .device
+            .create_framebuffer(&frame_buffer_create_info, None)
+            .unwrap();
+        let data = FramebufferData { framebuffer };
+        self.framebuffers.insert(data)
+    }
+}
+pub struct RenderpassData {
+    pub render_pass: vk::RenderPass,
+}
+impl RenderpassApi for Context {
+    unsafe fn create_renderpass(
+        &self,
+        builder: &RenderpassState,
+    ) -> Renderpass {
         fn build_attachment(
             ctx: &Context,
             attachment: &Attachment,
             layout: vk::ImageLayout,
         ) -> vk::AttachmentDescription {
-            let image_data = ctx.images.get(attachment.image.handle);
             // TODO: Add more configs
             vk::AttachmentDescription {
-                format: from_format(image_data.desc.format),
+                format: from_format(attachment.format),
                 flags: vk::AttachmentDescriptionFlags::empty(),
                 samples: vk::SampleCountFlags::TYPE_1,
                 load_op: vk::AttachmentLoadOp::CLEAR,
@@ -46,19 +84,19 @@ impl RenderTargetApi for Context {
         let color_attachments: Vec<_> = builder
             .color_attachments
             .iter()
-            .map(|attachment| vk::AttachmentReference {
-                attachment: attachment.index,
-                layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+            .map(|attachment| {
+                vk::AttachmentReference {
+                    attachment: attachment.index,
+                    layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+                }
             })
             .collect();
-        let depth_attachment =
-            builder
-                .depth_attachment
-                .as_ref()
-                .map(|attachment| vk::AttachmentReference {
-                    attachment: attachment.index,
-                    layout: vk::ImageLayout::DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL,
-                });
+        let depth_attachment = builder.depth_attachment.as_ref().map(|attachment| {
+            vk::AttachmentReference {
+                attachment: attachment.index,
+                layout: vk::ImageLayout::DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL,
+            }
+        });
         let mut dst_access_mask = vk::AccessFlags::empty();
         if builder.color_attachments.len() > 0 {
             dst_access_mask |= vk::AccessFlags::COLOR_ATTACHMENT_WRITE;
@@ -97,31 +135,28 @@ impl RenderTargetApi for Context {
             .device
             .create_render_pass(&renderpass_create_info, None)
             .unwrap();
-        let framebuffer_attachments = builder
-            .color_attachments
-            .iter()
-            .chain(builder.depth_attachment.as_ref())
-            .sorted_by(|l, r| l.index.cmp(&r.index))
-            .map(|attachment| self.images.get(attachment.image.handle).image_view)
-            .collect_vec();
-        // TODO: Proper resolution
-        let frame_buffer_create_info = vk::FramebufferCreateInfo {
-            render_pass,
-            attachment_count: framebuffer_attachments.len() as u32,
-            p_attachments: framebuffer_attachments.as_ptr(),
-            width: self.surface_resolution.width,
-            height: self.surface_resolution.height,
-            layers: 1,
-            ..Default::default()
-        };
-        let framebuffer = self
-            .device
-            .create_framebuffer(&frame_buffer_create_info, None)
-            .unwrap();
-        self.render_targets.insert(RenderTargetData {
-            render_pass,
-            framebuffer,
-        })
+        // let framebuffer_attachments = builder
+        //     .color_attachments
+        //     .iter()
+        //     .chain(builder.depth_attachment.as_ref())
+        //     .sorted_by(|l, r| l.index.cmp(&r.index))
+        //     .map(|attachment| self.images.get(attachment.image.handle).image_view)
+        //     .collect_vec();
+        // // TODO: Proper resolution
+        // let frame_buffer_create_info = vk::FramebufferCreateInfo {
+        //     render_pass,
+        //     attachment_count: framebuffer_attachments.len() as u32,
+        //     p_attachments: framebuffer_attachments.as_ptr(),
+        //     width: self.surface_resolution.width,
+        //     height: self.surface_resolution.height,
+        //     layers: 1,
+        //     ..Default::default()
+        // };
+        // let framebuffer = self
+        //     .device
+        //     .create_framebuffer(&frame_buffer_create_info, None)
+        //     .unwrap();
+        self.renderpasses.insert(RenderpassData { render_pass })
     }
 }
 // use super::{CommandBuffer, Vulkan};

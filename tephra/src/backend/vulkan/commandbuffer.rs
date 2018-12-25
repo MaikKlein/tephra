@@ -89,10 +89,7 @@ enum Sync {
 // }
 
 impl SubmitApi for Context {
-    unsafe fn submit_commands(
-        &self,
-        commands: &CommandList,
-    ) {
+    unsafe fn submit_commands(&self, commands: &CommandList) {
         let mut fences = Vec::new();
         let mut buffers = Vec::new();
         let device = &self.device;
@@ -200,8 +197,102 @@ impl SubmitApi for Context {
                             &[src_barrier, dst_barrier],
                         );
                     }
-                    Command::Dispatch(_dispatch) => {}
-                    Command::Draw(_draw) => {}
+                    Command::Dispatch(dispatch) => {
+                        let pipeline = self.compute_pipelines.get(dispatch.pipeline);
+                        let descriptor = self.descriptors.get(dispatch.shader_arguments);
+                        device.cmd_bind_pipeline(
+                            *command_buffer,
+                            vk::PipelineBindPoint::COMPUTE,
+                            pipeline.pipeline,
+                        );
+                        device.cmd_bind_descriptor_sets(
+                            *command_buffer,
+                            vk::PipelineBindPoint::COMPUTE,
+                            pipeline.layout,
+                            0,
+                            &[descriptor.descriptor_set],
+                            &[],
+                        );
+                        device.cmd_dispatch(*command_buffer, dispatch.x, dispatch.y, dispatch.z);
+                    }
+                    Command::Draw(draw) => {
+                        let clear_values = [
+                            vk::ClearValue {
+                                color: vk::ClearColorValue {
+                                    float32: [0.0, 0.0, 0.0, 0.0],
+                                },
+                            },
+                            vk::ClearValue {
+                                depth_stencil: vk::ClearDepthStencilValue {
+                                    depth: 1.0,
+                                    stencil: 0,
+                                },
+                            },
+                        ];
+
+                        let viewports = [vk::Viewport {
+                            x: 0.0,
+                            y: 0.0,
+                            width: self.surface_resolution.width as f32,
+                            height: self.surface_resolution.height as f32,
+                            min_depth: 0.0,
+                            max_depth: 1.0,
+                        }];
+                        let scissors = [vk::Rect2D {
+                            offset: vk::Offset2D { x: 0, y: 0 },
+                            extent: self.surface_resolution.clone(),
+                        }];
+                        let framebuffer = self.framebuffers.get(draw.framebuffer);
+                        let pipeline = self.graphic_pipelines.get(draw.graphics_pipeline);
+                        let vertex_buffer = self.buffers.get(draw.vertex);
+                        let index_buffer = self.buffers.get(draw.index.buffer);
+                        let renderpass = self.renderpasses.get(draw.renderpass);
+                        let descriptor = self.descriptors.get(draw.shader_arguments);
+                        let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
+                            .render_pass(renderpass.render_pass)
+                            .framebuffer(framebuffer.framebuffer)
+                            .render_area(vk::Rect2D {
+                                offset: vk::Offset2D { x: 0, y: 0 },
+                                extent: self.surface_resolution.clone(),
+                            })
+                            .clear_values(&clear_values);
+                        device.cmd_begin_render_pass(
+                            *command_buffer,
+                            &render_pass_begin_info,
+                            vk::SubpassContents::INLINE,
+                        );
+
+                        // TODO: Make configurable
+                        device.cmd_set_viewport(*command_buffer, 0, &viewports);
+                        device.cmd_set_scissor(*command_buffer, 0, &scissors);
+
+                        device.cmd_bind_pipeline(
+                            *command_buffer,
+                            vk::PipelineBindPoint::GRAPHICS,
+                            pipeline.pipeline,
+                        );
+                        device.cmd_bind_descriptor_sets(
+                            *command_buffer,
+                            vk::PipelineBindPoint::GRAPHICS,
+                            pipeline.layout,
+                            0,
+                            &[descriptor.descriptor_set],
+                            &[],
+                        );
+                        device.cmd_bind_vertex_buffers(
+                            *command_buffer,
+                            0,
+                            &[vertex_buffer.buffer],
+                            &[0],
+                        );
+                        device.cmd_bind_index_buffer(
+                            *command_buffer,
+                            index_buffer.buffer,
+                            0,
+                            vk::IndexType::UINT32,
+                        );
+                        device.cmd_end_render_pass(*command_buffer);
+                    }
                 }
             }
             device
@@ -221,12 +312,13 @@ impl SubmitApi for Context {
                     fence,
                 )
                 .unwrap();
+            device
+                .wait_for_fences(&[fence], true, u64::max_value())
+                .unwrap();
             fences.push(fence);
             buffers.push(command_buffer);
         }
-        device
-            .wait_for_fences(&fences, true, u64::max_value())
-            .unwrap();
+
         for fence in fences {
             device.destroy_fence(fence, None);
         }

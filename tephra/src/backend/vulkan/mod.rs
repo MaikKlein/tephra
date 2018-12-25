@@ -1,7 +1,12 @@
 use crate::{
-    backend::BackendApi, buffer::BufferHandle, context, context::ContextApi,
-    descriptor::DescriptorHandle, image::ImageHandle, pipeline::GraphicsPipeline,
-    renderpass::RenderTarget, shader::ShaderModule,
+    backend::BackendApi,
+    buffer::BufferHandle,
+    context::{self, ContextApi},
+    descriptor::DescriptorHandle,
+    image::ImageHandle,
+    pipeline::{ComputePipeline, GraphicsPipeline},
+    renderpass::{Framebuffer, Renderpass},
+    shader::ShaderModule,
 };
 use ash::{
     extensions::{DebugReport, DebugUtils, Surface, Swapchain, XlibSurface},
@@ -359,11 +364,13 @@ where
 }
 pub struct InnerContext {
     pub shader_modules: HandleMap<ShaderModule, shader::ShaderModuleData>,
+    pub compute_pipelines: HandleMap<ComputePipeline, pipeline::ComputePipelineData>,
     pub graphic_pipelines: HandleMap<GraphicsPipeline, pipeline::GraphicsPipelineData>,
     pub buffers: HandleMap<BufferHandle, buffer::BufferData>,
     pub descriptors: HandleMap<DescriptorHandle, descriptor::Descriptor>,
     pub images: HandleMap<ImageHandle, image::ImageData>,
-    pub render_targets: HandleMap<RenderTarget, renderpass::RenderTargetData>,
+    pub renderpasses: HandleMap<Renderpass, renderpass::RenderpassData>,
+    pub framebuffers: HandleMap<Framebuffer, renderpass::FramebufferData>,
     pub entry: Entry,
     pub instance: Instance,
     pub device: Device,
@@ -792,9 +799,11 @@ impl Context {
                 .create_pipeline_cache(&pipeline_cache_create_info, None)
                 .expect("pipeline cache");
             let context = InnerContext {
+                framebuffers: HandleMap::new(),
                 shader_modules: HandleMap::new(),
                 graphic_pipelines: HandleMap::new(),
-                render_targets: HandleMap::new(),
+                compute_pipelines: HandleMap::new(),
+                renderpasses: HandleMap::new(),
                 buffers: HandleMap::new(),
                 images: HandleMap::new(),
                 descriptors: HandleMap::new(),

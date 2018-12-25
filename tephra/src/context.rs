@@ -7,7 +7,7 @@ use crate::{
     downcast,
     image::ImageApi,
     pipeline::PipelineApi,
-    renderpass::RenderTargetApi,
+    renderpass::RenderpassApi,
     shader::ShaderApi,
     swapchain::CreateSwapchain,
 };
@@ -21,7 +21,7 @@ where
         + CreatePool
         + BufferApi
         + ImageApi
-        + RenderTargetApi
+        + RenderpassApi
         + PipelineApi,
 {
 }

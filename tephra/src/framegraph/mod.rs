@@ -1,12 +1,12 @@
 use crate::{
     buffer::{Buffer, BufferApi, BufferHandle},
-    commandbuffer::{CommandList},
+    commandbuffer::CommandList,
     context::Context,
     descriptor::{Allocator, Layout, NativeLayout, Pool},
     framegraph::task_builder::{deferred, TaskBuilder},
     image::{Image, ImageApi, ImageDesc, Resolution},
     pipeline::GraphicsPipeline,
-    renderpass::{RenderTarget, RenderTargetApi, RenderTargetState},
+    renderpass::{Framebuffer, Renderpass, RenderpassApi, RenderpassState},
 };
 use petgraph::Direction;
 use petgraph::{self, Graph};
@@ -45,10 +45,7 @@ impl<T> Clone for Resource<T> {
     }
 }
 impl<T> Resource<T> {
-    pub fn new(
-        id: usize,
-        version: u32,
-    ) -> Self {
+    pub fn new(id: usize, version: u32) -> Self {
         Resource {
             id,
             version,
@@ -89,8 +86,7 @@ pub enum ResourceAccess {
 pub enum ResourceType {
     Buffer(BufferHandle),
     Image(Image),
-    RenderTarget(RenderTarget),
-    GraphicsPipeline(GraphicsPipeline),
+    Framebuffer(Framebuffer),
 }
 impl ResourceType {
     pub fn as_buffer(&self) -> BufferHandle {
@@ -114,18 +110,12 @@ pub struct Access {
 }
 
 impl fmt::Display for Pass {
-    fn fmt(
-        &self,
-        f: &mut fmt::Formatter,
-    ) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:#?}", self)
     }
 }
 impl fmt::Display for Access {
-    fn fmt(
-        &self,
-        f: &mut fmt::Formatter,
-    ) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:#?}", self)
     }
 }
@@ -146,61 +136,30 @@ impl Registry {
         self.free_id += 1;
         id
     }
-    pub fn add_render_target(
-        &mut self,
-        rt: RenderTarget,
-    ) -> Resource<RenderTarget> {
+    pub fn add_buffer<T>(&mut self, buffer: Buffer<T>) -> Resource<Buffer<T>> {
         let id = self.reserve_index();
-        self.resources.insert(id, ResourceType::RenderTarget(rt));
+        self.resources
+            .insert(id, ResourceType::Buffer(buffer.buffer));
         Resource::new(id, 0)
     }
-    pub fn add_buffer(
-        &mut self,
-        buffer: BufferHandle,
-    ) -> Resource<BufferHandle> {
-        let id = self.reserve_index();
-        self.resources.insert(id, ResourceType::Buffer(buffer));
-        Resource::new(id, 0)
-    }
-    pub fn add_image(
-        &mut self,
-        image: Image,
-    ) -> Resource<Image> {
+    pub fn add_image(&mut self, image: Image) -> Resource<Image> {
         let id = self.reserve_index();
         self.resources.insert(id, ResourceType::Image(image));
         Resource::new(id, 0)
     }
-    pub fn get_render_target(
-        &self,
-        resource: Resource<RenderTarget>,
-    ) -> RenderTarget {
+    pub fn get_framebuffer(&self, resource: Resource<Framebuffer>) -> Framebuffer {
         match self.resources[&resource.id] {
-            ResourceType::RenderTarget(rt) => rt,
+            ResourceType::Framebuffer(fb) => fb,
             _ => unreachable!(),
         }
     }
-    pub fn get_graphics_pipeline(
-        &self,
-        resource: Resource<GraphicsPipeline>,
-    ) -> GraphicsPipeline {
-        match self.resources[&resource.id] {
-            ResourceType::GraphicsPipeline(pipeline) => pipeline,
-            _ => unreachable!(),
-        }
-    }
-    pub fn get_buffer(
-        &self,
-        resource: Resource<BufferHandle>,
-    ) -> BufferHandle {
+    pub fn get_buffer(&self, resource: Resource<BufferHandle>) -> BufferHandle {
         match self.resources[&resource.id] {
             ResourceType::Buffer(buffer) => buffer,
             _ => unreachable!(),
         }
     }
-    pub fn get_image(
-        &self,
-        resource: Resource<Image>,
-    ) -> Image {
+    pub fn get_image(&self, resource: Resource<Image>) -> Image {
         match self.resources[&resource.id] {
             ResourceType::Image(image) => image,
             _ => unreachable!(),
@@ -211,8 +170,7 @@ pub struct Compiled {}
 
 pub struct Recording {
     image_data: Vec<(ResourceIndex, ImageDesc)>,
-    render_targets: Vec<(ResourceIndex, deferred::RenderTargetState)>,
-    pipeline_states: Vec<(ResourceIndex, deferred::GraphicsPipelineState)>,
+    frambuffer_data: Vec<(ResourceIndex, Vec<Resource<Image>>)>,
 }
 
 /// Rust doesn't have type alias yet, so this is a work around
@@ -240,10 +198,7 @@ pub struct Framegraph<T = Recording> {
 }
 
 pub trait GetResource<T> {
-    fn get_resource(
-        &self,
-        resource: Resource<T>,
-    ) -> T;
+    fn get_resource(&self, resource: Resource<T>) -> T;
 }
 
 // impl<T> GetResource<Image> for Framegraph<T> {
@@ -266,18 +221,11 @@ pub trait GetResource<T> {
 //     }
 // }
 impl<T> Framegraph<T> {
-    pub fn insert_pass_handle<D>(
-        &mut self,
-        resource: Resource<D>,
-        handle: Handle,
-    ) {
+    pub fn insert_pass_handle<D>(&mut self, resource: Resource<D>, handle: Handle) {
         self.pass_map
             .insert((resource.id, resource.version), handle);
     }
-    pub fn get_pass_handle<D>(
-        &self,
-        resource: Resource<D>,
-    ) -> Option<Handle> {
+    pub fn get_pass_handle<D>(&self, resource: Resource<D>) -> Option<Handle> {
         self.pass_map.get(&(resource.id, resource.version)).cloned()
     }
 }
@@ -307,9 +255,8 @@ impl Framegraph {
         Framegraph {
             ctx: ctx.clone(),
             state: Recording {
-                render_targets: Vec::new(),
                 image_data: Vec::new(),
-                pipeline_states: Vec::new(),
+                frambuffer_data: Vec::new(),
             },
             graph: Graph::new(),
             registry: Registry::new(),
@@ -420,11 +367,7 @@ impl Framegraph {
     //     self.state.layouts.insert(pass_handle, layout.inner_layout);
     //     task
     // }
-    pub fn add_pass<Setup, Execute, P>(
-        &mut self,
-        name: &'static str,
-        mut setup: Setup,
-    ) -> P
+    pub fn add_pass<Setup, Execute, P>(&mut self, name: &'static str, mut setup: Setup) -> P
     where
         Setup: FnMut(&mut TaskBuilder<'_>) -> (P, Execute),
         Execute:
@@ -453,21 +396,21 @@ impl Framegraph {
                     .resources
                     .insert(*id, ResourceType::Image(image));
             }
-            for (id, deferred_render_target_state) in self.state.render_targets {
-                let render_target_state =
-                    deferred_render_target_state.into_non_deferred(&self.registry);
-                let render_target = self.ctx.create_render_target(&render_target_state);
-                self.registry
-                    .resources
-                    .insert(id, ResourceType::RenderTarget(render_target));
-            }
-            for (id, deferred_pipeline) in self.state.pipeline_states {
-                let pipeline_state = deferred_pipeline.into_non_deferred(&self.registry);
-                let pipeline = self.ctx.create_graphics_pipeline(&pipeline_state);
-                self.registry
-                    .resources
-                    .insert(id, ResourceType::GraphicsPipeline(pipeline));
-            }
+            // for (id, deferred_render_target_state) in self.state.render_targets {
+            //     let render_target_state =
+            //         deferred_render_target_state.into_non_deferred(&self.registry);
+            //     let render_target = self.ctx.create_renderpass(&render_target_state);
+            //     self.registry
+            //         .resources
+            //         .insert(id, ResourceType::RenderTarget(render_target));
+            // }
+            // for (id, deferred_pipeline) in self.state.pipeline_states {
+            //     let pipeline_state = deferred_pipeline.into_non_deferred(&self.registry);
+            //     let pipeline = self.ctx.create_graphics_pipeline(&pipeline_state);
+            //     self.registry
+            //         .resources
+            //         .insert(id, ResourceType::GraphicsPipeline(pipeline));
+            // }
         }
 
         Framegraph {
@@ -522,10 +465,7 @@ impl Framegraph<Compiled> {
         }
     }
 
-    pub fn execute(
-        &mut self,
-        blackboard: &Blackboard,
-    ) {
+    pub fn execute(&mut self, blackboard: &Blackboard) {
         let mut pool = Pool::new(&self.ctx);
         let mut allocator = pool.allocate();
         self.submission_order().for_each(|idx| {
@@ -534,10 +474,7 @@ impl Framegraph<Compiled> {
             execute(self, blackboard, &mut allocator);
         });
     }
-    pub fn export_graphviz<P: AsRef<Path>>(
-        &self,
-        path: P,
-    ) {
+    pub fn export_graphviz<P: AsRef<Path>>(&self, path: P) {
         use std::io::Write;
         let mut file = File::create(path.as_ref()).expect("path");
         let dot = petgraph::dot::Dot::with_config(&self.graph, &[]);
@@ -550,9 +487,9 @@ pub struct PassRunner {
 }
 // impl PassRunner {
 //     pub fn execute(mut self, f: ExecuteFn) {
-        
+
 //     }
-    
+
 // }
 // impl<T> Framegraph<T> {
 //     pub fn get_image(&self, id: ResourceIndex) -> Image {

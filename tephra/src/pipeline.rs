@@ -1,6 +1,7 @@
 use crate::{
+    context::Context,
     descriptor::{Binding, DescriptorInfo, DescriptorResource, DescriptorType},
-    renderpass::{self, RenderTarget, VertexInput, VertexInputData},
+    renderpass::{self, Renderpass, VertexInput, VertexInputData},
     shader::ShaderModule,
 };
 use derive_builder::Builder;
@@ -23,11 +24,31 @@ pub trait PipelineApi {
     unsafe fn create_graphics_pipeline(&self, state: &GraphicsPipelineState) -> GraphicsPipeline;
     unsafe fn create_compute_pipeline(&self, state: &ComputePipelineState) -> ComputePipeline;
 }
-#[derive(Clone)]
 #[derive(Builder)]
 #[builder(pattern = "owned")]
 pub struct ComputePipelineState {
-    pub compute_shader: ShaderModule,
+    pub compute_shader: ShaderStage,
+    #[builder(setter(skip = "false"), private)]
+    pub layout: Vec<Binding<DescriptorType>>,
+}
+impl ComputePipeline {
+    pub fn builder() -> ComputePipelineStateBuilder {
+        Default::default()
+    }
+}
+impl GraphicsPipeline {
+    pub fn builder() -> GraphicsPipelineStateBuilder {
+        Default::default()
+    }
+}
+impl ComputePipelineStateBuilder {
+    pub unsafe fn create(self, ctx: &Context) -> ComputePipeline {
+        ctx.create_compute_pipeline(&self.build().unwrap())
+    }
+    pub fn layout<D: DescriptorInfo>(mut self) -> Self {
+        self.layout = Some(D::layout());
+        self
+    }
 }
 
 #[derive(Clone)]
@@ -41,14 +62,18 @@ pub type Stride = u32;
 pub struct GraphicsPipelineState {
     pub vertex_shader: ShaderStage,
     pub fragment_shader: ShaderStage,
-    pub render_target: RenderTarget,
-    #[builder(setter(skip = "false"))]
+    pub render_target: Renderpass,
+    #[builder(setter(skip = "false"), private)]
     pub layout: Vec<Binding<DescriptorType>>,
     #[builder(setter(skip = "false"))]
     // TODO: Default to SoA not AoS
     pub vertex_input: (Stride, Vec<VertexInputData>),
 }
 impl GraphicsPipelineStateBuilder {
+    pub unsafe fn create(self, ctx: &Context) -> GraphicsPipeline {
+        let state = self.build().unwrap();
+        ctx.create_graphics_pipeline(&state)
+    }
     pub fn layout<D: DescriptorInfo>(mut self) -> Self {
         self.layout = Some(D::layout());
         self

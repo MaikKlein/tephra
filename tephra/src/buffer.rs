@@ -81,7 +81,7 @@ impl BufferProperty for DeviceLocal {
         Property::DeviceLocal
     }
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 pub struct Buffer<T> {
     pub _m: PhantomData<T>,
     pub buffer: BufferHandle,

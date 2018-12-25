@@ -6,16 +6,14 @@ pub use tephra::winit;
 
 use std::sync::Arc;
 use tephra::{
-    backend::vulkan::Context,
-    buffer::{Buffer, BufferUsage, Property},
+    backend::vulkan,
+    buffer::{Buffer, BufferHandle, BufferUsage, Property},
     commandbuffer::{CommandList, Compute, Graphics, Transfer},
-    framegraph::{
-        task_builder::deferred::Attachment, Blackboard, Compiled, Framegraph, GetResource,
-        Recording, Resource,
-    },
+    context::Context,
+    framegraph::{Blackboard, Compiled, Framegraph, GetResource, Recording, Resource},
     image::{Format, Image, ImageDesc, ImageLayout, Resolution},
-    pipeline::{GraphicsPipeline, ShaderStage},
-    renderpass::RenderTarget,
+    pipeline::{ComputePipeline, GraphicsPipeline, ShaderStage},
+    renderpass::{Attachment, Renderpass},
     shader::ShaderModule,
     swapchain::Swapchain,
 };
@@ -38,45 +36,37 @@ pub struct TriangleCompute {
     pub storage_buffer: Resource<Buffer<[f32; 4]>>,
 }
 
-// impl TriangleCompute {
-//     pub fn add_pass(fg: &mut Framegraph<Recording>) -> TriangleCompute {
-//         let buffer = Buffer::from_slice(
-//             &fg.ctx,
-//             Property::HostVisible,
-//             BufferUsage::Storage,
-//             &[[1.0f32, 0.0, 0.0, 1.0]],
-//         )
-//         .expect("Buffer");
-//         let compute_shader =
-//             ShaderModule::load(&fg.ctx, "shader/triangle/comp.spv").expect("compute shader");
-//         let storage_buffer = fg.add_buffer(buffer);
-//         fg.add_compute_pass("Compute", move |builder| {
-//             TriangleCompute {
-//                 storage_buffer: builder.write(storage_buffer),
-//                 state: ComputeState {
-//                     compute_shader: Some(compute_shader.clone()),
-//                 },
-//             }
-//         })
-//     }
-// }
+impl TriangleCompute {
+    pub unsafe fn add_pass(ctx: &Context, fg: &mut Framegraph<Recording>) -> TriangleCompute {
+        fg.add_pass("Compute", |builder| {
+            let storage_buffer = {
+                let buffer = Buffer::from_slice(
+                    ctx,
+                    Property::HostVisible,
+                    BufferUsage::Storage,
+                    &[[1.0f32, 0.0, 0.0, 1.0]],
+                )
+                .expect("Buffer");
+                builder.framegraph.registry.add_buffer(buffer)
+            };
 
-// impl Computepass for TriangleCompute {
-//     type Layout = ComputeDesc;
-//     fn execute<'cmd>(
-//         &'cmd self,
-//         _blackboard: &'cmd Blackboard,
-//         cmds: &mut ComputeCommandbuffer<'cmd>,
-//         _fg: &Framegraph<Compiled>,
-//     ) {
-//         let desc = ComputeDesc {
-//             buffer: self.storage_buffer,
-//         };
-//         cmds.bind_pipeline(&self.state);
-//         cmds.bind_descriptor(&desc);
-//         cmds.dispatch(1, 1, 1);
-//     }
-// }
+            let compute_shader =
+                ShaderModule::load(ctx, "shader/triangle/comp.spv").expect("compute shader");
+            let pipeline = ComputePipeline::builder()
+                .compute_shader(ShaderStage {
+                    shader_module: compute_shader,
+                    entry_name: "main".into(),
+                })
+                .layout::<Color>()
+                .create(ctx);
+            let pass = TriangleCompute { storage_buffer };
+            (pass, move |fg, blackbox, pool| {
+                let mut cmds = CommandList::new();
+                cmds
+            })
+        })
+    }
+}
 
 #[derive(Descriptor)]
 pub struct Color {
@@ -91,13 +81,18 @@ pub struct TrianglePass {
 }
 
 impl TrianglePass {
-    pub fn add_pass(
+    pub unsafe fn add_pass(
+        ctx: &Context,
         fg: &mut Framegraph<Recording>,
         storage_buffer: Resource<Buffer<[f32; 4]>>,
         resolution: Resolution,
         format: Format,
     ) -> TrianglePass {
         fg.add_pass("Triangle Pass", |builder| {
+            let vertex_shader_module =
+                ShaderModule::load(&ctx, "shader/triangle/vert.spv").expect("vertex");
+            let fragment_shader_module =
+                ShaderModule::load(&ctx, "shader/triangle/frag.spv").expect("vertex");
             let color_desc = ImageDesc {
                 layout: ImageLayout::Color,
                 format,
@@ -114,26 +109,36 @@ impl TrianglePass {
                 depth: builder.create_image("Depth", depth_desc),
                 storage_buffer: builder.read(storage_buffer),
             };
-            let render_target = RenderTarget::deferred()
+            let renderpass = Renderpass::builder()
                 .color_attachment(
                     Attachment::builder()
-                        .image(pass.color)
+                        .format(format)
                         .index(0)
                         .build()
                         .unwrap(),
                 )
                 .with_depth_attachment(
                     Attachment::builder()
-                        .image(pass.depth)
+                        .format(Format::D16_UNORM)
                         .index(1)
                         .build()
                         .unwrap(),
                 )
-                .build_deferred(builder);
-            let pipeline = GraphicsPipeline::deferred()
-                .render_target(render_target)
+                .create(ctx);
+            let pipeline = GraphicsPipeline::builder()
+                .vertex_shader(ShaderStage {
+                    shader_module: vertex_shader_module,
+                    entry_name: "main".into(),
+                })
+                .fragment_shader(ShaderStage {
+                    shader_module: fragment_shader_module,
+                    entry_name: "main".into(),
+                })
+                .render_target(renderpass)
                 .layout::<Color>()
-                .build_deferred(builder);
+                .vertex::<Vertex>()
+                .create(ctx);
+            let framebuffer = builder.create_framebuffer(vec![pass.color, pass.depth]);
             (pass, move |fg, blackbox, pool| {
                 let mut cmds = CommandList::new();
                 let state = blackbox.get::<TriangleState>().expect("State");
@@ -145,10 +150,13 @@ impl TrianglePass {
                 descriptor.update(fg.ctx(), &color, &fg);
                 cmds.record::<Graphics>()
                     .draw_indexed(
-                        fg.registry().get_graphics_pipeline(pipeline),
+                        pipeline,
+                        renderpass,
+                        fg.registry().get_framebuffer(framebuffer),
                         descriptor,
                         state.vertex_buffer,
                         state.index_buffer,
+                        0..3,
                     )
                     .submit();
                 cmds
@@ -157,51 +165,44 @@ impl TrianglePass {
     }
 }
 
-// pub struct Presentpass {
-//     pub color: Resource<Image>,
-// }
+#[derive(Copy, Clone)]
+pub struct Presentpass {
+    pub color: Resource<Image>,
+}
 
-// impl Computepass for Presentpass {
-//     type Layout = ();
-//     fn execute<'cmd>(
-//         &'cmd self,
-//         blackboard: &'cmd Blackboard,
-//         _cmds: &mut ComputeCommandbuffer<'cmd>,
-//         fg: &Framegraph<Compiled>,
-//     ) {
-//         let swapchain = blackboard.get::<Swapchain>().expect("swap");
-//         let color_image = fg.get_resource(self.color);
-//         swapchain.copy_and_present(color_image);
-//     }
-// }
+impl Presentpass {
+    pub fn add_pass(fg: &mut Framegraph<Recording>, color: Resource<Image>) {
+        fg.add_pass("PresentPass", |builder| {
+            let pass = Presentpass {
+                color: builder.read(color),
+            };
+            (pass, move |fg, blackboard, pool| {
+                let mut cmds = CommandList::new();
+                let swapchain = blackboard.get::<Swapchain>().expect("swap");
+                let color_image = fg.registry().get_image(pass.color);
+                swapchain.copy_and_present(color_image);
+                cmds
+            })
+        });
+    }
+}
 
-// impl Presentpass {
-//     pub fn add_pass(
-//         fg: &mut Framegraph<Recording>,
-//         color: Resource<Image>,
-//     ) {
-//         fg.add_compute_pass("PresentPass", |builder| {
-//             Presentpass {
-//                 color: builder.read(color),
-//             }
-//         });
-//     }
-// }
-
-// pub fn render_pass(
-//     fg: &mut Framegraph<Recording>,
-//     resolution: Resolution,
-//     //swapchain: &Swapchain,
-// ) {
-//     let triangle_compute = TriangleCompute::add_pass(fg);
-//     let triangle_data = TrianglePass::add_pass(
-//         fg,
-//         triangle_compute.storage_buffer,
-//         resolution,
-//         swapchain.format(),
-//     );
-//     //Presentpass::add_pass(fg, triangle_data.color);
-// }
+pub unsafe fn render_pass(
+    ctx: &Context,
+    fg: &mut Framegraph<Recording>,
+    resolution: Resolution,
+    swapchain: &Swapchain,
+) {
+    let triangle_compute = TriangleCompute::add_pass(ctx, fg);
+    let triangle_data = TrianglePass::add_pass(
+        ctx,
+        fg,
+        triangle_compute.storage_buffer,
+        resolution,
+        swapchain.format(),
+    );
+    //Presentpass::add_pass(fg, triangle_data.color);
+}
 
 struct TriangleState {
     vertex_buffer: Buffer<Vertex>,
@@ -230,14 +231,10 @@ struct TriangleState {
 // }
 fn main() {
     unsafe {
-        let ctx = Context::new();
+        let ctx = vulkan::Context::new();
         let mut blackboard = Blackboard::new();
         let swapchain = Swapchain::new(&ctx);
         let resolution = swapchain.resolution();
-        let vertex_shader_module =
-            ShaderModule::load(&ctx, "shader/triangle/vert.spv").expect("vertex");
-        let fragment_shader_module =
-            ShaderModule::load(&ctx, "shader/triangle/frag.spv").expect("vertex");
         // let state = PipelineState::new()
         //     .with_vertex_shader(ShaderStage {
         //         shader_module: vertex_shader_module,
@@ -280,7 +277,7 @@ fn main() {
             index_buffer,
         };
         blackboard.add(triangle_state);
-        //render_pass(&mut fg, resolution, &swapchain);
+        render_pass(&ctx, &mut fg, resolution, &swapchain);
         blackboard.add(swapchain);
         let mut fg = fg.compile();
         fg.export_graphviz("graph.dot");

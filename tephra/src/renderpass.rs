@@ -1,27 +1,38 @@
 use crate::context::Context;
-use derive_builder::Builder;
+use crate::framegraph::Resource;
 use crate::image::{Format, Image};
+use derive_builder::Builder;
 use slotmap::{new_key_type, SlotMap};
 use smallvec::SmallVec;
 use std::marker::PhantomData;
 use std::mem::size_of;
-use crate::framegraph::Resource;
 new_key_type!(
-    pub struct RenderTarget;
+    pub struct Renderpass;
+    pub struct Framebuffer;
 );
 
-impl RenderTarget {
-    pub fn builder() -> RenderTargetState {
-        RenderTargetState {
-            color_attachments: Attachments::new(),
-            depth_attachment: None,
+pub trait FramebufferApi {
+    unsafe fn create_framebuffer(
+        &self,
+        renderpass: Renderpass,
+        images: &[Image],
+    ) -> Framebuffer;
+}
+
+impl Renderpass {
+    pub fn builder() -> RenderpassBuilder {
+        RenderpassBuilder {
+            state: RenderpassState {
+                color_attachments: Attachments::new(),
+                depth_attachment: None,
+            },
         }
     }
 }
 
 #[derive(Builder)]
 pub struct Attachment {
-    pub image: Image,
+    pub format: Format,
     pub index: u32,
 }
 
@@ -32,13 +43,42 @@ impl Attachment {
 }
 
 pub type Attachments = SmallVec<[Attachment; 10]>;
-pub struct RenderTargetState {
+pub struct RenderpassState {
     pub color_attachments: Attachments,
     pub depth_attachment: Option<Attachment>,
 }
+pub struct RenderpassBuilder {
+    state: RenderpassState,
+}
+impl RenderpassBuilder {
+    pub fn color_attachment(
+        mut self,
+        attachment: Attachment,
+    ) -> Self {
+        self.state.color_attachments.push(attachment);
+        self
+    }
+    pub fn with_depth_attachment(
+        mut self,
+        attachment: Attachment,
+    ) -> Self {
+        self.state.depth_attachment = Some(attachment);
+        self
+    }
 
-pub trait RenderTargetApi {
-    unsafe fn create_render_target(&self, builder: &RenderTargetState) -> RenderTarget;
+    pub unsafe fn create(
+        self,
+        ctx: &Context,
+    ) -> Renderpass {
+        ctx.create_renderpass(&self.state)
+    }
+}
+
+pub trait RenderpassApi {
+    unsafe fn create_renderpass(
+        &self,
+        builder: &RenderpassState,
+    ) -> Renderpass;
 }
 
 #[derive(Debug, Copy, Clone)]

@@ -4,10 +4,11 @@ use crate::{
     framegraph::{Compiled, Framegraph, Resource, ResourceIndex},
     image::{Image, ImageHandle},
     pipeline::{ComputePipeline, ComputePipelineState, GraphicsPipeline, GraphicsPipelineState},
-    renderpass::{VertexInput, VertexInputData},
+    renderpass::{Framebuffer, Renderpass, VertexInput, VertexInputData},
 };
+use derive_builder::Builder;
 use smallvec::SmallVec;
-use std::marker::PhantomData;
+use std::{marker::PhantomData, ops::Range};
 
 pub struct ShaderArgument;
 const MAX_SHADER_ARGS: usize = 4;
@@ -26,9 +27,12 @@ pub struct CopyImage {
 
 pub struct DrawCommand {
     pub graphics_pipeline: GraphicsPipeline,
+    pub renderpass: Renderpass,
+    pub framebuffer: Framebuffer,
     pub vertex: BufferHandle,
     pub index: Buffer<u32>,
     pub shader_arguments: DescriptorHandle,
+    pub range: Range<u32>,
 }
 
 pub struct DispatchCommand {
@@ -105,9 +109,12 @@ impl RecordCommandList<'_, Graphics> {
     pub fn draw_indexed<'alloc, Vertex, ShaderArgument>(
         mut self,
         graphics_pipeline: GraphicsPipeline,
+        renderpass: Renderpass,
+        framebuffer: Framebuffer,
         descriptor: Descriptor<'alloc, ShaderArgument>,
         vertex_buffer: Buffer<Vertex>,
         index_buffer: Buffer<u32>,
+        range: Range<u32>,
     ) -> Self
     where
         Vertex: VertexInput,
@@ -115,9 +122,12 @@ impl RecordCommandList<'_, Graphics> {
     {
         let cmd = DrawCommand {
             graphics_pipeline,
+            renderpass,
+            framebuffer,
             shader_arguments: descriptor.handle,
             vertex: vertex_buffer.buffer,
             index: index_buffer,
+            range,
         };
         self.commands.push(Command::Draw(cmd));
         self
@@ -151,10 +161,7 @@ pub enum Command {
     Dispatch(DispatchCommand),
 }
 pub trait SubmitApi {
-    unsafe fn submit_commands(
-        &self,
-        commands: &CommandList,
-    );
+    unsafe fn submit_commands(&self, commands: &CommandList);
 }
 
 // pub trait ExecuteApi {
