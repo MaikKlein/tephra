@@ -1,12 +1,10 @@
 use crate::{
-    buffer::{Buffer, BufferApi, BufferHandle},
-    descriptor::{Allocator, Descriptor, DescriptorHandle, DescriptorInfo},
-    framegraph::{Compiled, Framegraph, Resource, ResourceIndex},
-    image::{Image, ImageHandle},
-    pipeline::{ComputePipeline, ComputePipelineState, GraphicsPipeline, GraphicsPipelineState},
+    buffer::{Buffer, BufferHandle},
+    descriptor::{Descriptor, DescriptorHandle, DescriptorInfo},
+    image::ImageHandle,
+    pipeline::{ComputePipeline, GraphicsPipeline, GraphicsPipelineState},
     renderpass::{Framebuffer, Renderpass, VertexInput, VertexInputData},
 };
-use derive_builder::Builder;
 use smallvec::SmallVec;
 use std::{marker::PhantomData, ops::Range};
 

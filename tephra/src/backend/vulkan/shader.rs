@@ -2,9 +2,7 @@ use super::Context;
 use crate::shader::{ShaderApi, ShaderError, ShaderModule};
 use ash::version::DeviceV1_0;
 use ash::vk;
-use std::ops::Drop;
 use std::ptr;
-use std::sync::Arc;
 pub struct ShaderModuleData {
     pub shader_module: vk::ShaderModule,
 }

@@ -1,51 +1,8 @@
-use super::{Context, Vulkan};
-use crate::commandbuffer::{self, Command, CommandList, Compute, Graphics, Submit, SubmitApi};
-use crate::image::ImageHandle;
+use super::Context;
+use crate::commandbuffer::{Command, CommandList, SubmitApi};
 use ash::{version::DeviceV1_0, vk};
 use std::ptr;
 
-// #[derive(Copy, Clone)]
-// struct Submission {
-//     start: usize,
-//     end: usize,
-//     flags: vk::QueueFlags,
-// }
-
-// /// Determins on which queue a command can potentially run on
-// fn queue_flags(command: &Command) -> vk::QueueFlags {
-//     match command {
-//         Command::CopyImage(_) => {
-//             vk::QueueFlags::TRANSFER | vk::QueueFlags::COMPUTE | vk::QueueFlags::GRAPHICS
-//         }
-//         Command::Dispatch(_) => vk::QueueFlags::COMPUTE,
-//         Command::Draw(_) => vk::QueueFlags::GRAPHICS,
-//     }
-// }
-
-// fn generate_submissions<'cmd>(
-//     commands: &'cmd [Command],
-// ) -> impl Iterator<Item = Submission> + 'cmd {
-//     use itertools::Itertools;
-//     let points =
-//         commands
-//             .iter()
-//             .enumerate()
-//             .scan(vk::QueueFlags::all(), |curr_flags, (idx, cmd)| {
-//                 let flags = *curr_flags & queue_flags(cmd);
-//                 if flags.is_empty() {
-//                     *curr_flags = flags;
-//                     Some(idx)
-//                 } else {
-//                     None
-//                 }
-//             });
-//     points.tuple_windows().map(move |(start, end)| {
-//         let flags = commands[start..=end]
-//             .iter()
-//             .fold(vk::QueueFlags::all(), |flags, cmd| flags & queue_flags(cmd));
-//         Submission { start, end, flags }
-//     })
-// }
 struct PipelineBarrier {
     barrier: Barrier,
     src_stage_mask: vk::PipelineStageFlags,
@@ -64,29 +21,6 @@ enum Sync {
     PipelineBarrier(PipelineBarrier),
     Semaphore,
 }
-
-// fn stage_copy_image(
-//     copy_image: &commandbuffer::CopyImage,
-//     handle: ImageHandle,
-// ) -> vk::PipelineStageFlags {
-//     if handle == copy_image.src || handle == copy_image.dst {
-//         return vk::PipelineStageFlags::TRANSFER;
-//     }
-//     panic!("Handle is not inside CopyImage")
-// }
-
-// fn access_copy_image(
-//     copy_image: &commandbuffer::CopyImage,
-//     handle: ImageHandle,
-// ) -> vk::AccessFlags {
-//     if handle == copy_image.src {
-//         return vk::AccessFlags::TRANSFER_READ;
-//     }
-//     if handle == copy_image.dst {
-//         return vk::AccessFlags::TRANSFER_WRITE;
-//     }
-//     panic!("Handle is not inside CopyImage")
-// }
 
 impl SubmitApi for Context {
     unsafe fn submit_commands(&self, commands: &CommandList) {
@@ -329,64 +263,3 @@ impl SubmitApi for Context {
         }
     }
 }
-
-// pub struct Commandbuffer {
-//     ctx: Context,
-// }
-
-// // impl CommandbufferApi for Commandbuffer<Graphics> {
-// // }
-// pub struct Execute {
-//     ctx: Context,
-// }
-// impl ExecuteApi for Execute {
-//     fn execute_commands(&self, cmds: &[GraphicsCmd]) {
-//         let _clear_values = [
-//             vk::ClearValue {
-//                 color: vk::ClearColorValue {
-//                     float32: [0.0, 0.0, 0.0, 0.0],
-//                 },
-//             },
-//             vk::ClearValue {
-//                 depth_stencil: vk::ClearDepthStencilValue {
-//                     depth: 1.0,
-//                     stencil: 0,
-//                 },
-//             },
-//         ];
-//         //let mut pipelines = Vec::new();
-//         super::CommandBuffer::record(&self.ctx, "Execute", |_cb| {
-//             let _device = &self.ctx.device;
-//             let mut _outer_render: Option<&super::render::Render> = None;
-//             for cmd in cmds {
-//                 match cmd {
-//                     GraphicsCmd::BindPipeline {
-//                         state: _,
-//                         stride: _,
-//                         vertex_input_data: _,
-//                     } => {
-//                         unsafe {
-//                             // let pipeline = super::render::create_pipeline(
-//                             //     &self.ctx,
-//                             //     state,
-//                             //     *stride,
-//                             //     &vertex_input_data,
-//                             //     outer_render.unwrap().renderpass,
-//                             //     );
-//                             // pipelines.push(pipeline);
-//                         }
-//                     }
-//                     _ => (),
-//                 }
-//             }
-//         });
-//     }
-// }
-// impl CreateExecute for Context {
-//     fn create_execute(&self) -> commandbuffer::Execute {
-//         let execute = Execute { ctx: self.clone() };
-//         commandbuffer::Execute {
-//             inner: Box::new(execute),
-//         }
-//     }
-// }

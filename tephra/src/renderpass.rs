@@ -1,10 +1,8 @@
 use crate::context::Context;
-use crate::framegraph::Resource;
 use crate::image::{Format, Image};
 use derive_builder::Builder;
-use slotmap::{new_key_type, SlotMap};
+use slotmap::{new_key_type};
 use smallvec::SmallVec;
-use std::marker::PhantomData;
 use std::mem::size_of;
 new_key_type!(
     pub struct Renderpass;

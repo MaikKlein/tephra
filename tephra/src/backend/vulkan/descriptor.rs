@@ -1,8 +1,7 @@
-use super::{Context, Vulkan};
+use super::Context;
 use crate::descriptor::{
-    Binding, CreateLayout, CreatePool, DescriptorApi, DescriptorHandle, DescriptorInfo,
-    DescriptorResource, DescriptorSizes, DescriptorType, LayoutApi, NativeLayout, NativePool,
-    PoolApi,
+    Binding, CreateLayout, CreatePool, DescriptorApi, DescriptorHandle, DescriptorResource,
+    DescriptorSizes, DescriptorType, LayoutApi, NativeLayout, NativePool, PoolApi,
 };
 use crate::framegraph::{Compiled, Framegraph};
 use ash::version::DeviceV1_0;

@@ -1,4 +1,4 @@
-use super::{Context, Vulkan};
+use super::Context;
 use crate::{
     descriptor::{Binding, DescriptorType},
     pipeline::{
@@ -6,15 +6,8 @@ use crate::{
     },
     renderpass::{VertexInputData, VertexType},
 };
-use std::{ffi::CString, ptr};
-// use super::Vulkan;
-// use ash::version::DeviceV1_0;
 use ash::{version::DeviceV1_0, vk};
-// use pipeline::{CreatePipeline, Pipeline, PipelineApi, PipelineState};
-// use renderpass::Pass;
-// use std::ffi::CString;
-// use std::mem;
-// use std::ptr;
+use std::{ffi::CString, ptr};
 
 unsafe fn create_layout(
     ctx: &Context,

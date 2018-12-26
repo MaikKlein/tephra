@@ -4,13 +4,12 @@ extern crate tephra;
 extern crate tephra_derive;
 pub use tephra::winit;
 
-use std::sync::Arc;
 use tephra::{
     backend::vulkan,
-    buffer::{Buffer, BufferHandle, BufferUsage, Property},
-    commandbuffer::{CommandList, Compute, Graphics, Transfer},
+    buffer::{Buffer, BufferUsage, Property},
+    commandbuffer::{CommandList, Compute, Graphics},
     context::Context,
-    framegraph::{Blackboard, Compiled, Framegraph, GetResource, Recording, Resource},
+    framegraph::{Blackboard, Framegraph, Recording, Resource},
     image::{Format, Image, ImageDesc, ImageLayout, Resolution},
     pipeline::{ComputePipeline, GraphicsPipeline, ShaderStage},
     renderpass::{Attachment, Renderpass},
@@ -60,7 +59,7 @@ impl TriangleCompute {
                 .layout::<Color>()
                 .create(ctx);
             let pass = TriangleCompute { storage_buffer };
-            (pass, move |fg, blackbox, pool| {
+            (pass, move |fg, _, pool| {
                 let mut cmds = CommandList::new();
                 let color = ComputeDesc {
                     buffer: storage_buffer,
@@ -184,11 +183,11 @@ impl Presentpass {
             let pass = Presentpass {
                 color: builder.read(color),
             };
-            (pass, move |fg, blackboard, pool| {
-                let mut cmds = CommandList::new();
+            (pass, move |fg, blackboard, _pool| {
                 let swapchain = blackboard.get::<Swapchain>().expect("swap");
                 let color_image = fg.registry().get_image(pass.color);
                 swapchain.copy_and_present(color_image);
+                let cmds = CommandList::new();
                 cmds
             })
         });

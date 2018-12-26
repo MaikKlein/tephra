@@ -1,9 +1,6 @@
-use crate::backend::BackendApi;
 use crate::buffer::Buffer;
 use crate::context::Context;
 use crate::downcast::Downcast;
-use std::marker::PhantomData;
-use std::ops::Deref;
 use slotmap::new_key_type;
 use derive_builder::Builder;
 new_key_type!(
@@ -76,17 +73,6 @@ where
     pub data: Box<dyn FramebufferApi>,
 }
 
-// impl<Target> Framebuffer<Target>
-// where
-//     for<'a> Target: RenderTarget<'a>,
-// {
-//     pub fn new<P: Pass<'a>>(
-//         context: &Context<Backend>,
-//         target: P::Target,
-//         renderpass: &Renderpass<P, Backend>,
-//     ) -> Framebuffer<P::Target, Backend> {
-//         <Self as FramebufferApi>::new(context, target, renderpass)
-//     }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 #[repr(transparent)]
 pub struct Format(pub(crate) i32);

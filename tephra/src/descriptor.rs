@@ -3,13 +3,11 @@ use crate::buffer::BufferHandle;
 use crate::context::Context;
 use crate::downcast::Downcast;
 use crate::framegraph::{Compiled, Framegraph, Resource};
-use parking_lot::{Mutex, MutexGuard};
 use slotmap::new_key_type;
 use std::any::TypeId;
 use std::collections::HashMap;
 use std::marker::PhantomData;
-use std::ops::{Deref, Drop};
-use std::sync::Arc;
+use std::ops::Drop;
 new_key_type!(
     pub struct DescriptorHandle;
 );

@@ -1,13 +1,11 @@
 use super::buffer;
 use super::Context;
-use super::{CommandBuffer, Vulkan};
+use super::{CommandBuffer};
 use crate::buffer::Buffer;
-use crate::image::{CreateImage, Format, Image, ImageApi, ImageDesc, ImageHandle, ImageLayout};
+use crate::image::{Format, ImageApi, ImageDesc, ImageHandle, ImageLayout};
 use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk;
-//use renderpass::{Pass, Renderpass};
 use std::ptr;
-// pub struct FramebufferData {}
 pub(crate) fn into_format(vk_format: vk::Format) -> Format {
     Format(vk_format.as_raw())
 }
@@ -349,39 +347,3 @@ pub(crate) fn get_aspect_mask(desc: &ImageDesc) -> vk::ImageAspectFlags {
         ImageLayout::Depth => vk::ImageAspectFlags::DEPTH,
     }
 }
-
-// impl FramebufferApi for FramebufferData {
-// }
-// impl CreateFramebuffer for FramebufferData {
-//     fn new(
-//         &self,
-//         render_target_info: &RenderTargetInfo,
-//     ) -> Self {
-//         // unsafe {
-//         //     let render_target_info = target.render_target();
-//         //     let framebuffer_attachments: Vec<vk::ImageView> = render_target_info
-//         //         .image_views
-//         //         .iter()
-//         //         .map(|&image| {
-//         //             let image_data = image.data.downcast_ref::<ImageData>().unwrap();
-//         //             image_data.image_view
-//         //         }).collect();
-//         //     let frame_buffer_create_info = vk::FramebufferCreateInfo {
-//         //         s_type: vk::StructureType::FRAMEBUFFER_CREATE_INFO,
-//         //         p_next: ptr::null(),
-//         //         flags: Default::default(),
-//         //         render_pass: renderpass.impl_render_pass.data.render_pass,
-//         //         attachment_count: framebuffer_attachments.len() as u32,
-//         //         p_attachments: framebuffer_attachments.as_ptr(),
-//         //         width: context.surface_resolution.width,
-//         //         height: context.surface_resolution.height,
-//         //         layers: 1,
-//         //     };
-//         //     context
-//         //         .device
-//         //         .create_framebuffer(&frame_buffer_create_info, None)
-//         //         .unwrap();
-//         // }
-//         unimplemented!()
-//     }
-// }

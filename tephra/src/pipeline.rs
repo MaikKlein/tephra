@@ -1,7 +1,7 @@
 use crate::{
     context::Context,
-    descriptor::{Binding, DescriptorInfo, DescriptorResource, DescriptorType},
-    renderpass::{self, Renderpass, VertexInput, VertexInputData},
+    descriptor::{Binding, DescriptorInfo, DescriptorType},
+    renderpass::{Renderpass, VertexInput, VertexInputData},
     shader::ShaderModule,
 };
 use derive_builder::Builder;
@@ -11,14 +11,6 @@ new_key_type!(
     pub struct GraphicsPipeline;
     pub struct ComputePipeline;
 );
-
-// pub trait CreatePipeline {
-//     fn from_pipeline_builder(&self, pipline_builder: PipelineState) -> Pipeline;
-// }
-
-// pub trait PipelineApi: Downcast {
-// }
-// impl_downcast!(PipelineApi);
 
 pub trait PipelineApi {
     unsafe fn create_graphics_pipeline(&self, state: &GraphicsPipelineState) -> GraphicsPipeline;
@@ -83,12 +75,3 @@ impl GraphicsPipelineStateBuilder {
         self
     }
 }
-
-// pub struct Pipeline {
-//     pub data: Box<dyn PipelineApi>,
-// }
-// impl Pipeline {
-//     pub fn downcast<B: BackendApi>(&self) -> &B::Pipeline {
-//         self.data.downcast_ref::<B::Pipeline>().expect("Vulkan Backend Pipeline")
-//     }
-// }

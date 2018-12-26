@@ -1,23 +1,21 @@
 use crate::{
-    buffer::{Buffer, BufferApi, BufferHandle},
+    buffer::{Buffer, BufferHandle},
     commandbuffer::CommandList,
     context::Context,
-    descriptor::{Allocator, Layout, NativeLayout, Pool},
-    framegraph::task_builder::{deferred, TaskBuilder},
-    image::{Image, ImageApi, ImageDesc, Resolution},
-    pipeline::GraphicsPipeline,
-    renderpass::{Framebuffer, Renderpass, RenderpassApi, RenderpassState},
+    descriptor::{Allocator, Pool},
+    framegraph::task_builder::TaskBuilder,
+    image::{Image, ImageDesc},
+    renderpass::{Framebuffer, Renderpass},
 };
-use petgraph::Direction;
-use petgraph::{self, Graph};
-use std::clone::Clone;
-use std::collections::HashMap;
-use std::collections::HashSet;
-use std::fmt;
-use std::fs::File;
-use std::marker::PhantomData;
-use std::path::Path;
-use std::sync::Arc;
+use petgraph::{self, Direction, Graph};
+use std::{
+    clone::Clone,
+    collections::{HashMap, HashSet},
+    fmt,
+    fs::File,
+    marker::PhantomData,
+    path::Path,
+};
 pub mod blackboard;
 pub mod render_task;
 pub mod task_builder;
@@ -238,19 +236,6 @@ impl<T> Framegraph<T> {
     }
 }
 impl Framegraph {
-    // pub fn add_resource(&mut self, ty: ResourceType) -> ResourceIndex {
-    //     let id = self.resources.len();
-    //     self.resources.push(ty);
-    //     id
-    // }
-    // pub fn add_image(&mut self, image: Image) -> Resource<Image> {
-    //     let id = self.add_resource(ResourceType::Image(image));
-    //     Resource::new(id, 0)
-    // }
-    // pub fn add_buffer<T>(&mut self, buffer: Buffer<T>) -> Resource<Buffer<T>> {
-    //     let id = self.add_resource(ResourceType::Buffer(buffer.buffer));
-    //     Resource::new(id, 0)
-    // }
     pub fn new(ctx: &Context) -> Self {
         Framegraph {
             ctx: ctx.clone(),
@@ -264,109 +249,6 @@ impl Framegraph {
             pass_map: HashMap::new(),
         }
     }
-    // pub fn add_compute_pass<Data, P, Setup>(
-    //     &mut self,
-    //     name: &'static str,
-    //     setup: Setup,
-    //     pass: P,
-    //     execute: fn(&Data, &Blackboard, &Render, &Framegraph<Compiled>),
-    // ) -> render_task::ARenderTask<Data> {
-    // where
-    //     Setup: Fn(&mut TaskBuilder) -> Data,
-    //     P: Fn(&Data) -> Vec<Resource<Image>>,
-    //     Data: 'static,
-    // {
-    //     unimplemented!()
-    // }
-    // pub fn add_render_pass<Input, P, Setup>(
-    //     &mut self,
-    //     name: &'static str,
-    //     setup: Setup,
-    //     pass: P,
-    //     execute: render_task::ExecuteFn<Input>,
-    // ) -> render_task::ARenderTask<Input>
-    // where
-    //     Setup: Fn(&mut TaskBuilder<'_, 'graph>) -> Input,
-    //     P: Fn(&Input) -> Vec<Resource<Image>>,
-    //     Input: 'static,
-    // {
-    //     let (pass_handle, image_resources, task) = {
-    //         let renderpass = Pass {
-    //             name,
-    //             ty: PassType::Graphics,
-    //         };
-    //         let pass_handle = self.graph.add_node(renderpass);
-    //         let input = {
-    //             let mut builder = TaskBuilder {
-    //                 pass_handle,
-    //                 framegraph: self,
-    //             };
-    //             setup(&mut builder)
-    //         };
-    //         let image_resources = pass(&input);
-    //         let task = RenderTask { data: input, execute };
-    //         (pass_handle, image_resources, Arc::new(task))
-    //     };
-    //     self.execute_fns.insert(pass_handle, task.clone());
-    //     self.state
-    //         .frame_buffer_layout
-    //         .insert(pass_handle, image_resources);
-    //     task
-    // }
-    // pub fn add_compute_pass<F, P>(&mut self, name: &'static str, mut f: F) -> Arc<P>
-    // where
-    //     F: FnMut(&mut TaskBuilder<'_>) -> P,
-    //     P: Computepass + 'static,
-    // {
-    //     let layout = Layout::<P::Layout>::new(&self.ctx);
-    //     let (pass_handle, task) = {
-    //         let renderpass = Pass {
-    //             name,
-    //             ty: PassType::Compute,
-    //         };
-    //         let pass_handle = self.graph.add_node(renderpass);
-    //         let renderpass = {
-    //             let mut builder = TaskBuilder {
-    //                 pass_handle,
-    //                 framegraph: self,
-    //             };
-    //             f(&mut builder)
-    //         };
-    //         (pass_handle, Arc::new(renderpass))
-    //     };
-    //     self.execute_compute.insert(pass_handle, task.clone());
-    //     self.state.layouts.insert(pass_handle, layout.inner_layout);
-    //     task
-    // }
-    // pub fn add_render_pass<F, P>(&mut self, name: &'static str, mut f: F) -> Arc<P>
-    // where
-    //     F: FnMut(&mut TaskBuilder<'_>) -> P,
-    //     P: Renderpass + 'static,
-    // {
-    //     let layout = Layout::<P::Layout>::new(&self.ctx);
-    //     let (pass_handle, image_resources, task) = {
-    //         let renderpass = Pass {
-    //             name,
-    //             ty: PassType::Graphics,
-    //         };
-    //         let pass_handle = self.graph.add_node(renderpass);
-    //         let renderpass = {
-    //             let mut builder = TaskBuilder {
-    //                 pass_handle,
-    //                 framegraph: self,
-    //             };
-    //             f(&mut builder)
-    //         };
-    //         let image_resources = renderpass.framebuffer();
-    //         (pass_handle, image_resources, Arc::new(renderpass))
-    //     };
-    //     self.execute_fns.insert(pass_handle, task.clone());
-    //     self.state
-    //         .frame_buffer_layout
-    //         .insert(pass_handle, image_resources);
-    //     self.state.layouts.insert(pass_handle, layout.inner_layout);
-    //     task
-    // }
     pub fn add_pass<Setup, Execute, P>(&mut self, name: &'static str, mut setup: Setup) -> P
     where
         Setup: FnMut(&mut TaskBuilder<'_>) -> (P, Execute),

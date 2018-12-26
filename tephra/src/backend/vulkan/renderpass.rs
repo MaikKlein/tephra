@@ -7,7 +7,6 @@ use crate::{
     },
 };
 use ash::{version::DeviceV1_0, vk};
-use itertools::Itertools;
 pub struct FramebufferData {
     pub framebuffer: vk::Framebuffer,
 }
