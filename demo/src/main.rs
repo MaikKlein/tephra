@@ -62,6 +62,14 @@ impl TriangleCompute {
             let pass = TriangleCompute { storage_buffer };
             (pass, move |fg, blackbox, pool| {
                 let mut cmds = CommandList::new();
+                let color = ComputeDesc {
+                    buffer: storage_buffer,
+                };
+                let mut descriptor = pool.allocate::<ComputeDesc>();
+                descriptor.update(fg.ctx(), &color, &fg);
+                cmds.record::<Compute>()
+                    .dispatch(pipeline, descriptor, 1, 1, 1)
+                    .submit();
                 cmds
             })
         })

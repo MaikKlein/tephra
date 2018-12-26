@@ -291,6 +291,8 @@ impl SubmitApi for Context {
                             0,
                             vk::IndexType::UINT32,
                         );
+                        let index_len = index_buffer.size / std::mem::size_of::<u32>() as u64;
+                        device.cmd_draw_indexed(*command_buffer, index_len as u32, 1, 0, 0, 1);
                         device.cmd_end_render_pass(*command_buffer);
                     }
                 }

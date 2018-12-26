@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use crate::{
     buffer::BufferApi,
+    commandbuffer::SubmitApi,
     descriptor::{CreateLayout, CreatePool, DescriptorApi},
     downcast,
     image::ImageApi,
@@ -23,6 +24,7 @@ where
         + ImageApi
         + RenderpassApi
         + PipelineApi
+        + SubmitApi
         + FramebufferApi,
 {
 }

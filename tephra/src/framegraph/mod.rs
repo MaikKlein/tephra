@@ -460,13 +460,14 @@ impl Framegraph<Compiled> {
         }
     }
 
-    pub fn execute(&mut self, blackboard: &Blackboard) {
+    pub unsafe fn execute(&mut self, blackboard: &Blackboard) {
         let mut pool = Pool::new(&self.ctx);
         let mut allocator = pool.allocate();
         self.submission_order().for_each(|idx| {
             // TODO: Improve pass execution
             let execute = self.execute_fns.get(&idx).unwrap();
-            execute(self, blackboard, &mut allocator);
+            let cmds = execute(self, blackboard, &mut allocator);
+            self.ctx.submit_commands(&cmds);
         });
     }
     pub fn export_graphviz<P: AsRef<Path>>(&self, path: P) {

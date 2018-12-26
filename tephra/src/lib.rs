@@ -26,7 +26,6 @@ pub mod framegraph;
 pub mod image;
 pub mod pipeline;
 pub mod reflect;
-pub mod render;
 pub mod renderpass;
 pub mod shader;
 pub mod swapchain;

@@ -141,7 +141,8 @@ impl RecordCommandList<'_, Compute> {
         x: u32,
         y: u32,
         z: u32,
-    ) where
+    ) -> Self
+    where
         ShaderArgument: DescriptorInfo,
     {
         let cmd = DispatchCommand {
@@ -152,6 +153,7 @@ impl RecordCommandList<'_, Compute> {
             z,
         };
         self.commands.push(Command::Dispatch(cmd));
+        self
     }
 }
 
