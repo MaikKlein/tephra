@@ -1,11 +1,12 @@
 use super::Context;
-use crate::descriptor::{
-    Binding, CreatePool, DescriptorApi, DescriptorHandle, DescriptorResource,
-    DescriptorSizes, DescriptorType, NativePool, PoolApi,
-};
-use crate::framegraph::{Compiled, Framegraph};
 use ash::version::DeviceV1_0;
 use ash::vk;
+use tephra::descriptor::{
+    Binding, CreatePool, DescriptorApi, DescriptorHandle, DescriptorResource, DescriptorSizes,
+    DescriptorType, NativePool, PoolApi,
+};
+use tephra::framegraph::GetResource;
+use tephra::framegraph::{Compiled, Framegraph};
 pub struct Pool {
     pub ctx: Context,
     pub pool: vk::DescriptorPool,
@@ -137,7 +138,6 @@ impl DescriptorApi for Context {
         fg: &Framegraph<Compiled>,
     ) {
         let descriptor = self.descriptors.get(handle);
-        use crate::framegraph::GetResource;
         let buffer_infos: Vec<Binding<vk::DescriptorBufferInfo>> = data
             .iter()
             .map(|resource| match resource.data {

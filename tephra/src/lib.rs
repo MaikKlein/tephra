@@ -17,7 +17,6 @@ extern crate failure_derive;
 extern crate downcast_rs as downcast;
 extern crate anymap;
 extern crate petgraph;
-pub mod backend;
 pub mod buffer;
 pub mod commandbuffer;
 pub mod context;

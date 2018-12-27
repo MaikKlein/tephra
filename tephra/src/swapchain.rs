@@ -1,6 +1,8 @@
-use crate::context::Context;
-use crate::image::{Format, Image, Resolution};
 use std::ops::Deref;
+use crate::{
+    context::Context,
+    image::{Format, Image, Resolution},
+};
 
 #[derive(Debug, Fail)]
 pub enum SwapchainError {

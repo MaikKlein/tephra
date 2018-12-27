@@ -1,11 +1,11 @@
 extern crate ash;
 extern crate tephra;
+extern crate tephra_vulkan;
 #[macro_use]
 extern crate tephra_derive;
 pub use tephra::winit;
 
 use tephra::{
-    backend::vulkan,
     buffer::{Buffer, BufferUsage, Property},
     commandbuffer::{CommandList, Compute, Graphics},
     context::Context,
@@ -217,7 +217,7 @@ struct TriangleState {
 }
 fn main() {
     unsafe {
-        let ctx = vulkan::Context::new();
+        let ctx = tephra_vulkan::Context::new();
         let mut blackboard = Blackboard::new();
         let swapchain = Swapchain::new(&ctx);
         let resolution = swapchain.resolution();

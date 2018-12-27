@@ -2,5 +2,6 @@
 members = [
     "demo",
     "tephra",
+    "backend/vulkan",
     "tephra-derive"
 ]

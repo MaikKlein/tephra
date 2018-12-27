@@ -1,0 +1,15 @@
+[package]
+name = "tephra-vulkan"
+version = "0.1.0"
+authors = ["maik"]
+edition = "2018"
+[dependencies]
+ash = "0.26"
+tephra = {path = "../../tephra"}
+thread-local-object = "0.1.0"
+parking_lot = "0.6.3"
+winit = "0.17"
+
+[dependencies.slotmap]
+version = "0.3.0"
+features = ["unstable"]

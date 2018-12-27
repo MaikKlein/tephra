@@ -1,6 +1,6 @@
 use super::image::from_format;
 use super::Context;
-use crate::{
+use tephra::{
     image::Image,
     renderpass::{
         Attachment, Framebuffer, FramebufferApi, Renderpass, RenderpassApi, RenderpassState,

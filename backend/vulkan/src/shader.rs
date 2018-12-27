@@ -1,5 +1,5 @@
 use super::Context;
-use crate::shader::{ShaderApi, ShaderError, ShaderModule};
+use tephra::shader::{ShaderApi, ShaderError, ShaderModule};
 use ash::version::DeviceV1_0;
 use ash::vk;
 use std::ptr;

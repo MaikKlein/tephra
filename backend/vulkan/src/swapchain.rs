@@ -1,13 +1,15 @@
 use super::image::{into_format, ImageData};
+use super::CommandBuffer;
 use super::Context;
-use super::{CommandBuffer};
-use crate::image::{Format, Image, ImageApi, ImageDesc, ImageLayout, Resolution};
-use crate::swapchain::{CreateSwapchain, Swapchain, SwapchainApi, SwapchainError};
 use ash::extensions;
 use ash::version::DeviceV1_0;
 use ash::vk;
 use std::ops::Drop;
 use std::ptr;
+use tephra::{
+    image::{Format, Image, ImageApi, ImageDesc, ImageLayout, Resolution},
+    swapchain::{CreateSwapchain, Swapchain, SwapchainApi, SwapchainError},
+};
 
 pub struct SwapchainData {
     pub context: Context,

@@ -1,10 +1,10 @@
 use super::Context;
-use crate::buffer::{BufferApi, BufferError, BufferHandle, BufferUsage, MappingError, Property};
 use ash::{
     version::{DeviceV1_0, InstanceV1_0},
     vk,
 };
 use std::ptr;
+use tephra::buffer::{BufferApi, BufferError, BufferHandle, BufferUsage, MappingError, Property};
 
 impl BufferApi for Context {
     fn destroy(&self, buffer: BufferHandle) {
