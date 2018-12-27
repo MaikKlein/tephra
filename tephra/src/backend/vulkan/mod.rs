@@ -1,5 +1,4 @@
 use crate::{
-    backend::BackendApi,
     buffer::BufferHandle,
     context::{self, ContextApi},
     descriptor::DescriptorHandle,
@@ -34,18 +33,6 @@ pub mod pipeline;
 pub mod renderpass;
 pub mod shader;
 pub mod swapchain;
-
-#[derive(Copy, Clone)]
-pub struct Vulkan;
-impl BackendApi for Vulkan {
-    type Shader = shader::ShaderModuleData;
-    type Context = Context;
-    type Buffer = buffer::BufferData;
-    type Image = image::ImageData;
-    type Swapchain = swapchain::SwapchainData;
-    type Descriptor = descriptor::Descriptor;
-    type Layout = descriptor::Layout;
-}
 
 #[derive(Clone)]
 pub struct ThreadLocalCommandPool {

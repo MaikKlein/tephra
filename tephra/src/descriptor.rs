@@ -1,7 +1,5 @@
-use crate::backend::BackendApi;
 use crate::buffer::BufferHandle;
 use crate::context::Context;
-use crate::downcast::Downcast;
 use crate::framegraph::{Compiled, Framegraph, Resource};
 use slotmap::new_key_type;
 use std::any::TypeId;
@@ -140,39 +138,6 @@ impl Pool {
     }
 }
 
-pub trait CreateLayout {
-    fn create_layout(&self, data: &[Binding<DescriptorType>]) -> NativeLayout;
-}
-pub trait LayoutApi: Downcast {
-    //pub fn layout(&self) -> &[]
-}
-impl LayoutApi {
-    pub fn downcast<B: BackendApi>(&self) -> &B::Layout {
-        self.downcast_ref::<B::Layout>()
-            .expect("Downcast Layout Vulkan")
-    }
-}
-impl_downcast!(LayoutApi);
-
-pub struct NativeLayout {
-    pub inner: Box<dyn LayoutApi>,
-}
-
-pub struct Layout<T: DescriptorInfo> {
-    pub inner_layout: NativeLayout,
-    _m: PhantomData<T>,
-}
-impl<T> Layout<T>
-where
-    T: DescriptorInfo,
-{
-    pub fn new(ctx: &Context) -> Self {
-        Layout {
-            inner_layout: ctx.create_layout(&T::layout()),
-            _m: PhantomData,
-        }
-    }
-}
 pub trait DescriptorApi {
     fn write(
         &self,

@@ -1,7 +1,7 @@
 use super::Context;
 use crate::descriptor::{
-    Binding, CreateLayout, CreatePool, DescriptorApi, DescriptorHandle, DescriptorResource,
-    DescriptorSizes, DescriptorType, LayoutApi, NativeLayout, NativePool, PoolApi,
+    Binding, CreatePool, DescriptorApi, DescriptorHandle, DescriptorResource,
+    DescriptorSizes, DescriptorType, NativePool, PoolApi,
 };
 use crate::framegraph::{Compiled, Framegraph};
 use ash::version::DeviceV1_0;
@@ -117,45 +117,6 @@ impl CreatePool for Context {
 pub struct Layout {
     pub ctx: Context,
     pub layouts: Vec<vk::DescriptorSetLayout>,
-}
-impl LayoutApi for Layout {}
-impl CreateLayout for Context {
-    fn create_layout(&self, data: &[Binding<DescriptorType>]) -> NativeLayout {
-        let layout_bindings: Vec<_> = data
-            .iter()
-            .map(|desc| {
-                let ty = match desc.data {
-                    DescriptorType::Uniform => vk::DescriptorType::UNIFORM_BUFFER,
-                    DescriptorType::Storage => vk::DescriptorType::STORAGE_BUFFER,
-                };
-                vk::DescriptorSetLayoutBinding {
-                    binding: 0,
-                    descriptor_type: ty,
-                    descriptor_count: 1,
-                    stage_flags: vk::ShaderStageFlags::ALL,
-                    p_immutable_samplers: std::ptr::null(),
-                }
-            })
-            .collect();
-        let descriptor_info = vk::DescriptorSetLayoutCreateInfo {
-            binding_count: layout_bindings.len() as u32,
-            p_bindings: layout_bindings.as_ptr(),
-            ..Default::default()
-        };
-
-        let layouts = vec![unsafe {
-            self.device
-                .create_descriptor_set_layout(&descriptor_info, None)
-                .unwrap()
-        }];
-        let inner = Layout {
-            ctx: self.clone(),
-            layouts,
-        };
-        NativeLayout {
-            inner: Box::new(inner),
-        }
-    }
 }
 pub struct Descriptor {
     pub descriptor_set: vk::DescriptorSet,

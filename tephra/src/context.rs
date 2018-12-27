@@ -4,7 +4,7 @@ use std::sync::Arc;
 use crate::{
     buffer::BufferApi,
     commandbuffer::SubmitApi,
-    descriptor::{CreateLayout, CreatePool, DescriptorApi},
+    descriptor::{CreatePool, DescriptorApi},
     downcast,
     image::ImageApi,
     pipeline::PipelineApi,
@@ -18,7 +18,6 @@ where
     Self: CreateSwapchain
         + ShaderApi
         + DescriptorApi
-        + CreateLayout
         + CreatePool
         + BufferApi
         + ImageApi

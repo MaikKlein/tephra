@@ -1,5 +1,5 @@
 use crate::context::Context;
-use crate::image::{Image, Resolution, Format};
+use crate::image::{Format, Image, Resolution};
 use std::ops::Deref;
 
 #[derive(Debug, Fail)]
@@ -17,17 +17,11 @@ pub trait CreateSwapchain {
 
 pub trait SwapchainApi {
     fn present_images(&self) -> &[Image];
-    fn present(
-        &self,
-        index: u32,
-    );
+    fn present(&self, index: u32);
     fn aquire_next_image(&self) -> Result<u32, SwapchainError>;
     fn resolution(&self) -> Resolution;
     fn recreate(&mut self);
-    fn copy_and_present(
-        &self,
-        image: Image,
-    );
+    fn copy_and_present(&self, image: Image);
     fn format(&self) -> Format;
 }
 

@@ -1,6 +1,6 @@
-use super::image::{from_format, into_format, ImageData};
+use super::image::{into_format, ImageData};
 use super::Context;
-use super::{CommandBuffer, Vulkan};
+use super::{CommandBuffer};
 use crate::image::{Format, Image, ImageApi, ImageDesc, ImageLayout, Resolution};
 use crate::swapchain::{CreateSwapchain, Swapchain, SwapchainApi, SwapchainError};
 use ash::extensions;
