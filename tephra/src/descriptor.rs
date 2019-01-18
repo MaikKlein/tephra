@@ -36,6 +36,7 @@ pub struct LinearPoolAllocator {
     // Infos
     layout: Vec<Binding<DescriptorType>>,
     sizes: DescriptorSizes,
+    current_allocations: usize,
 }
 
 impl LinearPoolAllocator {
@@ -51,6 +52,7 @@ impl LinearPoolAllocator {
             pools: Vec::new(),
             layout,
             sizes,
+            current_allocations: 0,
         }
     }
 
@@ -68,48 +70,6 @@ impl LinearPoolAllocator {
     }
 }
 
-pub struct Allocator<'pool> {
-    ctx: Context,
-    pool: &'pool mut Pool,
-    current_allocations: HashMap<TypeId, usize>,
-}
-
-impl<'a> Drop for Allocator<'a> {
-    fn drop(&mut self) {
-        self.pool.reset();
-    }
-}
-
-impl<'pool> Allocator<'pool> {
-    pub fn allocate<'alloc, T>(&'alloc mut self) -> Descriptor<'alloc, T>
-    where
-        T: DescriptorInfo + 'static,
-    {
-        let ctx = self.ctx.clone();
-        let allocator = self
-            .pool
-            .allocators
-            .entry(TypeId::of::<T>())
-            .or_insert_with(|| LinearPoolAllocator::new::<T>(&ctx));
-        let current_allocation = self
-            .current_allocations
-            .entry(TypeId::of::<T>())
-            .or_insert(0);
-        let allocator_index = *current_allocation / allocator.block_size;
-        // If we don't have enough space, we need to allocate a new pool
-        if allocator_index >= allocator.pools.len() {
-            allocator.allocate_additional_pool();
-        }
-        let handle = allocator.pools[allocator_index].inner.create_descriptor();
-        *current_allocation += 1;
-
-        Descriptor {
-            handle,
-            _m: PhantomData,
-        }
-    }
-}
-
 pub struct Pool {
     ctx: Context,
     allocators: HashMap<TypeId, LinearPoolAllocator>,
@@ -123,12 +83,21 @@ impl Pool {
         }
     }
 
-    pub fn allocate<'a>(&'a mut self) -> Allocator<'a> {
-        Allocator {
-            ctx: self.ctx.clone(),
-            pool: self,
-            current_allocations: HashMap::new(),
+    pub fn allocate<T: DescriptorInfo>(&mut self, data: &T) -> DescriptorHandle {
+        let ctx = self.ctx.clone();
+        let allocator = self
+            .allocators
+            .entry(TypeId::of::<T>())
+            .or_insert_with(|| LinearPoolAllocator::new::<T>(&ctx));
+        let allocator_index = allocator.current_allocations / allocator.block_size;
+        // If we don't have enough space, we need to allocate a new pool
+        if allocator_index >= allocator.pools.len() {
+            allocator.allocate_additional_pool();
         }
+        let handle = allocator.pools[allocator_index].inner.create_descriptor();
+        ctx.write(handle, &data.descriptor_data());
+        allocator.current_allocations += 1;
+        handle
     }
 
     pub fn reset(&mut self) {
@@ -143,7 +112,6 @@ pub trait DescriptorApi {
         &self,
         handle: DescriptorHandle,
         data: &[Binding<DescriptorResource>],
-        fg: &Framegraph<Compiled>,
     );
     fn create_descriptor(
         &self,
@@ -198,8 +166,8 @@ pub enum DescriptorType {
     Storage,
 }
 pub enum DescriptorResource {
-    Uniform(Resource<BufferHandle>),
-    Storage(Resource<BufferHandle>),
+    Uniform(BufferHandle),
+    Storage(BufferHandle),
 }
 #[derive(Debug)]
 pub struct Binding<T> {
@@ -207,15 +175,15 @@ pub struct Binding<T> {
     pub data: T,
 }
 
-pub struct Descriptor<'a, T: DescriptorInfo> {
-    pub handle: DescriptorHandle,
-    _m: PhantomData<&'a T>,
-}
-impl<'a, T> Descriptor<'a, T>
-where
-    T: DescriptorInfo,
-{
-    pub fn update(&mut self, ctx: &Context, t: &'a T, fg: &Framegraph<Compiled>) {
-        ctx.write(self.handle, &t.descriptor_data(), fg);
-    }
-}
+// pub struct Descriptor<'a, T: DescriptorInfo> {
+//     pub handle: DescriptorHandle,
+//     _m: PhantomData<&'a T>,
+// }
+// impl<'a, T> Descriptor<'a, T>
+// where
+//     T: DescriptorInfo,
+// {
+//     pub fn update(&mut self, ctx: &Context, t: &'a T, fg: &Framegraph<Compiled>) {
+//         ctx.write(self.handle, &t.descriptor_data(), fg);
+//     }
+// }

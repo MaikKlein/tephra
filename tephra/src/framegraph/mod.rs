@@ -2,7 +2,7 @@ use crate::{
     buffer::{Buffer, BufferHandle},
     commandbuffer::CommandList,
     context::Context,
-    descriptor::{Allocator, Pool},
+    descriptor::Pool,
     framegraph::task_builder::TaskBuilder,
     image::{Image, ImageDesc},
     renderpass::{Framebuffer, Renderpass},
@@ -151,9 +151,12 @@ impl Registry {
             _ => unreachable!(),
         }
     }
-    pub fn get_buffer(&self, resource: Resource<BufferHandle>) -> BufferHandle {
+    pub fn get_buffer<T>(&self, resource: Resource<Buffer<T>>) -> Buffer<T> {
         match self.resources[&resource.id] {
-            ResourceType::Buffer(buffer) => buffer,
+            ResourceType::Buffer(buffer) => Buffer {
+                _m: PhantomData,
+                buffer,
+            },
             _ => unreachable!(),
         }
     }
@@ -183,7 +186,7 @@ macro_rules! define_fn {
 }
 define_fn! {
     pub type ExecuteFn =
-        Fn(&Framegraph<Compiled>, &Blackboard, &mut Allocator) -> CommandList + 'static
+        Fn(&Framegraph<Compiled>, &Blackboard, &mut Pool) -> CommandList + 'static
 }
 
 pub struct Framegraph<T = Recording> {
@@ -252,8 +255,7 @@ impl Framegraph {
     pub fn add_pass<Setup, Execute, P>(&mut self, name: &'static str, mut setup: Setup) -> P
     where
         Setup: FnMut(&mut TaskBuilder<'_>) -> (P, Execute),
-        Execute:
-            Fn(&Framegraph<Compiled>, &Blackboard, &mut Allocator<'_>) -> CommandList + 'static,
+        Execute: Fn(&Framegraph<Compiled>, &Blackboard, &mut Pool) -> CommandList + 'static,
     {
         let (pass_handle, execute, data) = {
             let pass = Pass { name };
@@ -344,11 +346,10 @@ impl Framegraph<Compiled> {
 
     pub unsafe fn execute(&mut self, blackboard: &Blackboard) {
         let mut pool = Pool::new(&self.ctx);
-        let mut allocator = pool.allocate();
         self.submission_order().for_each(|idx| {
             // TODO: Improve pass execution
             let execute = self.execute_fns.get(&idx).unwrap();
-            let cmds = execute(self, blackboard, &mut allocator);
+            let cmds = execute(self, blackboard, &mut pool);
             self.ctx.submit_commands(&cmds);
         });
     }

@@ -28,7 +28,7 @@ pub struct Vertex {
 #[derive(Descriptor)]
 pub struct ComputeDesc {
     #[descriptor(Storage)]
-    pub buffer: Resource<Buffer<[f32; 4]>>,
+    pub buffer: Buffer<[f32; 4]>,
 }
 
 pub struct TriangleCompute {
@@ -62,10 +62,9 @@ impl TriangleCompute {
             (pass, move |fg, _, pool| {
                 let mut cmds = CommandList::new();
                 let color = ComputeDesc {
-                    buffer: storage_buffer,
+                    buffer: fg.registry().get_buffer(storage_buffer),
                 };
-                let mut descriptor = pool.allocate::<ComputeDesc>();
-                descriptor.update(fg.ctx(), &color, &fg);
+                let mut descriptor = pool.allocate(&color);
                 cmds.record::<Compute>()
                     .dispatch(pipeline, descriptor, 1, 1, 1)
                     .submit();
@@ -78,7 +77,7 @@ impl TriangleCompute {
 #[derive(Descriptor)]
 pub struct Color {
     #[descriptor(Storage)]
-    pub color: Resource<Buffer<[f32; 4]>>,
+    pub color: Buffer<[f32; 4]>,
 }
 #[derive(Copy, Clone)]
 pub struct TrianglePass {
@@ -150,11 +149,9 @@ impl TrianglePass {
                 let mut cmds = CommandList::new();
                 let state = blackbox.get::<TriangleState>().expect("State");
                 let color = Color {
-                    color: pass.storage_buffer,
+                    color: fg.registry().get_buffer(pass.storage_buffer),
                 };
-                let mut descriptor = pool.allocate::<Color>();
-                // TODO: Improve this API, just terrible.
-                descriptor.update(fg.ctx(), &color, &fg);
+                let mut descriptor = pool.allocate(&color);
                 cmds.record::<Graphics>()
                     .draw_indexed(
                         pipeline,

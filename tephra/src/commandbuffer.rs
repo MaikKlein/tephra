@@ -1,14 +1,30 @@
 use crate::{
     buffer::{Buffer, BufferHandle},
-    descriptor::{Descriptor, DescriptorHandle, DescriptorInfo},
+    descriptor::{DescriptorHandle, DescriptorInfo},
     image::ImageHandle,
     pipeline::{ComputePipeline, GraphicsPipeline, GraphicsPipelineState},
     renderpass::{Framebuffer, Renderpass, VertexInput, VertexInputData},
 };
+use bitflags::bitflags;
 use smallvec::SmallVec;
 use std::{marker::PhantomData, ops::Range};
 
-pub struct ShaderArgument;
+bitflags! {
+    pub struct AccessFlags: u32 {
+        const TRANSFER_READ = 1 << 0;
+        const TRANSFER_WRITE = 1 << 1;
+        const VERTEX_BUFFER = 1 << 2;
+        const INDEX_BUFFER = 1 << 3;
+        const COMPUTE_READ = 1 << 4;
+        const COMPUTE_WRITE = 1 << 5;
+        const FRAGMENT_READ = 1 << 6;
+        const FRAGMENT_READ_COLOR = 1 << 7;
+    }
+}
+
+pub struct ShaderArgument {
+    descriptor: DescriptorHandle,
+}
 const MAX_SHADER_ARGS: usize = 4;
 pub type ShaderArguments = SmallVec<[ShaderArgument; MAX_SHADER_ARGS]>;
 
@@ -104,25 +120,24 @@ where
 }
 impl RecordCommandList<'_, Transfer> {}
 impl RecordCommandList<'_, Graphics> {
-    pub fn draw_indexed<'alloc, Vertex, ShaderArgument>(
+    pub fn draw_indexed<Vertex>(
         mut self,
         graphics_pipeline: GraphicsPipeline,
         renderpass: Renderpass,
         framebuffer: Framebuffer,
-        descriptor: Descriptor<'alloc, ShaderArgument>,
+        descriptor: DescriptorHandle,
         vertex_buffer: Buffer<Vertex>,
         index_buffer: Buffer<u32>,
         range: Range<u32>,
     ) -> Self
     where
         Vertex: VertexInput,
-        ShaderArgument: DescriptorInfo,
     {
         let cmd = DrawCommand {
             graphics_pipeline,
             renderpass,
             framebuffer,
-            shader_arguments: descriptor.handle,
+            shader_arguments: descriptor,
             vertex: vertex_buffer.buffer,
             index: index_buffer,
             range,
@@ -132,20 +147,18 @@ impl RecordCommandList<'_, Graphics> {
     }
 }
 impl RecordCommandList<'_, Compute> {
-    pub fn dispatch<'alloc, ShaderArgument>(
+    pub fn dispatch(
         mut self,
         pipeline: ComputePipeline,
-        descriptor: Descriptor<'alloc, ShaderArgument>,
+        descriptor: DescriptorHandle,
         x: u32,
         y: u32,
         z: u32,
     ) -> Self
-    where
-        ShaderArgument: DescriptorInfo,
     {
         let cmd = DispatchCommand {
             pipeline,
-            shader_arguments: descriptor.handle,
+            shader_arguments: descriptor,
             x,
             y,
             z,
