@@ -186,10 +186,11 @@ macro_rules! define_fn {
 }
 define_fn! {
     pub type ExecuteFn =
-        Fn(&Framegraph<Compiled>, &Blackboard, &mut Pool) -> CommandList + 'static
+        Fn(&Registry, &Blackboard, &mut Pool) -> CommandList + 'static
 }
 
 pub struct Framegraph<T = Recording> {
+    pool: Pool,
     pub ctx: Context,
     execute_fns: HashMap<Handle, Box<ExecuteFn>>,
     state: T,
@@ -240,7 +241,9 @@ impl<T> Framegraph<T> {
 }
 impl Framegraph {
     pub fn new(ctx: &Context) -> Self {
+        let pool = Pool::new(ctx);
         Framegraph {
+            pool,
             ctx: ctx.clone(),
             state: Recording {
                 image_data: Vec::new(),
@@ -255,7 +258,7 @@ impl Framegraph {
     pub fn add_pass<Setup, Execute, P>(&mut self, name: &'static str, mut setup: Setup) -> P
     where
         Setup: FnMut(&mut TaskBuilder<'_>) -> (P, Execute),
-        Execute: Fn(&Framegraph<Compiled>, &Blackboard, &mut Pool) -> CommandList + 'static,
+        Execute: Fn(&Registry, &Blackboard, &mut Pool) -> CommandList + 'static,
     {
         let (pass_handle, execute, data) = {
             let pass = Pass { name };
@@ -293,6 +296,7 @@ impl Framegraph {
         }
 
         Framegraph {
+            pool: self.pool,
             ctx: self.ctx,
             execute_fns: self.execute_fns,
             registry: self.registry,
@@ -345,13 +349,14 @@ impl Framegraph<Compiled> {
     }
 
     pub unsafe fn execute(&mut self, blackboard: &Blackboard) {
-        let mut pool = Pool::new(&self.ctx);
-        self.submission_order().for_each(|idx| {
+        for idx in self.submission_order() {
             // TODO: Improve pass execution
+            let pool = &mut self.pool;
             let execute = self.execute_fns.get(&idx).unwrap();
-            let cmds = execute(self, blackboard, &mut pool);
+            let cmds = execute(&self.registry, blackboard, pool);
             self.ctx.submit_commands(&cmds);
-        });
+        }
+        self.pool.reset();
     }
     pub fn export_graphviz<P: AsRef<Path>>(&self, path: P) {
         use std::io::Write;

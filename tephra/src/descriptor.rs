@@ -66,6 +66,7 @@ impl LinearPoolAllocator {
     pub fn reset(&mut self) {
         for pool in &mut self.pools {
             pool.inner.reset();
+            self.current_allocations = 0;
         }
     }
 }

@@ -59,10 +59,10 @@ impl TriangleCompute {
                 .layout::<Color>()
                 .create(ctx);
             let pass = TriangleCompute { storage_buffer };
-            (pass, move |fg, _, pool| {
+            (pass, move |registry, _, pool| {
                 let mut cmds = CommandList::new();
                 let color = ComputeDesc {
-                    buffer: fg.registry().get_buffer(storage_buffer),
+                    buffer: registry.get_buffer(storage_buffer),
                 };
                 let mut descriptor = pool.allocate(&color);
                 cmds.record::<Compute>()
@@ -145,18 +145,18 @@ impl TrianglePass {
                 .vertex::<Vertex>()
                 .create(ctx);
             let framebuffer = builder.create_framebuffer(renderpass, vec![pass.color, pass.depth]);
-            (pass, move |fg, blackbox, pool| {
+            (pass, move |registry, blackbox, pool| {
                 let mut cmds = CommandList::new();
                 let state = blackbox.get::<TriangleState>().expect("State");
                 let color = Color {
-                    color: fg.registry().get_buffer(pass.storage_buffer),
+                    color: registry.get_buffer(pass.storage_buffer),
                 };
                 let mut descriptor = pool.allocate(&color);
                 cmds.record::<Graphics>()
                     .draw_indexed(
                         pipeline,
                         renderpass,
-                        fg.registry().get_framebuffer(framebuffer),
+                        registry.get_framebuffer(framebuffer),
                         descriptor,
                         state.vertex_buffer,
                         state.index_buffer,
@@ -180,9 +180,9 @@ impl Presentpass {
             let pass = Presentpass {
                 color: builder.read(color),
             };
-            (pass, move |fg, blackboard, _pool| {
+            (pass, move |registry, blackboard, _pool| {
                 let swapchain = blackboard.get::<Swapchain>().expect("swap");
-                let color_image = fg.registry().get_image(pass.color);
+                let color_image = registry.get_image(pass.color);
                 swapchain.copy_and_present(color_image);
                 let cmds = CommandList::new();
                 cmds
