@@ -1,6 +1,8 @@
-use crate::buffer::BufferHandle;
-use crate::context::Context;
-use crate::framegraph::{Compiled, Framegraph, Resource};
+use crate::{
+    buffer::BufferHandle,
+    commandbuffer::{ShaderArguments, ShaderView, ShaderViews},
+    context::Context,
+};
 use slotmap::new_key_type;
 use std::any::TypeId;
 use std::collections::HashMap;
@@ -15,7 +17,7 @@ pub trait CreatePool {
     fn create_pool(
         &self,
         alloc_size: u32,
-        data: &[Binding<DescriptorType>],
+        data: &[ShaderView],
         sizes: DescriptorSizes,
     ) -> NativePool;
 }
@@ -34,32 +36,30 @@ pub struct LinearPoolAllocator {
     block_size: usize,
     pools: Vec<NativePool>,
     // Infos
-    layout: Vec<Binding<DescriptorType>>,
+    views: ShaderViews,
     sizes: DescriptorSizes,
     current_allocations: usize,
 }
 
 impl LinearPoolAllocator {
-    pub fn new<T>(ctx: &Context) -> Self
-    where
-        T: DescriptorInfo,
-    {
-        let layout = T::layout();
-        let sizes = DescriptorSizes::from_layout(&layout);
+    pub fn new(ctx: &Context, views: ShaderViews) -> Self {
+        let sizes = DescriptorSizes::from_views(&views);
         LinearPoolAllocator {
             ctx: ctx.clone(),
             block_size: 50,
             pools: Vec::new(),
-            layout,
+            views,
             sizes,
             current_allocations: 0,
         }
     }
 
     pub fn allocate_additional_pool(&mut self) {
+        println!("allo {:?}", self.views);
+        println!("allo {:?}", self.sizes);
         let pool = self
             .ctx
-            .create_pool(self.block_size as u32, &self.layout, self.sizes);
+            .create_pool(self.block_size as u32, &self.views, self.sizes);
         self.pools.push(pool);
     }
 
@@ -73,7 +73,7 @@ impl LinearPoolAllocator {
 
 pub struct Pool {
     ctx: Context,
-    allocators: HashMap<TypeId, LinearPoolAllocator>,
+    allocators: HashMap<ShaderViews, LinearPoolAllocator>,
 }
 
 impl Pool {
@@ -84,19 +84,20 @@ impl Pool {
         }
     }
 
-    pub fn allocate<T: DescriptorInfo>(&mut self, data: &T) -> DescriptorHandle {
+    pub fn allocate(&mut self, data: &ShaderArguments) -> DescriptorHandle {
+        println!("Allocate ");
         let ctx = self.ctx.clone();
         let allocator = self
             .allocators
-            .entry(TypeId::of::<T>())
-            .or_insert_with(|| LinearPoolAllocator::new::<T>(&ctx));
+            .entry(data.views.clone())
+            .or_insert_with(|| LinearPoolAllocator::new(&ctx, data.views.clone()));
         let allocator_index = allocator.current_allocations / allocator.block_size;
         // If we don't have enough space, we need to allocate a new pool
         if allocator_index >= allocator.pools.len() {
             allocator.allocate_additional_pool();
         }
         let handle = allocator.pools[allocator_index].inner.create_descriptor();
-        ctx.write(handle, &data.descriptor_data());
+        ctx.write(handle, &data);
         allocator.current_allocations += 1;
         handle
     }
@@ -109,16 +110,7 @@ impl Pool {
 }
 
 pub trait DescriptorApi {
-    fn write(
-        &self,
-        handle: DescriptorHandle,
-        data: &[Binding<DescriptorResource>],
-    );
-    fn create_descriptor(
-        &self,
-        data: &[Binding<DescriptorType>],
-        sizes: DescriptorSizes,
-    ) -> DescriptorHandle;
+    fn write(&self, handle: DescriptorHandle, data: &ShaderArguments);
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -129,14 +121,14 @@ pub struct DescriptorSizes {
 }
 
 impl DescriptorSizes {
-    pub fn from_layout(layout: &[Binding<DescriptorType>]) -> Self {
+    pub fn from_views(views: &[ShaderView]) -> Self {
         let sizes = DescriptorSizes {
             buffer: 0,
             storage: 0,
             images: 0,
         };
-        layout.iter().fold(sizes, |mut acc, elem| {
-            match elem.data {
+        views.iter().fold(sizes, |mut acc, elem| {
+            match elem.ty {
                 DescriptorType::Uniform => acc.buffer += 1,
                 DescriptorType::Storage => acc.storage += 1,
             }
@@ -161,7 +153,7 @@ impl DescriptorInfo for () {
     }
 }
 
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum DescriptorType {
     Uniform,
     Storage,
@@ -175,16 +167,3 @@ pub struct Binding<T> {
     pub binding: u32,
     pub data: T,
 }
-
-// pub struct Descriptor<'a, T: DescriptorInfo> {
-//     pub handle: DescriptorHandle,
-//     _m: PhantomData<&'a T>,
-// }
-// impl<'a, T> Descriptor<'a, T>
-// where
-//     T: DescriptorInfo,
-// {
-//     pub fn update(&mut self, ctx: &Context, t: &'a T, fg: &Framegraph<Compiled>) {
-//         ctx.write(self.handle, &t.descriptor_data(), fg);
-//     }
-// }

@@ -186,7 +186,7 @@ macro_rules! define_fn {
 }
 define_fn! {
     pub type ExecuteFn =
-        Fn(&Registry, &Blackboard, &mut Pool) -> CommandList + 'static
+        Fn(&Registry, &Blackboard, &mut CommandList) + 'static
 }
 
 pub struct Framegraph<T = Recording> {
@@ -258,7 +258,7 @@ impl Framegraph {
     pub fn add_pass<Setup, Execute, P>(&mut self, name: &'static str, mut setup: Setup) -> P
     where
         Setup: FnMut(&mut TaskBuilder<'_>) -> (P, Execute),
-        Execute: Fn(&Registry, &Blackboard, &mut Pool) -> CommandList + 'static,
+        Execute: Fn(&Registry, &Blackboard, &mut CommandList) + 'static,
     {
         let (pass_handle, execute, data) = {
             let pass = Pass { name };
@@ -349,13 +349,14 @@ impl Framegraph<Compiled> {
     }
 
     pub unsafe fn execute(&mut self, blackboard: &Blackboard) {
-        for idx in self.submission_order() {
+        let submission_order = self.submission_order();
+        let mut command_list = CommandList::new();
+        for idx in submission_order {
             // TODO: Improve pass execution
-            let pool = &mut self.pool;
             let execute = self.execute_fns.get(&idx).unwrap();
-            let cmds = execute(&self.registry, blackboard, pool);
-            self.ctx.submit_commands(&cmds);
+            execute(&self.registry, blackboard, &mut command_list);
         }
+        self.ctx.submit_commands(&mut self.pool, &command_list);
         self.pool.reset();
     }
     pub fn export_graphviz<P: AsRef<Path>>(&self, path: P) {

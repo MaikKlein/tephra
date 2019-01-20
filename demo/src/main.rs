@@ -7,8 +7,11 @@ pub use tephra::winit;
 
 use tephra::{
     buffer::{Buffer, BufferUsage, Property},
-    commandbuffer::{CommandList, Compute, Graphics},
+    commandbuffer::{
+        CommandList, Compute, Graphics, ShaderArguments, ShaderResource, ShaderView, Space,
+    },
     context::Context,
+    descriptor::DescriptorType,
     framegraph::{Blackboard, Framegraph, Recording, Resource},
     image::{Format, Image, ImageDesc, ImageLayout, Resolution},
     pipeline::{ComputePipeline, GraphicsPipeline, ShaderStage},
@@ -59,16 +62,20 @@ impl TriangleCompute {
                 .layout::<Color>()
                 .create(ctx);
             let pass = TriangleCompute { storage_buffer };
-            (pass, move |registry, _, pool| {
-                let mut cmds = CommandList::new();
-                let color = ComputeDesc {
-                    buffer: registry.get_buffer(storage_buffer),
-                };
-                let mut descriptor = pool.allocate(&color);
+            (pass, move |registry, _, cmds| {
+                let shader_arguments = ShaderArguments::builder()
+                    .with(
+                        registry.get_buffer(storage_buffer),
+                        0,
+                        DescriptorType::Storage,
+                    )
+                    .build();
+                let space = Space::builder()
+                    .with_shader_arg(0, shader_arguments)
+                    .build();
                 cmds.record::<Compute>()
-                    .dispatch(pipeline, descriptor, 1, 1, 1)
+                    .dispatch(pipeline, space, 1, 1, 1)
                     .submit();
-                cmds
             })
         })
     }
@@ -145,25 +152,29 @@ impl TrianglePass {
                 .vertex::<Vertex>()
                 .create(ctx);
             let framebuffer = builder.create_framebuffer(renderpass, vec![pass.color, pass.depth]);
-            (pass, move |registry, blackbox, pool| {
-                let mut cmds = CommandList::new();
+            (pass, move |registry, blackbox, cmds| {
                 let state = blackbox.get::<TriangleState>().expect("State");
-                let color = Color {
-                    color: registry.get_buffer(pass.storage_buffer),
-                };
-                let mut descriptor = pool.allocate(&color);
+                let shader_arguments = ShaderArguments::builder()
+                    .with(
+                        registry.get_buffer(pass.storage_buffer),
+                        0,
+                        DescriptorType::Storage,
+                    )
+                    .build();
+                let space = Space::builder()
+                    .with_shader_arg(0, shader_arguments)
+                    .build();
                 cmds.record::<Graphics>()
                     .draw_indexed(
                         pipeline,
                         renderpass,
                         registry.get_framebuffer(framebuffer),
-                        descriptor,
+                        space,
                         state.vertex_buffer,
                         state.index_buffer,
                         0..3,
                     )
                     .submit();
-                cmds
             })
         })
     }
@@ -180,12 +191,10 @@ impl Presentpass {
             let pass = Presentpass {
                 color: builder.read(color),
             };
-            (pass, move |registry, blackboard, _pool| {
+            (pass, move |registry, blackboard, _cmds| {
                 let swapchain = blackboard.get::<Swapchain>().expect("swap");
                 let color_image = registry.get_image(pass.color);
                 swapchain.copy_and_present(color_image);
-                let cmds = CommandList::new();
-                cmds
             })
         });
     }

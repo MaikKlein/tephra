@@ -1,7 +1,10 @@
 use super::Context;
-use tephra::commandbuffer::{Command, CommandList, SubmitApi};
 use ash::{version::DeviceV1_0, vk};
 use std::ptr;
+use tephra::{
+    commandbuffer::{Command, CommandList, SubmitApi},
+    descriptor::Pool,
+};
 
 struct PipelineBarrier {
     barrier: Barrier,
@@ -23,7 +26,7 @@ enum Sync {
 }
 
 impl SubmitApi for Context {
-    unsafe fn submit_commands(&self, commands: &CommandList) {
+    unsafe fn submit_commands(&self, pool: &mut Pool, commands: &CommandList) {
         let mut fences = Vec::new();
         let mut buffers = Vec::new();
         let device = &self.device;
@@ -133,20 +136,23 @@ impl SubmitApi for Context {
                     }
                     Command::Dispatch(dispatch) => {
                         let pipeline = self.compute_pipelines.get(dispatch.pipeline);
-                        let descriptor = self.descriptors.get(dispatch.shader_arguments);
                         device.cmd_bind_pipeline(
                             *command_buffer,
                             vk::PipelineBindPoint::COMPUTE,
                             pipeline.pipeline,
                         );
-                        device.cmd_bind_descriptor_sets(
-                            *command_buffer,
-                            vk::PipelineBindPoint::COMPUTE,
-                            pipeline.layout,
-                            0,
-                            &[descriptor.descriptor_set],
-                            &[],
-                        );
+                        for (set, shader_arguments) in dispatch.shader_arguments.iter(){
+                            let descriptor_handle = pool.allocate(shader_arguments);
+                            let descriptor = self.descriptors.get(descriptor_handle);
+                            device.cmd_bind_descriptor_sets(
+                                *command_buffer,
+                                vk::PipelineBindPoint::COMPUTE,
+                                pipeline.layout,
+                                *set,
+                                &[descriptor.descriptor_set],
+                                &[],
+                            );
+                        }
                         device.cmd_dispatch(*command_buffer, dispatch.x, dispatch.y, dispatch.z);
                     }
                     Command::Draw(draw) => {
@@ -181,7 +187,6 @@ impl SubmitApi for Context {
                         let vertex_buffer = self.buffers.get(draw.vertex);
                         let index_buffer = self.buffers.get(draw.index.buffer);
                         let renderpass = self.renderpasses.get(draw.renderpass);
-                        let descriptor = self.descriptors.get(draw.shader_arguments);
                         let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
                             .render_pass(renderpass.render_pass)
                             .framebuffer(framebuffer.framebuffer)
@@ -205,14 +210,18 @@ impl SubmitApi for Context {
                             vk::PipelineBindPoint::GRAPHICS,
                             pipeline.pipeline,
                         );
-                        device.cmd_bind_descriptor_sets(
-                            *command_buffer,
-                            vk::PipelineBindPoint::GRAPHICS,
-                            pipeline.layout,
-                            0,
-                            &[descriptor.descriptor_set],
-                            &[],
-                        );
+                        for (set, shader_arguments) in draw.shader_arguments.iter() {
+                            let descriptor_handle = pool.allocate(shader_arguments);
+                            let descriptor = self.descriptors.get(descriptor_handle);
+                            device.cmd_bind_descriptor_sets(
+                                *command_buffer,
+                                vk::PipelineBindPoint::GRAPHICS,
+                                pipeline.layout,
+                                *set,
+                                &[descriptor.descriptor_set],
+                                &[],
+                            );
+                        }
                         device.cmd_bind_vertex_buffers(
                             *command_buffer,
                             0,

@@ -1,13 +1,17 @@
 use crate::{
     buffer::{Buffer, BufferHandle},
-    descriptor::{DescriptorHandle, DescriptorInfo},
+    descriptor::{DescriptorHandle, DescriptorInfo, DescriptorType, Pool},
     image::ImageHandle,
     pipeline::{ComputePipeline, GraphicsPipeline, GraphicsPipelineState},
     renderpass::{Framebuffer, Renderpass, VertexInput, VertexInputData},
 };
 use bitflags::bitflags;
 use smallvec::SmallVec;
-use std::{marker::PhantomData, ops::Range};
+use std::{
+    hash::{Hash, Hasher},
+    marker::PhantomData,
+    ops::{Deref, Range},
+};
 
 bitflags! {
     pub struct AccessFlags: u32 {
@@ -21,12 +25,95 @@ bitflags! {
         const FRAGMENT_READ_COLOR = 1 << 7;
     }
 }
-
-pub struct ShaderArgument {
-    descriptor: DescriptorHandle,
+#[derive(Default)]
+pub struct Space(SmallVec<[(u32, ShaderArguments); MAX_SHADER_ARGS]>);
+impl Space {
+    pub fn builder() -> SpaceBuilder {
+        SpaceBuilder {
+            space: Space::default(),
+        }
+    }
 }
+
+pub struct SpaceBuilder {
+    space: Space,
+}
+impl Deref for Space {
+    type Target = [(u32, ShaderArguments)];
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+impl SpaceBuilder {
+    pub fn with_shader_arg(mut self, set: u32, shader_args: ShaderArguments) -> Self {
+        self.space.0.push((set, shader_args));
+        self
+    }
+    pub fn build(self) -> Space {
+        self.space
+    }
+}
+#[derive(Copy, Clone, Debug)]
+pub enum ShaderResource {
+    Buffer(BufferHandle),
+    Image(ImageHandle),
+}
+impl<T> From<Buffer<T>> for ShaderResource {
+    fn from(buffer: Buffer<T>) -> ShaderResource {
+        ShaderResource::Buffer(buffer.buffer)
+    }
+}
+
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+pub struct ShaderView {
+    pub binding: u32,
+    pub ty: DescriptorType,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct ShaderArgument {
+    pub resource: ShaderResource,
+    pub view: ShaderView,
+}
+
 const MAX_SHADER_ARGS: usize = 4;
-pub type ShaderArguments = SmallVec<[ShaderArgument; MAX_SHADER_ARGS]>;
+
+pub type StackVec<T> = SmallVec<[T; MAX_SHADER_ARGS]>;
+pub type ShaderViews = StackVec<ShaderView>;
+pub type ShaderResources =  StackVec<ShaderResource>;
+
+#[derive(Default, Debug)]
+pub struct ShaderArguments{
+    pub resources: ShaderResources,
+    pub views: ShaderViews,
+}
+
+pub struct ShaderArgumentsBuilder {
+    shader_arguments: ShaderArguments,
+}
+impl ShaderArgumentsBuilder {
+    pub fn build(self) -> ShaderArguments {
+        self.shader_arguments
+    }
+    pub fn with<S: Into<ShaderResource>>(
+        mut self,
+        shader_resource: S,
+        binding: u32,
+        ty: DescriptorType,
+    ) -> Self {
+        let view = ShaderView { binding, ty };
+        self.shader_arguments.views.push(view);
+        self.shader_arguments.resources.push(shader_resource.into());
+        self
+    }
+}
+impl ShaderArguments {
+    pub fn builder() -> ShaderArgumentsBuilder {
+        ShaderArgumentsBuilder {
+            shader_arguments: ShaderArguments::default(),
+        }
+    }
+}
 
 // TODO: Implement properly
 pub struct PipelineInfo {
@@ -45,13 +132,13 @@ pub struct DrawCommand {
     pub framebuffer: Framebuffer,
     pub vertex: BufferHandle,
     pub index: Buffer<u32>,
-    pub shader_arguments: DescriptorHandle,
+    pub shader_arguments: Space,
     pub range: Range<u32>,
 }
 
 pub struct DispatchCommand {
     pub pipeline: ComputePipeline,
-    pub shader_arguments: DescriptorHandle,
+    pub shader_arguments: Space,
     pub x: u32,
     pub y: u32,
     pub z: u32,
@@ -125,7 +212,7 @@ impl RecordCommandList<'_, Graphics> {
         graphics_pipeline: GraphicsPipeline,
         renderpass: Renderpass,
         framebuffer: Framebuffer,
-        descriptor: DescriptorHandle,
+        shader_arguments: Space,
         vertex_buffer: Buffer<Vertex>,
         index_buffer: Buffer<u32>,
         range: Range<u32>,
@@ -137,7 +224,7 @@ impl RecordCommandList<'_, Graphics> {
             graphics_pipeline,
             renderpass,
             framebuffer,
-            shader_arguments: descriptor,
+            shader_arguments,
             vertex: vertex_buffer.buffer,
             index: index_buffer,
             range,
@@ -150,15 +237,14 @@ impl RecordCommandList<'_, Compute> {
     pub fn dispatch(
         mut self,
         pipeline: ComputePipeline,
-        descriptor: DescriptorHandle,
+        shader_arguments: Space,
         x: u32,
         y: u32,
         z: u32,
-    ) -> Self
-    {
+    ) -> Self {
         let cmd = DispatchCommand {
             pipeline,
-            shader_arguments: descriptor,
+            shader_arguments,
             x,
             y,
             z,
@@ -174,147 +260,5 @@ pub enum Command {
     Dispatch(DispatchCommand),
 }
 pub trait SubmitApi {
-    unsafe fn submit_commands(&self, commands: &CommandList);
+    unsafe fn submit_commands(&self, pool: &mut Pool, commands: &CommandList);
 }
-
-// pub trait ExecuteApi {
-//     fn execute_commands(
-//         &self,
-//         cmds: &[GraphicsCmd],
-//     );
-// }
-// pub trait CreateExecute {
-//     fn create_execute(&self) -> Execute;
-// }
-
-// pub struct Execute {
-//     pub inner: Box<dyn ExecuteApi>,
-// }
-
-// pub enum ComputeCmd<'a> {
-//     BindPipeline { state: &'a ComputeState },
-//     Dispatch { x: u32, y: u32, z: u32 },
-//     BindDescriptor(DescriptorHandle),
-// }
-// pub struct ComputeCommandbuffer<'a> {
-//     fg: &'a Framegraph<Compiled>,
-//     pool_allocator: Allocator<'a>,
-//     pub(crate) cmds: Vec<ComputeCmd<'a>>,
-// }
-// impl<'a> ComputeCommandbuffer<'a> {
-//     pub fn new(
-//         pool_allocator: Allocator<'a>,
-//         fg: &'a Framegraph<Compiled>,
-//     ) -> Self {
-//         ComputeCommandbuffer {
-//             fg,
-//             cmds: Vec::new(),
-//             pool_allocator,
-//         }
-//     }
-
-//     pub fn dispatch(
-//         &mut self,
-//         x: u32,
-//         y: u32,
-//         z: u32,
-//     ) {
-//         let cmd = ComputeCmd::Dispatch { x, y, z };
-//         self.cmds.push(cmd);
-//     }
-
-//     pub fn bind_pipeline(
-//         &mut self,
-//         state: &'a ComputeState,
-//     ) {
-//         let cmd = ComputeCmd::BindPipeline { state };
-//         self.cmds.push(cmd);
-//     }
-//     pub fn bind_descriptor<T>(
-//         &mut self,
-//         descriptor: &T,
-//     ) where
-//         T: DescriptorInfo,
-//     {
-//         let mut d = self.pool_allocator.allocate::<T>();
-//         d.update(&self.fg.ctx, descriptor, &self.fg);
-//         let cmd = ComputeCmd::BindDescriptor(d.handle);
-//         self.cmds.push(cmd);
-//     }
-// }
-// pub enum GraphicsCmd<'a> {
-//     BindVertex(BufferHandle),
-//     BindIndex(BufferHandle),
-//     BindDescriptor(DescriptorHandle),
-//     BindPipeline {
-//         state: &'a GraphicsPipelineState,
-//         stride: u32,
-//         vertex_input_data: Vec<VertexInputData>,
-//     },
-//     DrawIndex {
-//         len: u32,
-//     },
-// }
-
-// pub struct GraphicsCommandbuffer<'a> {
-//     fg: &'a Framegraph<Compiled>,
-//     pool_allocator: Allocator<'a>,
-//     pub(crate) cmds: Vec<GraphicsCmd<'a>>,
-// }
-
-// impl<'a> GraphicsCommandbuffer<'a> {
-//     pub fn new(
-//         fg: &'a Framegraph<Compiled>,
-//         pool_allocator: Allocator<'a>,
-//     ) -> Self {
-//         GraphicsCommandbuffer {
-//             fg,
-//             cmds: Vec::new(),
-//             pool_allocator,
-//         }
-//     }
-//     pub fn bind_vertex<T>(
-//         &mut self,
-//         buffer: Buffer<T>,
-//     ) {
-//         let cmd = GraphicsCmd::BindVertex(buffer.buffer);
-//         self.cmds.push(cmd);
-//     }
-//     pub fn bind_index(
-//         &mut self,
-//         buffer: Buffer<u32>,
-//     ) {
-//         let cmd = GraphicsCmd::BindIndex(buffer.buffer);
-//         self.cmds.push(cmd);
-//     }
-//     pub fn bind_pipeline<T: VertexInput>(
-//         &mut self,
-//         state: &'a GraphicsPipelineState,
-//     ) {
-//         let cmd = GraphicsCmd::BindPipeline {
-//             state,
-//             stride: std::mem::size_of::<T>() as u32,
-//             vertex_input_data: T::vertex_input_data(),
-//         };
-//         self.cmds.push(cmd);
-//     }
-//     pub fn draw_index(
-//         &mut self,
-//         len: usize,
-//     ) {
-//         let cmd = GraphicsCmd::DrawIndex { len: len as u32 };
-//         self.cmds.push(cmd);
-//     }
-
-//     pub fn bind_descriptor<T>(
-//         &mut self,
-//         descriptor: &T,
-//     ) where
-//         T: DescriptorInfo,
-//     {
-//         let mut d = self.pool_allocator.allocate::<T>();
-//         d.update(&self.fg.ctx, descriptor, &self.fg);
-//         let cmd = GraphicsCmd::BindDescriptor(d.handle);
-//         self.cmds.push(cmd);
-//     }
-// }

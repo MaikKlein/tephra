@@ -1,6 +1,7 @@
 use super::Context;
 use ash::version::DeviceV1_0;
 use ash::vk;
+use tephra::commandbuffer::{ShaderArguments, ShaderResource, ShaderView, Space};
 use tephra::descriptor::{
     Binding, CreatePool, DescriptorApi, DescriptorHandle, DescriptorResource, DescriptorSizes,
     DescriptorType, NativePool, PoolApi,
@@ -28,6 +29,7 @@ impl PoolApi for Pool {
             p_set_layouts: self.layouts.as_ptr(),
             ..Default::default()
         };
+        dbg!{&desc_alloc_info};
         let descriptor_set = unsafe {
             self.ctx
                 .device
@@ -42,13 +44,13 @@ impl CreatePool for Context {
     fn create_pool(
         &self,
         alloc_size: u32,
-        data: &[Binding<DescriptorType>],
+        data: &[ShaderView],
         sizes: DescriptorSizes,
     ) -> NativePool {
         let layout_bindings: Vec<_> = data
             .iter()
             .map(|desc| {
-                let ty = match desc.data {
+                let ty = match desc.ty {
                     DescriptorType::Uniform => vk::DescriptorType::UNIFORM_BUFFER,
                     DescriptorType::Storage => vk::DescriptorType::STORAGE_BUFFER,
                 };
@@ -61,6 +63,7 @@ impl CreatePool for Context {
                 }
             })
             .collect();
+        dbg!(&layout_bindings);
         let descriptor_info = vk::DescriptorSetLayoutCreateInfo {
             binding_count: layout_bindings.len() as u32,
             p_bindings: layout_bindings.as_ptr(),
@@ -100,6 +103,8 @@ impl CreatePool for Context {
             max_sets: alloc_size,
             ..Default::default()
         };
+        println!("{:#?}", descriptor_pool_info);
+        println!("{:#?}", pool_sizes);
         let pool = unsafe {
             self.device
                 .create_descriptor_pool(&descriptor_pool_info, None)
@@ -120,35 +125,22 @@ pub struct Descriptor {
 }
 
 impl DescriptorApi for Context {
-    fn create_descriptor(
-        &self,
-        _data: &[Binding<DescriptorType>],
-        _sizes: DescriptorSizes,
-    ) -> DescriptorHandle {
-        unimplemented!()
-    }
-    fn write(
-        &self,
-        handle: DescriptorHandle,
-        data: &[Binding<DescriptorResource>],
-    ) {
+    fn write(&self, handle: DescriptorHandle, data: &ShaderArguments) {
         let descriptor = self.descriptors.get(handle);
-        let buffer_infos: Vec<Binding<vk::DescriptorBufferInfo>> = data
+        let buffer_infos: Vec<vk::DescriptorBufferInfo> = data
+            .resources
             .iter()
-            .map(|resource| match resource.data {
-                DescriptorResource::Uniform(buffer) | DescriptorResource::Storage(buffer) => {
+            .map(|resource| match *resource {
+                ShaderResource::Buffer(buffer) => {
                     let generic_buffer = buffer;
                     let vkbuffer = self.buffers.get(generic_buffer);
-                    let buffer_info = vk::DescriptorBufferInfo {
+                    vk::DescriptorBufferInfo {
                         buffer: vkbuffer.buffer,
                         offset: 0,
                         range: vkbuffer.size,
-                    };
-                    Binding {
-                        data: buffer_info,
-                        binding: resource.binding,
                     }
                 }
+                _ => unimplemented!(),
             })
             .collect();
 
@@ -156,20 +148,21 @@ impl DescriptorApi for Context {
             .iter()
             .enumerate()
             .map(|(idx, info)| {
-                let ty = match data[idx].data {
-                    DescriptorResource::Uniform(_) => vk::DescriptorType::UNIFORM_BUFFER,
-                    DescriptorResource::Storage(_) => vk::DescriptorType::STORAGE_BUFFER,
+                let descriptor_type = match data.views[idx].ty {
+                    DescriptorType::Uniform => vk::DescriptorType::UNIFORM_BUFFER,
+                    DescriptorType::Storage => vk::DescriptorType::STORAGE_BUFFER,
                 };
+                let dst_binding = data.views[idx].binding;
                 vk::WriteDescriptorSet {
                     s_type: vk::StructureType::WRITE_DESCRIPTOR_SET,
                     p_next: std::ptr::null(),
                     dst_set: descriptor.descriptor_set,
-                    dst_binding: info.binding,
+                    dst_binding,
                     dst_array_element: 0,
                     descriptor_count: 1,
-                    descriptor_type: ty,
+                    descriptor_type,
                     p_image_info: std::ptr::null(),
-                    p_buffer_info: &info.data,
+                    p_buffer_info: info,
                     p_texel_buffer_view: std::ptr::null(),
                 }
             })
