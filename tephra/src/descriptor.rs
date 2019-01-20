@@ -23,8 +23,7 @@ pub trait CreatePool {
 }
 
 pub trait PoolApi {
-    fn create_descriptor(&self) -> DescriptorHandle;
-    fn reset(&mut self);
+    fn create_descriptor(&self, count: u32) -> Vec<DescriptorHandle>;
 }
 
 pub struct NativePool {
@@ -35,6 +34,7 @@ pub struct LinearPoolAllocator {
     ctx: Context,
     block_size: usize,
     pools: Vec<NativePool>,
+    descriptors: Vec<DescriptorHandle>,
     // Infos
     views: ShaderViews,
     sizes: DescriptorSizes,
@@ -48,24 +48,34 @@ impl LinearPoolAllocator {
             ctx: ctx.clone(),
             block_size: 50,
             pools: Vec::new(),
+            descriptors: Vec::new(),
             views,
             sizes,
             current_allocations: 0,
         }
     }
 
+    pub fn create_descriptor(&mut self) -> DescriptorHandle {
+        let allocator_index = self.current_allocations / self.block_size;
+        // If we don't have enough space, we need to allocate a new pool
+        if allocator_index >= self.pools.len() {
+            self.allocate_additional_pool();
+        }
+        let handle = self.descriptors[self.current_allocations];
+        self.current_allocations += 1;
+        handle
+    }
     pub fn allocate_additional_pool(&mut self) {
-        println!("allo {:?}", self.views);
-        println!("allo {:?}", self.sizes);
         let pool = self
             .ctx
             .create_pool(self.block_size as u32, &self.views, self.sizes);
+        let descriptors = pool.inner.create_descriptor(self.block_size as u32);
+        self.descriptors.extend(descriptors);
         self.pools.push(pool);
     }
 
     pub fn reset(&mut self) {
         for pool in &mut self.pools {
-            pool.inner.reset();
             self.current_allocations = 0;
         }
     }
@@ -85,20 +95,13 @@ impl Pool {
     }
 
     pub fn allocate(&mut self, data: &ShaderArguments) -> DescriptorHandle {
-        println!("Allocate ");
         let ctx = self.ctx.clone();
         let allocator = self
             .allocators
             .entry(data.views.clone())
             .or_insert_with(|| LinearPoolAllocator::new(&ctx, data.views.clone()));
-        let allocator_index = allocator.current_allocations / allocator.block_size;
-        // If we don't have enough space, we need to allocate a new pool
-        if allocator_index >= allocator.pools.len() {
-            allocator.allocate_additional_pool();
-        }
-        let handle = allocator.pools[allocator_index].inner.create_descriptor();
+        let handle = allocator.create_descriptor();
         ctx.write(handle, &data);
-        allocator.current_allocations += 1;
         handle
     }
 

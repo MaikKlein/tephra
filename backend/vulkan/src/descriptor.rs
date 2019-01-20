@@ -15,29 +15,26 @@ pub struct Pool {
 }
 
 impl PoolApi for Pool {
-    fn reset(&mut self) {
+    fn create_descriptor(&self, count: u32) -> Vec<DescriptorHandle> {
+        let layouts = vec![self.layouts[0]; count as usize];
+        let desc_alloc_info = vk::DescriptorSetAllocateInfo {
+            descriptor_pool: self.pool,
+            descriptor_set_count: layouts.len() as _,
+            p_set_layouts: layouts.as_ptr(),
+            ..Default::default()
+        };
         unsafe {
             self.ctx
                 .device
-                .reset_descriptor_pool(self.pool, vk::DescriptorPoolResetFlags::empty());
-        }
-    }
-    fn create_descriptor(&self) -> DescriptorHandle {
-        let desc_alloc_info = vk::DescriptorSetAllocateInfo {
-            descriptor_pool: self.pool,
-            descriptor_set_count: self.layouts.len() as u32,
-            p_set_layouts: self.layouts.as_ptr(),
-            ..Default::default()
-        };
-        dbg!{&desc_alloc_info};
-        let descriptor_set = unsafe {
-            self.ctx
-                .device
                 .allocate_descriptor_sets(&desc_alloc_info)
-                .unwrap()[0]
-        };
-        let inner = Descriptor { descriptor_set };
-        self.ctx.descriptors.insert(inner)
+                .unwrap()
+                .into_iter()
+                .map(|descriptor_set| {
+                    let inner = Descriptor { descriptor_set };
+                    self.ctx.descriptors.insert(inner)
+                })
+                .collect()
+        }
     }
 }
 impl CreatePool for Context {
@@ -63,7 +60,6 @@ impl CreatePool for Context {
                 }
             })
             .collect();
-        dbg!(&layout_bindings);
         let descriptor_info = vk::DescriptorSetLayoutCreateInfo {
             binding_count: layout_bindings.len() as u32,
             p_bindings: layout_bindings.as_ptr(),
@@ -78,11 +74,11 @@ impl CreatePool for Context {
         let mut pool_sizes = Vec::new();
         let buffer_size = vk::DescriptorPoolSize {
             ty: vk::DescriptorType::UNIFORM_BUFFER,
-            descriptor_count: sizes.buffer,
+            descriptor_count: sizes.buffer * alloc_size,
         };
         let storage_size = vk::DescriptorPoolSize {
             ty: vk::DescriptorType::STORAGE_BUFFER,
-            descriptor_count: sizes.storage,
+            descriptor_count: sizes.storage * alloc_size,
         };
         if storage_size.descriptor_count > 0 {
             pool_sizes.push(storage_size);
@@ -92,7 +88,7 @@ impl CreatePool for Context {
         }
         let image_size = vk::DescriptorPoolSize {
             ty: vk::DescriptorType::STORAGE_IMAGE,
-            descriptor_count: sizes.images,
+            descriptor_count: sizes.images * alloc_size,
         };
         if image_size.descriptor_count > 0 {
             pool_sizes.push(image_size);
@@ -103,8 +99,6 @@ impl CreatePool for Context {
             max_sets: alloc_size,
             ..Default::default()
         };
-        println!("{:#?}", descriptor_pool_info);
-        println!("{:#?}", pool_sizes);
         let pool = unsafe {
             self.device
                 .create_descriptor_pool(&descriptor_pool_info, None)
