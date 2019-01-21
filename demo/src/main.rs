@@ -8,11 +8,11 @@ pub use tephra::winit;
 use tephra::{
     buffer::{Buffer, BufferUsage, Property},
     commandbuffer::{
-        CommandList, Compute, Graphics, ShaderArguments, ShaderResource, ShaderView, Space,
+        CommandList, Compute, Descriptor, Graphics, ShaderArguments, ShaderResource, ShaderView,
     },
     context::Context,
     descriptor::DescriptorType,
-    framegraph::{Blackboard, Framegraph, Recording, Resource},
+    framegraph::{Blackboard, Framegraph, ReadResource, Recording, Resource, WriteResource},
     image::{Format, Image, ImageDesc, ImageLayout, Resolution},
     pipeline::{ComputePipeline, GraphicsPipeline, ShaderStage},
     renderpass::{Attachment, Renderpass},
@@ -35,7 +35,7 @@ pub struct ComputeDesc {
 }
 
 pub struct TriangleCompute {
-    pub storage_buffer: Resource<Buffer<[f32; 4]>>,
+    pub storage_buffer: WriteResource<Buffer<[f32; 4]>>,
 }
 
 impl TriangleCompute {
@@ -63,18 +63,18 @@ impl TriangleCompute {
                 .create(ctx);
             let pass = TriangleCompute { storage_buffer };
             (pass, move |registry, _, cmds| {
-                let shader_arguments = ShaderArguments::builder()
+                let descriptor = Descriptor::builder()
                     .with(
                         registry.get_buffer(storage_buffer),
                         0,
                         DescriptorType::Storage,
                     )
                     .build();
-                let space = Space::builder()
-                    .with_shader_arg(0, shader_arguments)
+                let args = ShaderArguments::builder()
+                    .with_shader_arg(0, descriptor)
                     .build();
-                cmds.record::<Compute>()
-                    .dispatch(pipeline, space, 1, 1, 1)
+                cmds.record::<Compute>(registry)
+                    .dispatch(pipeline, args, 1, 1, 1)
                     .submit();
             })
         })
@@ -88,20 +88,21 @@ pub struct Color {
 }
 #[derive(Copy, Clone)]
 pub struct TrianglePass {
-    pub storage_buffer: Resource<Buffer<[f32; 4]>>,
-    pub color: Resource<Image>,
-    pub depth: Resource<Image>,
+    pub storage_buffer: ReadResource<Buffer<[f32; 4]>>,
+    pub color: WriteResource<Image>,
+    pub depth: WriteResource<Image>,
 }
 
 impl TrianglePass {
     pub unsafe fn add_pass(
         ctx: &Context,
         fg: &mut Framegraph<Recording>,
-        storage_buffer: Resource<Buffer<[f32; 4]>>,
+        storage_buffer: impl Resource<Type = Buffer<[f32; 4]>>,
         resolution: Resolution,
         format: Format,
     ) -> TrianglePass {
         fg.add_pass("Triangle Pass", |builder| {
+            let storage_buffer = builder.read(storage_buffer);
             let vertex_shader_module =
                 ShaderModule::load(&ctx, "shader/triangle/vert.spv").expect("vertex");
             let fragment_shader_module =
@@ -154,21 +155,21 @@ impl TrianglePass {
             let framebuffer = builder.create_framebuffer(renderpass, vec![pass.color, pass.depth]);
             (pass, move |registry, blackbox, cmds| {
                 let state = blackbox.get::<TriangleState>().expect("State");
-                let shader_arguments = ShaderArguments::builder()
+                let shader_arguments = Descriptor::builder()
                     .with(
                         registry.get_buffer(pass.storage_buffer),
                         0,
                         DescriptorType::Storage,
                     )
                     .build();
-                let space = Space::builder()
+                let space = ShaderArguments::builder()
                     .with_shader_arg(0, shader_arguments)
                     .build();
-                cmds.record::<Graphics>()
+                cmds.record::<Graphics>(registry)
                     .draw_indexed(
                         pipeline,
                         renderpass,
-                        registry.get_framebuffer(framebuffer),
+                        framebuffer,
                         space,
                         state.vertex_buffer,
                         state.index_buffer,
@@ -182,11 +183,11 @@ impl TrianglePass {
 
 #[derive(Copy, Clone)]
 pub struct Presentpass {
-    pub color: Resource<Image>,
+    pub color: ReadResource<Image>,
 }
 
 impl Presentpass {
-    pub fn add_pass(fg: &mut Framegraph<Recording>, color: Resource<Image>) {
+    pub fn add_pass(fg: &mut Framegraph<Recording>, color: impl Resource<Type = Image>) {
         fg.add_pass("PresentPass", |builder| {
             let pass = Presentpass {
                 color: builder.read(color),

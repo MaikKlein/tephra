@@ -21,30 +21,81 @@ pub mod render_task;
 pub mod task_builder;
 pub use self::blackboard::Blackboard;
 
-pub trait ResourceBase {}
-#[derive(Debug)]
-pub struct Resource<T> {
-    _m: PhantomData<T>,
-    pub id: usize,
-    pub version: u32,
+pub trait Usage: Copy {
+    fn usage() -> ResourceAccess;
 }
-impl<T> ResourceBase for Resource<T> {}
-pub type ResourceIndex = usize;
-
-impl<T> Copy for Resource<T> {}
-
-impl<T> Clone for Resource<T> {
-    fn clone(&self) -> Self {
-        Resource {
-            id: self.id,
-            version: self.version,
-            _m: PhantomData,
-        }
+impl Usage for Read {
+    fn usage() -> ResourceAccess {
+        ResourceAccess::Read
     }
 }
-impl<T> Resource<T> {
+impl Usage for Write {
+    fn usage() -> ResourceAccess {
+        ResourceAccess::Write
+    }
+}
+
+pub trait Resource: Copy {
+    type Type;
+    fn id(&self) -> usize;
+    fn version(&self) -> u32;
+    fn usage(&self) -> ResourceAccess;
+    fn increment<U: Usage>(self) -> ResourceBase<Self::Type, U>;
+}
+
+impl<T, U> Resource for ResourceBase<T, U>
+where
+    U: Usage,
+{
+    type Type = T;
+    fn id(&self) -> usize {
+        self.id
+    }
+    fn version(&self) -> u32 {
+        self.version
+    }
+    fn usage(&self) -> ResourceAccess {
+        U::usage()
+    }
+    fn increment<U1: Usage>(self) -> ResourceBase<Self::Type, U1> {
+        self.increment()
+    }
+}
+
+#[derive(Copy, Clone)]
+pub enum Write {}
+#[derive(Copy, Clone)]
+pub enum Read {}
+pub type WriteResource<T> = ResourceBase<T, Write>;
+pub type ReadResource<T> = ResourceBase<T, Read>;
+#[derive(Debug)]
+pub struct ResourceBase<T, U> {
+    _m: PhantomData<(T, U)>,
+    version: u32,
+    id: ResourceIndex,
+}
+pub type ResourceIndex = usize;
+
+impl<T, U> Copy for ResourceBase<T, U> where U: Usage {}
+
+impl<T, U> Clone for ResourceBase<T, U>
+where
+    U: Usage,
+{
+    fn clone(&self) -> Self {
+        ResourceBase::new(self.id, self.version)
+    }
+}
+
+impl<T, U> ResourceBase<T, U>
+where
+    U: Usage,
+{
+    pub fn increment<U1: Usage>(self) -> ResourceBase<T, U1> {
+        ResourceBase::new(self.id, self.version + 1)
+    }
     pub fn new(id: usize, version: u32) -> Self {
-        Resource {
+        ResourceBase {
             id,
             version,
             _m: PhantomData,
@@ -52,15 +103,11 @@ impl<T> Resource<T> {
     }
 }
 
-impl<T> Resource<Buffer<T>> {
-    pub fn to_buffer_handle(self) -> Resource<BufferHandle> {
-        Resource {
-            _m: PhantomData,
-            id: self.id,
-            version: self.version,
-        }
-    }
-}
+// impl<A, T> Resource<Buffer<T>, A> {
+//     pub fn to_buffer_handle(self) -> Resource<BufferHandle, A> {
+//         Resource::new(self.id, self.version)
+//     }
+// }
 
 type Handle = petgraph::graph::NodeIndex;
 
@@ -118,6 +165,35 @@ impl fmt::Display for Access {
     }
 }
 
+impl<T: Copy> Resolve<Read> for Buffer<T> {
+    type Target = Buffer<T>;
+    fn resolve(&self, _registry: &Registry) -> Self::Target {
+        *self
+    }
+}
+
+impl<U, T> Resolve<U> for ResourceBase<Buffer<T>, U>
+where
+    U: Usage,
+{
+    type Target = Buffer<T>;
+    fn resolve(&self, registry: &Registry) -> Self::Target {
+        registry.get_buffer(*self)
+    }
+}
+impl<U> Resolve<U> for ResourceBase<Framebuffer, U>
+where
+    U: Usage,
+{
+    type Target = Framebuffer;
+    fn resolve(&self, registry: &Registry) -> Self::Target {
+        registry.get_framebuffer(*self)
+    }
+}
+pub trait Resolve<U> {
+    type Target;
+    fn resolve(&self, registry: &Registry) -> Self::Target;
+}
 pub struct Registry {
     resources: HashMap<ResourceIndex, ResourceType>,
     free_id: usize,
@@ -134,25 +210,25 @@ impl Registry {
         self.free_id += 1;
         id
     }
-    pub fn add_buffer<T>(&mut self, buffer: Buffer<T>) -> Resource<Buffer<T>> {
+    pub fn add_buffer<T>(&mut self, buffer: Buffer<T>) -> WriteResource<Buffer<T>> {
         let id = self.reserve_index();
         self.resources
             .insert(id, ResourceType::Buffer(buffer.buffer));
-        Resource::new(id, 0)
+        WriteResource::new(id, 0)
     }
-    pub fn add_image(&mut self, image: Image) -> Resource<Image> {
+    pub fn add_image(&mut self, image: Image) -> WriteResource<Image> {
         let id = self.reserve_index();
         self.resources.insert(id, ResourceType::Image(image));
-        Resource::new(id, 0)
+        WriteResource::new(id, 0)
     }
-    pub fn get_framebuffer(&self, resource: Resource<Framebuffer>) -> Framebuffer {
-        match self.resources[&resource.id] {
+    pub fn get_framebuffer(&self, resource: impl Resource<Type = Framebuffer>) -> Framebuffer {
+        match self.resources[&resource.id()] {
             ResourceType::Framebuffer(fb) => fb,
             _ => unreachable!(),
         }
     }
-    pub fn get_buffer<T>(&self, resource: Resource<Buffer<T>>) -> Buffer<T> {
-        match self.resources[&resource.id] {
+    pub fn get_buffer<T>(&self, resource: impl Resource<Type = Buffer<T>>) -> Buffer<T> {
+        match self.resources[&resource.id()] {
             ResourceType::Buffer(buffer) => Buffer {
                 _m: PhantomData,
                 buffer,
@@ -160,8 +236,8 @@ impl Registry {
             _ => unreachable!(),
         }
     }
-    pub fn get_image(&self, resource: Resource<Image>) -> Image {
-        match self.resources[&resource.id] {
+    pub fn get_image(&self, resource: impl Resource<Type = Image>) -> Image {
+        match self.resources[&resource.id()] {
             ResourceType::Image(image) => image,
             _ => unreachable!(),
         }
@@ -171,7 +247,7 @@ pub struct Compiled {}
 
 pub struct Recording {
     image_data: Vec<(ResourceIndex, ImageDesc)>,
-    framebuffer_data: Vec<(ResourceIndex, (Renderpass, Vec<Resource<Image>>))>,
+    framebuffer_data: Vec<(ResourceIndex, (Renderpass, Vec<WriteResource<Image>>))>,
 }
 
 /// Rust doesn't have type alias yet, so this is a work around
@@ -199,9 +275,9 @@ pub struct Framegraph<T = Recording> {
     pass_map: HashMap<(ResourceIndex, u32), Handle>,
 }
 
-pub trait GetResource<T> {
-    fn get_resource(&self, resource: Resource<T>) -> T;
-}
+// pub trait GetResource<T> {
+//     fn get_resource(&self, resource: Resource<T>) -> T;
+// }
 
 // impl<T> GetResource<Image> for Framegraph<T> {
 //     fn get_resource(&self, resource: Resource<Image>) -> Image {
@@ -223,12 +299,14 @@ pub trait GetResource<T> {
 //     }
 // }
 impl<T> Framegraph<T> {
-    pub fn insert_pass_handle<D>(&mut self, resource: Resource<D>, handle: Handle) {
+    pub fn insert_pass_handle(&mut self, resource: impl Resource, handle: Handle) {
         self.pass_map
-            .insert((resource.id, resource.version), handle);
+            .insert((resource.id(), resource.version()), handle);
     }
-    pub fn get_pass_handle<D>(&self, resource: Resource<D>) -> Option<Handle> {
-        self.pass_map.get(&(resource.id, resource.version)).cloned()
+    pub fn get_pass_handle(&self, resource: impl Resource) -> Option<Handle> {
+        self.pass_map
+            .get(&(resource.id(), resource.version()))
+            .cloned()
     }
 }
 impl<T> Framegraph<T> {

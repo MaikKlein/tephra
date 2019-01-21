@@ -357,7 +357,7 @@ pub struct InnerContext {
     pub compute_pipelines: HandleMap<ComputePipeline, pipeline::ComputePipelineData>,
     pub graphic_pipelines: HandleMap<GraphicsPipeline, pipeline::GraphicsPipelineData>,
     pub buffers: HandleMap<BufferHandle, buffer::BufferData>,
-    pub descriptors: HandleMap<DescriptorHandle, descriptor::Descriptor>,
+    pub descriptors: HandleMap<DescriptorHandle, descriptor::DescriptorSet>,
     pub images: HandleMap<ImageHandle, image::ImageData>,
     pub renderpasses: HandleMap<Renderpass, renderpass::RenderpassData>,
     pub framebuffers: HandleMap<Framebuffer, renderpass::FramebufferData>,

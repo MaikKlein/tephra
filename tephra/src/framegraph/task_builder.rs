@@ -1,12 +1,15 @@
 use crate::{
     buffer::Buffer,
-    framegraph::{Access, Framegraph, Handle, Recording, Resource, ResourceAccess},
+    framegraph::{
+        Access, Framegraph, Handle, Read, ReadResource, Recording, Resource, ResourceAccess, Usage,
+        Write, WriteResource,
+    },
     renderpass::{Framebuffer, Renderpass},
 };
 pub mod deferred {
     use super::TaskBuilder;
     use crate::{
-        framegraph::Resource,
+        framegraph::{ReadResource, Resource, WriteResource},
         image::{Image, ImageDescBuilder},
     };
 
@@ -16,11 +19,14 @@ pub mod deferred {
         }
     }
     impl ImageDescBuilder {
-        pub fn build_deferred<'task>(self, builder: &mut TaskBuilder<'task>) -> Resource<Image> {
+        pub fn build_deferred<'task>(
+            self,
+            builder: &mut TaskBuilder<'task>,
+        ) -> WriteResource<Image> {
             let id = builder.framegraph.registry.reserve_index();
             let image_desc = self.build().unwrap();
             builder.framegraph.state.image_data.push((id, image_desc));
-            let resource = Resource::new(id, 0);
+            let resource = WriteResource::new(id, 0);
             builder
                 .framegraph
                 .insert_pass_handle(resource, builder.pass_handle);
@@ -35,7 +41,7 @@ pub struct TaskBuilder<'frame> {
     pub framegraph: &'frame mut Framegraph<Recording>,
 }
 impl<'frame> TaskBuilder<'frame> {
-    pub fn add_buffer<T>(&mut self, buffer: Buffer<T>) -> Resource<Buffer<T>> {
+    pub fn add_buffer<T>(&mut self, buffer: Buffer<T>) -> WriteResource<Buffer<T>> {
         let resource = self.framegraph.registry.add_buffer(buffer);
         self.framegraph
             .insert_pass_handle(resource, self.pass_handle);
@@ -44,30 +50,30 @@ impl<'frame> TaskBuilder<'frame> {
     pub fn create_framebuffer(
         &mut self,
         renderpass: Renderpass,
-        images: Vec<Resource<Image>>,
-    ) -> Resource<Framebuffer> {
+        images: Vec<WriteResource<Image>>,
+    ) -> WriteResource<Framebuffer> {
         let id = self.framegraph.registry.reserve_index();
         self.framegraph
             .state
             .framebuffer_data
             .push((id, (renderpass, images)));
-        let resource = Resource::new(id, 0);
+        let resource = WriteResource::new(id, 0);
         self.framegraph
             .insert_pass_handle(resource, self.pass_handle);
         resource
     }
-    pub fn create_image(&mut self, _name: &'static str, desc: ImageDesc) -> Resource<Image> {
+    pub fn create_image(&mut self, _name: &'static str, desc: ImageDesc) -> WriteResource<Image> {
         let id = self.framegraph.registry.reserve_index();
         self.framegraph.state.image_data.push((id, desc));
-        let resource = Resource::new(id, 0);
+        let resource = WriteResource::new(id, 0);
         self.framegraph
             .insert_pass_handle(resource, self.pass_handle);
         resource
     }
 
-    pub fn write<T>(&mut self, resource: Resource<T>) -> Resource<T> {
+    pub fn write<T>(&mut self, resource: impl Resource<Type = T>) -> WriteResource<T> {
         let access = Access {
-            resource: resource.id,
+            resource: resource.id(),
             resource_access: ResourceAccess::Write,
         };
         if let Some(handle) = self.framegraph.get_pass_handle(resource) {
@@ -75,21 +81,21 @@ impl<'frame> TaskBuilder<'frame> {
                 .graph
                 .add_edge(handle, self.pass_handle, access);
         }
-        let write_resource = Resource::new(resource.id, resource.version + 1);
+        let write_resource = WriteResource::new(resource.id(), resource.version() + 1);
         self.framegraph
             .insert_pass_handle(write_resource, self.pass_handle);
         write_resource
     }
 
-    pub fn read<T>(&mut self, resource: Resource<T>) -> Resource<T> {
+    pub fn read<T>(&mut self, resource: impl Resource<Type = T>) -> ReadResource<T> {
         let access = Access {
-            resource: resource.id,
+            resource: resource.id(),
             resource_access: ResourceAccess::Read,
         };
         let handle = self.framegraph.get_pass_handle(resource).expect("Handle");
         self.framegraph
             .graph
             .add_edge(handle, self.pass_handle, access);
-        resource
+        ReadResource::new(resource.id(), resource.version())
     }
 }

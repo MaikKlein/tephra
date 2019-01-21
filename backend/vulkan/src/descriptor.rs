@@ -1,12 +1,11 @@
 use super::Context;
 use ash::version::DeviceV1_0;
 use ash::vk;
-use tephra::commandbuffer::{ShaderArguments, ShaderResource, ShaderView, Space};
+use tephra::commandbuffer::{Descriptor, ShaderArguments, ShaderResource, ShaderView};
 use tephra::descriptor::{
     Binding, CreatePool, DescriptorApi, DescriptorHandle, DescriptorResource, DescriptorSizes,
     DescriptorType, NativePool, PoolApi,
 };
-use tephra::framegraph::GetResource;
 use tephra::framegraph::{Compiled, Framegraph};
 pub struct Pool {
     pub ctx: Context,
@@ -30,7 +29,7 @@ impl PoolApi for Pool {
                 .unwrap()
                 .into_iter()
                 .map(|descriptor_set| {
-                    let inner = Descriptor { descriptor_set };
+                    let inner = DescriptorSet { descriptor_set };
                     self.ctx.descriptors.insert(inner)
                 })
                 .collect()
@@ -114,12 +113,12 @@ impl CreatePool for Context {
         }
     }
 }
-pub struct Descriptor {
+pub struct DescriptorSet {
     pub descriptor_set: vk::DescriptorSet,
 }
 
 impl DescriptorApi for Context {
-    fn write(&self, handle: DescriptorHandle, data: &ShaderArguments) {
+    fn write(&self, handle: DescriptorHandle, data: &Descriptor) {
         let descriptor = self.descriptors.get(handle);
         let buffer_infos: Vec<vk::DescriptorBufferInfo> = data
             .resources

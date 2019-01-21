@@ -1,6 +1,7 @@
 use crate::{
     buffer::{Buffer, BufferHandle},
     descriptor::{DescriptorHandle, DescriptorInfo, DescriptorType, Pool},
+    framegraph::{Read, Registry, Resolve, Write},
     image::ImageHandle,
     pipeline::{ComputePipeline, GraphicsPipeline, GraphicsPipelineState},
     renderpass::{Framebuffer, Renderpass, VertexInput, VertexInputData},
@@ -26,30 +27,30 @@ bitflags! {
     }
 }
 #[derive(Default)]
-pub struct Space(SmallVec<[(u32, ShaderArguments); MAX_SHADER_ARGS]>);
-impl Space {
-    pub fn builder() -> SpaceBuilder {
-        SpaceBuilder {
-            space: Space::default(),
+pub struct ShaderArguments(SmallVec<[(u32, Descriptor); MAX_SHADER_ARGS]>);
+impl ShaderArguments {
+    pub fn builder() -> ShaderArumentsBuilder {
+        ShaderArumentsBuilder {
+            space: ShaderArguments::default(),
         }
     }
 }
 
-pub struct SpaceBuilder {
-    space: Space,
+pub struct ShaderArumentsBuilder {
+    space: ShaderArguments,
 }
-impl Deref for Space {
-    type Target = [(u32, ShaderArguments)];
+impl Deref for ShaderArguments {
+    type Target = [(u32, Descriptor)];
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
-impl SpaceBuilder {
-    pub fn with_shader_arg(mut self, set: u32, shader_args: ShaderArguments) -> Self {
+impl ShaderArumentsBuilder {
+    pub fn with_shader_arg(mut self, set: u32, shader_args: Descriptor) -> Self {
         self.space.0.push((set, shader_args));
         self
     }
-    pub fn build(self) -> Space {
+    pub fn build(self) -> ShaderArguments {
         self.space
     }
 }
@@ -69,31 +70,24 @@ pub struct ShaderView {
     pub binding: u32,
     pub ty: DescriptorType,
 }
-
-#[derive(Copy, Clone, Debug)]
-pub struct ShaderArgument {
-    pub resource: ShaderResource,
-    pub view: ShaderView,
-}
-
 const MAX_SHADER_ARGS: usize = 4;
 
 pub type StackVec<T> = SmallVec<[T; MAX_SHADER_ARGS]>;
 pub type ShaderViews = StackVec<ShaderView>;
-pub type ShaderResources =  StackVec<ShaderResource>;
+pub type ShaderResources = StackVec<ShaderResource>;
 
 #[derive(Default, Debug)]
-pub struct ShaderArguments{
+pub struct Descriptor {
     pub resources: ShaderResources,
     pub views: ShaderViews,
 }
 
-pub struct ShaderArgumentsBuilder {
-    shader_arguments: ShaderArguments,
+pub struct DescriptorBuilder {
+    descriptor: Descriptor,
 }
-impl ShaderArgumentsBuilder {
-    pub fn build(self) -> ShaderArguments {
-        self.shader_arguments
+impl DescriptorBuilder {
+    pub fn build(self) -> Descriptor {
+        self.descriptor
     }
     pub fn with<S: Into<ShaderResource>>(
         mut self,
@@ -102,15 +96,15 @@ impl ShaderArgumentsBuilder {
         ty: DescriptorType,
     ) -> Self {
         let view = ShaderView { binding, ty };
-        self.shader_arguments.views.push(view);
-        self.shader_arguments.resources.push(shader_resource.into());
+        self.descriptor.views.push(view);
+        self.descriptor.resources.push(shader_resource.into());
         self
     }
 }
-impl ShaderArguments {
-    pub fn builder() -> ShaderArgumentsBuilder {
-        ShaderArgumentsBuilder {
-            shader_arguments: ShaderArguments::default(),
+impl Descriptor {
+    pub fn builder() -> DescriptorBuilder {
+        DescriptorBuilder {
+            descriptor: Descriptor::default(),
         }
     }
 }
@@ -132,13 +126,13 @@ pub struct DrawCommand {
     pub framebuffer: Framebuffer,
     pub vertex: BufferHandle,
     pub index: Buffer<u32>,
-    pub shader_arguments: Space,
+    pub shader_arguments: ShaderArguments,
     pub range: Range<u32>,
 }
 
 pub struct DispatchCommand {
     pub pipeline: ComputePipeline,
-    pub shader_arguments: Space,
+    pub shader_arguments: ShaderArguments,
     pub x: u32,
     pub y: u32,
     pub z: u32,
@@ -179,8 +173,9 @@ impl CommandList {
             submits: Vec::new(),
         }
     }
-    pub fn record<Q>(&mut self) -> RecordCommandList<Q> {
+    pub fn record<'a, Q>(&'a mut self, registry: &'a Registry) -> RecordCommandList<'a, Q> {
         RecordCommandList {
+            registry,
             command_list: self,
             commands: Vec::new(),
             _m: PhantomData,
@@ -189,6 +184,7 @@ impl CommandList {
 }
 pub struct RecordCommandList<'a, Q> {
     command_list: &'a mut CommandList,
+    registry: &'a Registry,
     commands: Vec<Command>,
     _m: PhantomData<Q>,
 }
@@ -206,15 +202,16 @@ where
     }
 }
 impl RecordCommandList<'_, Transfer> {}
+
 impl RecordCommandList<'_, Graphics> {
     pub fn draw_indexed<Vertex>(
         mut self,
         graphics_pipeline: GraphicsPipeline,
         renderpass: Renderpass,
-        framebuffer: Framebuffer,
-        shader_arguments: Space,
-        vertex_buffer: Buffer<Vertex>,
-        index_buffer: Buffer<u32>,
+        framebuffer: impl Resolve<Write, Target = Framebuffer>,
+        shader_arguments: ShaderArguments,
+        vertex_buffer: impl Resolve<Read, Target = Buffer<Vertex>>,
+        index_buffer: impl Resolve<Read, Target = Buffer<u32>>,
         range: Range<u32>,
     ) -> Self
     where
@@ -223,10 +220,10 @@ impl RecordCommandList<'_, Graphics> {
         let cmd = DrawCommand {
             graphics_pipeline,
             renderpass,
-            framebuffer,
+            framebuffer: framebuffer.resolve(self.registry),
             shader_arguments,
-            vertex: vertex_buffer.buffer,
-            index: index_buffer,
+            vertex: vertex_buffer.resolve(self.registry).buffer,
+            index: index_buffer.resolve(self.registry),
             range,
         };
         self.commands.push(Command::Draw(cmd));
@@ -237,7 +234,7 @@ impl RecordCommandList<'_, Compute> {
     pub fn dispatch(
         mut self,
         pipeline: ComputePipeline,
-        shader_arguments: Space,
+        shader_arguments: ShaderArguments,
         x: u32,
         y: u32,
         z: u32,

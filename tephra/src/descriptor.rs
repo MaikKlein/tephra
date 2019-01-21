@@ -1,6 +1,6 @@
 use crate::{
     buffer::BufferHandle,
-    commandbuffer::{ShaderArguments, ShaderView, ShaderViews},
+    commandbuffer::{Descriptor, ShaderView, ShaderViews},
     context::Context,
 };
 use slotmap::new_key_type;
@@ -94,7 +94,7 @@ impl Pool {
         }
     }
 
-    pub fn allocate(&mut self, data: &ShaderArguments) -> DescriptorHandle {
+    pub fn allocate(&mut self, data: &Descriptor) -> DescriptorHandle {
         let ctx = self.ctx.clone();
         let allocator = self
             .allocators
@@ -113,7 +113,7 @@ impl Pool {
 }
 
 pub trait DescriptorApi {
-    fn write(&self, handle: DescriptorHandle, data: &ShaderArguments);
+    fn write(&self, handle: DescriptorHandle, data: &Descriptor);
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -170,3 +170,4 @@ pub struct Binding<T> {
     pub binding: u32,
     pub data: T,
 }
+
