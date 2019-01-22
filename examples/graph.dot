@@ -1,0 +1,8 @@
+digraph {
+    0 [label="Pass {\l    name: \"Compute\"\l}"]
+    1 [label="Pass {\l    name: \"Triangle Pass\"\l}"]
+    2 [label="Pass {\l    name: \"PresentPass\"\l}"]
+    0 -> 1 [label="Access {\l    resource: 0,\l    resource_access: Read\l}"]
+    0 -> 1 [label="Access {\l    resource: 0,\l    resource_access: Read\l}"]
+    1 -> 2 [label="Access {\l    resource: 1,\l    resource_access: Read\l}"]
+}
