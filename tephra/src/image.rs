@@ -1,8 +1,8 @@
 use crate::buffer::Buffer;
 use crate::context::Context;
 use crate::downcast::Downcast;
-use slotmap::new_key_type;
 use derive_builder::Builder;
+use slotmap::new_key_type;
 new_key_type!(
     pub struct ImageHandle;
 );
@@ -18,14 +18,13 @@ pub struct Resolution {
     pub height: u32,
 }
 
-pub trait CreateImage {
-}
+pub trait CreateImage {}
 
 pub trait ImageApi {
     fn allocate_image(&self, desc: ImageDesc) -> ImageHandle;
     fn from_buffer(&self, buffer: Buffer<u8>) -> ImageHandle;
     fn desc(&self, handle: ImageHandle) -> ImageDesc;
-    fn copy_image(&self,src: ImageHandle, dst: ImageHandle);
+    fn copy_image(&self, src: ImageHandle, dst: ImageHandle);
 }
 
 #[derive(Copy, Clone)]
@@ -44,9 +43,7 @@ pub struct ImageDesc {
 impl Image {
     pub fn allocate(ctx: &Context, desc: ImageDesc) -> Image {
         let handle = ctx.allocate_image(desc);
-        Image {
-            handle,
-        }
+        Image { handle }
     }
 }
 

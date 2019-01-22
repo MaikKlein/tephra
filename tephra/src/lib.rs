@@ -17,6 +17,8 @@ extern crate failure_derive;
 extern crate downcast_rs as downcast;
 extern crate anymap;
 extern crate petgraph;
+extern crate image as cpu_image;
+pub mod passes;
 pub mod buffer;
 pub mod commandbuffer;
 pub mod context;

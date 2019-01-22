@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "demo",
+    "examples",
     "tephra",
     "backend/vulkan",
     "tephra-derive"
