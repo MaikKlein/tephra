@@ -1,7 +1,7 @@
 use super::image::{into_format, ImageData};
 use super::CommandBuffer;
 use super::Context;
-use ash::extensions;
+use ash::extensions::khr;
 use ash::version::DeviceV1_0;
 use ash::vk;
 use std::ops::Drop;
@@ -23,7 +23,7 @@ impl Drop for SwapchainData {
         unsafe {
             self.context
                 .swapchain_loader
-                .destroy_swapchain_khr(self.swapchain, None);
+                .destroy_swapchain(self.swapchain, None);
         }
     }
 }
@@ -52,7 +52,7 @@ impl SwapchainApi for SwapchainData {
         unsafe {
             self.context
                 .swapchain_loader
-                .acquire_next_image_khr(
+                .acquire_next_image(
                     self.swapchain,
                     ::std::u64::MAX,
                     self.context.present_complete_semaphore,
@@ -84,7 +84,7 @@ impl SwapchainApi for SwapchainData {
             };
             self.context
                 .swapchain_loader
-                .queue_present_khr(*self.context.present_queue.inner.lock(), &present_info)
+                .queue_present(*self.context.present_queue.inner.lock(), &present_info)
                 .unwrap();
         }
     }
@@ -97,7 +97,7 @@ unsafe fn get_swapchain_images(
 ) -> Vec<Image> {
     let present_images = ctx
         .swapchain_loader
-        .get_swapchain_images_khr(swapchain)
+        .get_swapchain_images(swapchain)
         .unwrap();
     present_images
         .iter()
@@ -147,7 +147,7 @@ fn create_swapchain(ctx: &Context, old_swapchain: Option<vk::SwapchainKHR>) -> S
     unsafe {
         let surface_formats = ctx
             .surface_loader
-            .get_physical_device_surface_formats_khr(ctx.pdevice, ctx.surface)
+            .get_physical_device_surface_formats(ctx.pdevice, ctx.surface)
             .unwrap();
         let surface_format = surface_formats
             .iter()
@@ -162,7 +162,7 @@ fn create_swapchain(ctx: &Context, old_swapchain: Option<vk::SwapchainKHR>) -> S
             .expect("Unable to find suitable surface format.");
         let surface_capabilities = ctx
             .surface_loader
-            .get_physical_device_surface_capabilities_khr(ctx.pdevice, ctx.surface)
+            .get_physical_device_surface_capabilities(ctx.pdevice, ctx.surface)
             .unwrap();
         let mut desired_image_count = surface_capabilities.min_image_count + 1;
         if surface_capabilities.max_image_count > 0
@@ -184,14 +184,14 @@ fn create_swapchain(ctx: &Context, old_swapchain: Option<vk::SwapchainKHR>) -> S
         };
         let present_modes = ctx
             .surface_loader
-            .get_physical_device_surface_present_modes_khr(ctx.pdevice, ctx.surface)
+            .get_physical_device_surface_present_modes(ctx.pdevice, ctx.surface)
             .unwrap();
         let present_mode = present_modes
             .iter()
             .cloned()
             .find(|&mode| mode == vk::PresentModeKHR::MAILBOX)
             .unwrap_or(vk::PresentModeKHR::FIFO);
-        let swapchain_loader = extensions::Swapchain::new(&ctx.instance, &ctx.device);
+        let swapchain_loader = khr::Swapchain::new(&ctx.instance, &ctx.device);
         let swapchain_create_info = vk::SwapchainCreateInfoKHR {
             s_type: vk::StructureType::SWAPCHAIN_CREATE_INFO_KHR,
             p_next: ptr::null(),
@@ -213,7 +213,7 @@ fn create_swapchain(ctx: &Context, old_swapchain: Option<vk::SwapchainKHR>) -> S
             queue_family_index_count: 0,
         };
         let swapchain = swapchain_loader
-            .create_swapchain_khr(&swapchain_create_info, None)
+            .create_swapchain(&swapchain_create_info, None)
             .unwrap();
 
         let resolution = Resolution {

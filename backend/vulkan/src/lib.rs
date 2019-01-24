@@ -1,17 +1,11 @@
 #[macro_use]
 extern crate ash;
 extern crate tephra;
-use tephra::{
-    buffer::BufferHandle,
-    context::{self, ContextApi},
-    descriptor::DescriptorHandle,
-    image::ImageHandle,
-    pipeline::{ComputePipeline, GraphicsPipeline},
-    renderpass::{Framebuffer, Renderpass},
-    shader::ShaderModule,
-};
 use ash::{
-    extensions::{DebugReport, DebugUtils, Surface, Swapchain, XlibSurface},
+    extensions::{
+        ext::{DebugReport, DebugUtils},
+        khr::{Surface, Swapchain, XlibSurface},
+    },
     version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
     vk, Device, Entry, Instance,
 };
@@ -25,6 +19,15 @@ use std::{
     ptr,
     sync::mpsc::{channel, Receiver, Sender},
     sync::Arc,
+};
+use tephra::{
+    buffer::BufferHandle,
+    context::{self, ContextApi},
+    descriptor::DescriptorHandle,
+    image::ImageHandle,
+    pipeline::{ComputePipeline, GraphicsPipeline},
+    renderpass::{Framebuffer, Renderpass},
+    shader::ShaderModule,
 };
 use thread_local_object::ThreadLocal;
 use winit;
@@ -51,10 +54,7 @@ impl ThreadLocalCommandPool {
         }
     }
 
-    fn get_command_buffer(
-        &self,
-        context: &Context,
-    ) -> RecordCommandBuffer {
+    fn get_command_buffer(&self, context: &Context) -> RecordCommandBuffer {
         let has_local_value = self.thread_local_command_pool.get(|value| value.is_some());
         if !has_local_value {
             let _ = self
@@ -78,10 +78,7 @@ pub struct CommandPool {
 }
 
 impl CommandPool {
-    fn new(
-        context: &Context,
-        queue_family_index: u32,
-    ) -> Self {
+    fn new(context: &Context, queue_family_index: u32) -> Self {
         let pool_create_info = vk::CommandPoolCreateInfo {
             s_type: vk::StructureType::COMMAND_POOL_CREATE_INFO,
             p_next: ptr::null(),
@@ -105,11 +102,7 @@ impl CommandPool {
         }
     }
 
-    fn allocate_command_buffers(
-        &mut self,
-        context: &Context,
-        count: u32,
-    ) {
+    fn allocate_command_buffers(&mut self, context: &Context, count: u32) {
         let alloc_info = vk::CommandBufferAllocateInfo {
             s_type: vk::StructureType::COMMAND_BUFFER_ALLOCATE_INFO,
             p_next: ptr::null(),
@@ -125,10 +118,7 @@ impl CommandPool {
             self.command_buffers.extend(v.into_iter());
         }
     }
-    pub fn get_command_buffer(
-        &mut self,
-        context: &Context,
-    ) -> RecordCommandBuffer {
+    pub fn get_command_buffer(&mut self, context: &Context) -> RecordCommandBuffer {
         {
             let reset_command_buffer_iter = self.receiver.try_iter().map(|command_buffer| {
                 unsafe {
@@ -246,11 +236,7 @@ pub struct CommandBuffer {
 }
 
 impl CommandBuffer {
-    pub fn record<F>(
-        context: &Context,
-        name: &str,
-        mut f: F,
-    ) -> Self
+    pub fn record<F>(context: &Context, name: &str, mut f: F) -> Self
     where
         F: FnMut(vk::CommandBuffer),
     {
@@ -277,7 +263,7 @@ impl CommandBuffer {
         unsafe {
             context
                 .debug_utils_loader
-                .debug_utils_set_object_name_ext(context.device.handle(), &name_info)
+                .debug_utils_set_object_name(context.device.handle(), &name_info)
                 .expect("util name");
             context
                 .device
@@ -326,10 +312,7 @@ where
     K: Key,
     D: Slottable,
 {
-    pub fn insert(
-        &self,
-        data: D,
-    ) -> K {
+    pub fn insert(&self, data: D) -> K {
         self.map.write().insert(data)
     }
 
@@ -338,17 +321,11 @@ where
             map: RwLock::new(SlotMap::with_key()),
         }
     }
-    pub fn is_valid(
-        &self,
-        key: K,
-    ) -> bool {
+    pub fn is_valid(&self, key: K) -> bool {
         self.map.read().get(key).is_some()
     }
 
-    pub fn get(
-        &self,
-        key: K,
-    ) -> parking_lot::MappedRwLockReadGuard<D> {
+    pub fn get(&self, key: K) -> parking_lot::MappedRwLockReadGuard<D> {
         parking_lot::RwLockReadGuard::map(self.map.read(), |data| data.get(key).unwrap())
     }
 }
@@ -492,7 +469,7 @@ impl Context {
             };
 
             let debug_utils_messenger = debug_utils_loader
-                .create_debug_utils_messenger_ext(&messenger_create_info, None)
+                .create_debug_utils_messenger(&messenger_create_info, None)
                 .expect("messenger");
             // let debug_call_back = debug_report_loader
             //     .create_debug_report_callback_ext(&debug_info, None)
@@ -512,7 +489,7 @@ impl Context {
                         .filter_map(|(index, ref info)| {
                             let supports_graphic_and_surface =
                                 info.queue_flags.contains(vk::QueueFlags::GRAPHICS)
-                                    && surface_loader.get_physical_device_surface_support_khr(
+                                    && surface_loader.get_physical_device_surface_support(
                                         *pdevice,
                                         index as u32,
                                         surface,
@@ -566,33 +543,27 @@ impl Context {
             let present_queue = Queue::new(present_queue);
 
             let surface_formats = surface_loader
-                .get_physical_device_surface_formats_khr(pdevice, surface)
+                .get_physical_device_surface_formats(pdevice, surface)
                 .unwrap();
             let surface_format = surface_formats
                 .iter()
-                .map(|sfmt| {
-                    match sfmt.format {
-                        vk::Format::UNDEFINED => {
-                            vk::SurfaceFormatKHR {
-                                format: vk::Format::B8G8R8_UNORM,
-                                color_space: sfmt.color_space,
-                            }
-                        }
-                        _ => *sfmt,
-                    }
+                .map(|sfmt| match sfmt.format {
+                    vk::Format::UNDEFINED => vk::SurfaceFormatKHR {
+                        format: vk::Format::B8G8R8_UNORM,
+                        color_space: sfmt.color_space,
+                    },
+                    _ => *sfmt,
                 })
                 .nth(0)
                 .expect("Unable to find suitable surface format.");
             let surface_capabilities = surface_loader
-                .get_physical_device_surface_capabilities_khr(pdevice, surface)
+                .get_physical_device_surface_capabilities(pdevice, surface)
                 .unwrap();
             let surface_resolution = match surface_capabilities.current_extent.width {
-                ::std::u32::MAX => {
-                    vk::Extent2D {
-                        width: window_width,
-                        height: window_height,
-                    }
-                }
+                ::std::u32::MAX => vk::Extent2D {
+                    width: window_width,
+                    height: window_height,
+                },
                 _ => surface_capabilities.current_extent,
             };
             let swapchain_loader = Swapchain::new(&instance, &device);
@@ -871,7 +842,7 @@ unsafe fn create_surface<E: EntryV1_0, I: InstanceV1_0>(
         dpy: x11_display as *mut vk::Display,
     };
     let xlib_surface_loader = XlibSurface::new(entry, instance);
-    xlib_surface_loader.create_xlib_surface_khr(&x11_create_info, None)
+    xlib_surface_loader.create_xlib_surface(&x11_create_info, None)
 }
 
 #[cfg(windows)]
@@ -895,7 +866,7 @@ unsafe fn create_surface<E: EntryV1_0, I: InstanceV1_0>(
     };
     let win32_surface_loader =
         Win32Surface::new(entry, instance).expect("Unable to load win32 surface");
-    win32_surface_loader.create_win32_surface_khr(&win32_create_info, None)
+    win32_surface_loader.create_win32_surface(&win32_create_info, None)
 }
 
 #[cfg(all(unix, not(target_os = "android")))]

@@ -16,8 +16,7 @@ impl ResourceSyncMap {
         unimplemented!()
     }
 
-    pub fn register(handle: impl Into<ResourceType>, access: AccessType){
-    }
+    pub fn register(handle: impl Into<ResourceType>, access: AccessType) {}
 }
 
 pub trait RegisterResource {

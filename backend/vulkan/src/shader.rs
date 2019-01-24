@@ -1,17 +1,14 @@
 use super::Context;
-use tephra::shader::{ShaderApi, ShaderError, ShaderModule};
 use ash::version::DeviceV1_0;
 use ash::vk;
 use std::ptr;
+use tephra::shader::{ShaderApi, ShaderError, ShaderModule};
 pub struct ShaderModuleData {
     pub shader_module: vk::ShaderModule,
 }
 
 impl ShaderApi for Context {
-    unsafe fn create_shader(
-        &self,
-        bytes: &[u8],
-    ) -> Result<ShaderModule, ShaderError> {
+    unsafe fn create_shader(&self, bytes: &[u8]) -> Result<ShaderModule, ShaderError> {
         let context = self;
         let shader_info = vk::ShaderModuleCreateInfo {
             s_type: vk::StructureType::SHADER_MODULE_CREATE_INFO,
@@ -24,9 +21,7 @@ impl ShaderApi for Context {
             .device
             .create_shader_module(&shader_info, None)
             .expect("Vertex shader module error");
-        let shader_data = ShaderModuleData {
-            shader_module,
-        };
+        let shader_data = ShaderModuleData { shader_module };
         Ok(self.shader_modules.insert(shader_data))
     }
 }

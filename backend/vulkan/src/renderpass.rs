@@ -1,21 +1,17 @@
 use super::image::from_format;
 use super::Context;
+use ash::{version::DeviceV1_0, vk};
 use tephra::{
     image::Image,
     renderpass::{
         Attachment, Framebuffer, FramebufferApi, Renderpass, RenderpassApi, RenderpassState,
     },
 };
-use ash::{version::DeviceV1_0, vk};
 pub struct FramebufferData {
     pub framebuffer: vk::Framebuffer,
 }
 impl FramebufferApi for Context {
-    unsafe fn create_framebuffer(
-        &self,
-        renderpass: Renderpass,
-        images: &[Image],
-    ) -> Framebuffer {
+    unsafe fn create_framebuffer(&self, renderpass: Renderpass, images: &[Image]) -> Framebuffer {
         let renderpass_data = self.renderpasses.get(renderpass);
         // TODO: Proper resolution
         let framebuffer_attachments: Vec<_> = images
@@ -43,10 +39,7 @@ pub struct RenderpassData {
     pub render_pass: vk::RenderPass,
 }
 impl RenderpassApi for Context {
-    unsafe fn create_renderpass(
-        &self,
-        builder: &RenderpassState,
-    ) -> Renderpass {
+    unsafe fn create_renderpass(&self, builder: &RenderpassState) -> Renderpass {
         fn build_attachment(
             ctx: &Context,
             attachment: &Attachment,
@@ -83,19 +76,19 @@ impl RenderpassApi for Context {
         let color_attachments: Vec<_> = builder
             .color_attachments
             .iter()
-            .map(|attachment| {
-                vk::AttachmentReference {
-                    attachment: attachment.index,
-                    layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-                }
+            .map(|attachment| vk::AttachmentReference {
+                attachment: attachment.index,
+                layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
             })
             .collect();
-        let depth_attachment = builder.depth_attachment.as_ref().map(|attachment| {
-            vk::AttachmentReference {
-                attachment: attachment.index,
-                layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-            }
-        });
+        let depth_attachment =
+            builder
+                .depth_attachment
+                .as_ref()
+                .map(|attachment| vk::AttachmentReference {
+                    attachment: attachment.index,
+                    layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                });
         let mut dst_access_mask = vk::AccessFlags::empty();
         if builder.color_attachments.len() > 0 {
             dst_access_mask |= vk::AccessFlags::COLOR_ATTACHMENT_WRITE;

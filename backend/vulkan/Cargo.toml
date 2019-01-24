@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["maik"]
 edition = "2018"
 [dependencies]
-ash = "0.26"
+ash = "0.27"
 tephra = {path = "../../tephra"}
 thread-local-object = "0.1.0"
 parking_lot = "0.6.3"
