@@ -1,10 +1,32 @@
 use super::Context;
 use ash::{version::DeviceV1_0, vk};
+use std::collections::HashMap;
 use std::ptr;
 use tephra::{
-    commandbuffer::{Command, CommandList, SubmitApi},
+    commandbuffer::{self, Command, CommandList, SubmitApi},
     descriptor::Pool,
+    framegraph::ResourceType,
 };
+use vk_sync::AccessType;
+pub struct ResourceSyncMap {
+    map: HashMap<(), ()>,
+}
+impl ResourceSyncMap {
+    pub fn get_access(&self, handle: impl Into<ResourceType>) -> Option<&Vec<AccessType>> {
+        unimplemented!()
+    }
+
+    pub fn register(handle: impl Into<ResourceType>, access: AccessType){
+    }
+}
+
+pub trait RegisterResource {
+    fn register(&self, map: &mut ResourceSyncMap);
+}
+
+impl RegisterResource for commandbuffer::DrawCommand {
+    fn register(&self, map: &mut ResourceSyncMap) {}
+}
 
 struct PipelineBarrier {
     barrier: Barrier,
@@ -141,7 +163,7 @@ impl SubmitApi for Context {
                             vk::PipelineBindPoint::COMPUTE,
                             pipeline.pipeline,
                         );
-                        for (set, shader_arguments) in dispatch.shader_arguments.iter(){
+                        for (set, shader_arguments) in dispatch.shader_arguments.iter() {
                             let descriptor_handle = pool.allocate(shader_arguments);
                             let descriptor = self.descriptors.get(descriptor_handle);
                             device.cmd_bind_descriptor_sets(

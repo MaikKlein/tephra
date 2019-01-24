@@ -133,6 +133,12 @@ pub enum ResourceType {
     Image(Image),
     Framebuffer(Framebuffer),
 }
+impl From<BufferHandle> for ResourceType {
+    fn from(handle: BufferHandle) -> Self {
+        ResourceType::Buffer(handle)
+    }
+}
+
 impl ResourceType {
     pub fn as_buffer(&self) -> BufferHandle {
         match *self {
