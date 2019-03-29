@@ -1,2 +1,0 @@
-gdb rustc --ex "r $*"
-
