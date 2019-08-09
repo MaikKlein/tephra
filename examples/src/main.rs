@@ -204,6 +204,7 @@ fn main() {
             let mut command_list = CommandList::new();
             triangle.record_commands(&mut command_list);
             ctx.submit_commands(&mut pool, &command_list);
+            pool.reset();
         }
     }
 }
