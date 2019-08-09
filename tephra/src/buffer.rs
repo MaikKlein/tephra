@@ -43,23 +43,6 @@ pub enum BufferError {
 pub enum HostVisible {}
 pub enum DeviceLocal {}
 
-//pub trait HostVisibleBuffer<T, Backend: BackendApi>
-//where
-//    Self: Sized,
-//    T: Copy,
-//{
-//    //fn from_slice(
-//        // context: &context::Context<Backend>,
-//        // usage: BufferUsage,
-//        // data: &[T],
-//    // ) -> Result<Self, BufferError>;
-//    // fn map_memory<R, F>(&mut self, f: F) -> Result<R, MappingError>
-//    // where
-//        // F: Fn(&mut [T]) -> R;
-//}
-
-// impl_downcast!(BufferApi);
-
 pub trait BufferProperty {
     fn property() -> Property;
 }
@@ -137,41 +120,6 @@ impl<T: Copy> Buffer<T> {
         }
     }
 }
-
-// impl<T: Copy, Backend> Buffer<T, HostVisible, Backend>
-// where
-//     Backend: BackendApi,
-//     ImplBuffer<T, HostVisible, Backend>: HostVisibleBuffer<T, Backend>,
-// {
-//     pub fn from_slice(
-//         context: &context::Context<Backend>,
-//         usage: BufferUsage,
-//         data: &[T],
-//     ) -> Result<Self, BufferError> {
-//         HostVisibleBuffer::from_slice(context, usage, data)
-//             .map(|impl_buffer| Buffer { impl_buffer })
-//     }
-
-//     pub fn map_memory<R, F>(&mut self, f: F) -> Result<R, MappingError>
-//     where
-//         F: Fn(&mut [T]) -> R,
-//     {
-//         HostVisibleBuffer::map_memory(&mut self.impl_buffer, f)
-//     }
-// }
-
-// impl<T: Copy, Property, Backend> Buffer<T, Property, Backend>
-// where
-//     Backend: BackendApi,
-//     Property: BufferProperty,
-//     ImplBuffer<T, Property, Backend>: BufferApi<Backend, Item=T>,
-// {
-//     pub fn copy_to_device_local(&self) -> Result<Buffer<T, DeviceLocal, Backend>, BufferError> {
-//         self.impl_buffer
-//             .copy_to_device_local()
-//             .map(|impl_buffer| Buffer { impl_buffer })
-//     }
-// }
 
 #[derive(Copy, Clone)]
 pub enum BufferUsage {

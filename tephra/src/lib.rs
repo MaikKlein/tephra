@@ -30,6 +30,7 @@ pub mod reflect;
 pub mod renderpass;
 pub mod shader;
 pub mod swapchain;
+pub use failure::Error;
 #[derive(Copy, Clone, Default, Debug)]
 pub struct Viewport {
     pub origin: (f32, f32),

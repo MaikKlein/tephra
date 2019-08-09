@@ -173,9 +173,8 @@ impl CommandList {
             submits: Vec::new(),
         }
     }
-    pub fn record<'a, Q>(&'a mut self, registry: &'a Registry) -> RecordCommandList<'a, Q> {
+    pub fn record<'a, Q>(&'a mut self) -> RecordCommandList<'a, Q> {
         RecordCommandList {
-            registry,
             command_list: self,
             commands: Vec::new(),
             _m: PhantomData,
@@ -184,7 +183,6 @@ impl CommandList {
 }
 pub struct RecordCommandList<'a, Q> {
     command_list: &'a mut CommandList,
-    registry: &'a Registry,
     commands: Vec<Command>,
     _m: PhantomData<Q>,
 }
@@ -208,10 +206,10 @@ impl RecordCommandList<'_, Graphics> {
         mut self,
         graphics_pipeline: GraphicsPipeline,
         renderpass: Renderpass,
-        framebuffer: impl Resolve<Write, Target = Framebuffer>,
+        framebuffer: Framebuffer,
         shader_arguments: ShaderArguments,
-        vertex_buffer: impl Resolve<Read, Target = Buffer<Vertex>>,
-        index_buffer: impl Resolve<Read, Target = Buffer<u32>>,
+        vertex_buffer: Buffer<Vertex>,
+        index_buffer: Buffer<u32>,
         range: Range<u32>,
     ) -> Self
     where
@@ -220,10 +218,10 @@ impl RecordCommandList<'_, Graphics> {
         let cmd = DrawCommand {
             graphics_pipeline,
             renderpass,
-            framebuffer: framebuffer.resolve(self.registry),
+            framebuffer,
             shader_arguments,
-            vertex: vertex_buffer.resolve(self.registry).buffer,
-            index: index_buffer.resolve(self.registry),
+            vertex: vertex_buffer.buffer,
+            index: index_buffer,
             range,
         };
         self.commands.push(Command::Draw(cmd));
