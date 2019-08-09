@@ -91,8 +91,7 @@ impl Triangle {
             Buffer::from_slice(&ctx, Property::HostVisible, BufferUsage::Vertex, &VERTICES)?;
 
         let compute_pipeline = {
-            let compute_shader =
-                ShaderModule::load(ctx, "shader/triangle/comp.spv").expect("compute shader");
+            let compute_shader = ShaderModule::load(ctx, "shader/triangle/comp.spv")?;
             ComputePipeline::builder()
                 .compute_shader(ShaderStage {
                     shader_module: compute_shader,
@@ -102,10 +101,8 @@ impl Triangle {
                 .create(ctx)
         };
         let format = swapchain.format();
-        let vertex_shader_module =
-            ShaderModule::load(&ctx, "shader/triangle/vert.spv").expect("vertex");
-        let fragment_shader_module =
-            ShaderModule::load(&ctx, "shader/triangle/frag.spv").expect("vertex");
+        let vertex_shader_module = ShaderModule::load(&ctx, "shader/triangle/vert.spv")?;
+        let fragment_shader_module = ShaderModule::load(&ctx, "shader/triangle/frag.spv")?;
 
         let color_desc = ImageDesc {
             layout: ImageLayout::Color,
