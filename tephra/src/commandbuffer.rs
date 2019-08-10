@@ -1,6 +1,6 @@
 use crate::{
     buffer::{Buffer, BufferHandle},
-    descriptor::{DescriptorHandle, DescriptorInfo, DescriptorType, Pool},
+    descriptor::{DescriptorType, Pool},
     image::ImageHandle,
     pipeline::{ComputePipeline, GraphicsPipeline, GraphicsPipelineState},
     renderpass::{Framebuffer, Renderpass, VertexInput, VertexInputData},

@@ -9,7 +9,7 @@ use ash::{
     version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
     vk, Device, Entry, Instance,
 };
-use parking_lot::{Mutex, RwLock};
+use parking_lot::{Mutex};
 use std::{
     cell::RefCell,
     ffi::{CStr, CString},

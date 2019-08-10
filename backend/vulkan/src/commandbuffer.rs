@@ -1,12 +1,12 @@
 use super::Context;
 use ash::{version::DeviceV1_0, vk};
-use std::collections::HashMap;
+
 use std::ptr;
 use tephra::{
-    commandbuffer::{self, Command, CommandList, SubmitApi},
+    commandbuffer::{Command, CommandList, SubmitApi},
     descriptor::Pool,
 };
-use vk_sync::AccessType;
+
 
 struct PipelineBarrier {
     barrier: Barrier,

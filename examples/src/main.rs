@@ -7,7 +7,7 @@ pub use tephra::winit;
 
 use tephra::{
     buffer::{Buffer, BufferUsage, Property},
-    commandbuffer::{self, Access, CommandList, Compute, Descriptor, Graphics, ShaderArguments},
+    commandbuffer::{Access, CommandList, Compute, Descriptor, Graphics, ShaderArguments},
     context::Context,
     descriptor::{DescriptorType, Pool},
     image::{Format, Image, ImageDesc, ImageLayout},

@@ -7,7 +7,7 @@ pub extern crate winit;
 extern crate failure_derive;
 #[macro_use]
 extern crate downcast_rs as downcast;
-use crate::image as cpu_image;
+
 pub mod buffer;
 pub mod commandbuffer;
 pub mod context;
