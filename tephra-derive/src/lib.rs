@@ -16,7 +16,7 @@ pub fn derive_descriptor_info(input: proc_macro::TokenStream) -> proc_macro::Tok
     derive.into()
 }
 fn gen_descriptor_info(ident: &Ident, input: &DataStruct) -> TokenStream {
-    let path = quote!{tephra::descriptor};
+    let path = quote! {tephra::descriptor};
     let field_names = input
         .fields
         .iter()
@@ -27,17 +27,17 @@ fn gen_descriptor_info(ident: &Ident, input: &DataStruct) -> TokenStream {
             let binding = desc.binding;
             let ty = match desc.ty {
                 DescriptorType::Storage => {
-                    quote!{
+                    quote! {
                         #path::DescriptorResource::Storage(self.#field.buffer)
                     }
                 }
                 DescriptorType::Uniform => {
-                    quote!{
+                    quote! {
                         #path::DescriptorResource::Uniform(self.#field.buffer)
                     }
                 }
             };
-            quote!{
+            quote! {
                  #path::Binding {
                      binding: #binding,
                      data: #ty
@@ -47,17 +47,17 @@ fn gen_descriptor_info(ident: &Ident, input: &DataStruct) -> TokenStream {
     let layout = parse_descriptor_attributes(input).map(|desc| {
         let binding = desc.binding;
         let ty = match desc.ty {
-            DescriptorType::Storage => quote!{#path::DescriptorType::Storage},
-            DescriptorType::Uniform => quote!{#path::DescriptorType::Uniform},
+            DescriptorType::Storage => quote! {#path::DescriptorType::Storage},
+            DescriptorType::Uniform => quote! {#path::DescriptorType::Uniform},
         };
-        quote!{
+        quote! {
             #path::Binding {
                 binding: #binding,
                 data: #ty
             }
         }
     });
-    quote!{
+    quote! {
         impl #path::DescriptorInfo for #ident {
             fn descriptor_data(&self) -> Vec<#path::Binding<#path::DescriptorResource>> {
                 vec![
@@ -91,17 +91,19 @@ impl DescriptorType {
             _ => panic!("Only Metalist is supported"),
         };
         match nested[0] {
-            NestedMeta::Meta(ref meta) => match meta {
-                Meta::Word(ident) => {
-                    let name = ident.to_string();
-                    match name.as_str() {
-                        "Storage" => DescriptorType::Storage,
-                        "Uniform" => DescriptorType::Uniform,
-                        _ => panic!("Unknown type"),
+            NestedMeta::Meta(ref meta) => {
+                match meta {
+                    Meta::Word(ident) => {
+                        let name = ident.to_string();
+                        match name.as_str() {
+                            "Storage" => DescriptorType::Storage,
+                            "Uniform" => DescriptorType::Uniform,
+                            _ => panic!("Unknown type"),
+                        }
                     }
+                    _ => panic!("Expected Word"),
                 }
-                _ => panic!("Expected Word"),
-            },
+            }
             _ => panic!("Expected Meta"),
         }
     }
@@ -141,7 +143,7 @@ pub fn derive_vertex_inputsize(input: proc_macro::TokenStream) -> proc_macro::To
 
 fn gen_vertex_input(ident: &Ident, input: &DataStruct) -> TokenStream {
     let tys = input.fields.iter().map(|field| &field.ty);
-    quote!{
+    quote! {
         impl tephra::renderpass::VertexInput for #ident {
             fn vertex_input_data() -> Vec<tephra::renderpass::VertexInputData> {
                 use tephra::renderpass::VertexTypeData;

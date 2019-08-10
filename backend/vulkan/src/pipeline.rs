@@ -270,23 +270,27 @@ impl PipelineApi for Context {
 }
 pub fn vertex_format(ty: VertexType) -> vk::Format {
     match ty {
-        VertexType::F32(size) => match size {
-            1 => vk::Format::R32_SFLOAT,
-            2 => vk::Format::R32G32_SFLOAT,
-            3 => vk::Format::R32G32B32_SFLOAT,
-            4 => vk::Format::R32G32B32A32_SFLOAT,
-            _ => unreachable!(),
-        },
+        VertexType::F32(size) => {
+            match size {
+                1 => vk::Format::R32_SFLOAT,
+                2 => vk::Format::R32G32_SFLOAT,
+                3 => vk::Format::R32G32B32_SFLOAT,
+                4 => vk::Format::R32G32B32A32_SFLOAT,
+                _ => unreachable!(),
+            }
+        }
     }
 }
 pub fn vertex_input(vertex_input: &[VertexInputData]) -> Vec<vk::VertexInputAttributeDescription> {
     vertex_input
         .iter()
-        .map(|input| vk::VertexInputAttributeDescription {
-            location: input.location,
-            binding: input.binding,
-            offset: input.offset,
-            format: vertex_format(input.vertex_type),
+        .map(|input| {
+            vk::VertexInputAttributeDescription {
+                location: input.location,
+                binding: input.binding,
+                offset: input.offset,
+                format: vertex_format(input.vertex_type),
+            }
         })
         .collect()
 }

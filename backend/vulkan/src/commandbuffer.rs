@@ -5,27 +5,8 @@ use std::ptr;
 use tephra::{
     commandbuffer::{self, Command, CommandList, SubmitApi},
     descriptor::Pool,
-    framegraph::ResourceType,
 };
 use vk_sync::AccessType;
-pub struct ResourceSyncMap {
-    map: HashMap<(), ()>,
-}
-impl ResourceSyncMap {
-    pub fn get_access(&self, _handle: impl Into<ResourceType>) -> Option<&Vec<AccessType>> {
-        unimplemented!()
-    }
-
-    pub fn register(_handle: impl Into<ResourceType>, _access: AccessType) {}
-}
-
-pub trait RegisterResource {
-    fn register(&self, map: &mut ResourceSyncMap);
-}
-
-impl RegisterResource for commandbuffer::DrawCommand {
-    fn register(&self, _map: &mut ResourceSyncMap) {}
-}
 
 struct PipelineBarrier {
     barrier: Barrier,

@@ -10,7 +10,6 @@ use ash::{
     vk, Device, Entry, Instance,
 };
 use parking_lot::{Mutex, RwLock};
-use slotmap::{Key, SlotMap, Slottable};
 use std::{
     cell::RefCell,
     ffi::{CStr, CString},
@@ -28,6 +27,7 @@ use tephra::{
     pipeline::{ComputePipeline, GraphicsPipeline},
     renderpass::{Framebuffer, Renderpass},
     shader::ShaderModule,
+    HandleMap,
 };
 use thread_local_object::ThreadLocal;
 use winit;
@@ -300,42 +300,14 @@ impl Deref for Context {
         &self.inner
     }
 }
-pub struct HandleMap<K, D>
-where
-    K: Key,
-    D: Slottable,
-{
-    map: RwLock<SlotMap<K, D>>,
-}
-impl<K, D> HandleMap<K, D>
-where
-    K: Key,
-    D: Slottable,
-{
-    pub fn insert(&self, data: D) -> K {
-        self.map.write().insert(data)
-    }
 
-    pub fn new() -> Self {
-        HandleMap {
-            map: RwLock::new(SlotMap::with_key()),
-        }
-    }
-    pub fn is_valid(&self, key: K) -> bool {
-        self.map.read().get(key).is_some()
-    }
-
-    pub fn get(&self, key: K) -> parking_lot::MappedRwLockReadGuard<D> {
-        parking_lot::RwLockReadGuard::map(self.map.read(), |data| data.get(key).unwrap())
-    }
-}
 pub struct InnerContext {
+    pub images: HandleMap<ImageHandle, image::ImageData>,
     pub shader_modules: HandleMap<ShaderModule, shader::ShaderModuleData>,
     pub compute_pipelines: HandleMap<ComputePipeline, pipeline::ComputePipelineData>,
     pub graphic_pipelines: HandleMap<GraphicsPipeline, pipeline::GraphicsPipelineData>,
     pub buffers: HandleMap<BufferHandle, buffer::BufferData>,
     pub descriptors: HandleMap<DescriptorHandle, descriptor::DescriptorSet>,
-    pub images: HandleMap<ImageHandle, image::ImageData>,
     pub renderpasses: HandleMap<Renderpass, renderpass::RenderpassData>,
     pub framebuffers: HandleMap<Framebuffer, renderpass::FramebufferData>,
     pub entry: Entry,
@@ -547,12 +519,16 @@ impl Context {
                 .unwrap();
             let surface_format = surface_formats
                 .iter()
-                .map(|sfmt| match sfmt.format {
-                    vk::Format::UNDEFINED => vk::SurfaceFormatKHR {
-                        format: vk::Format::B8G8R8_UNORM,
-                        color_space: sfmt.color_space,
-                    },
-                    _ => *sfmt,
+                .map(|sfmt| {
+                    match sfmt.format {
+                        vk::Format::UNDEFINED => {
+                            vk::SurfaceFormatKHR {
+                                format: vk::Format::B8G8R8_UNORM,
+                                color_space: sfmt.color_space,
+                            }
+                        }
+                        _ => *sfmt,
+                    }
                 })
                 .nth(0)
                 .expect("Unable to find suitable surface format.");
@@ -560,10 +536,12 @@ impl Context {
                 .get_physical_device_surface_capabilities(pdevice, surface)
                 .unwrap();
             let surface_resolution = match surface_capabilities.current_extent.width {
-                ::std::u32::MAX => vk::Extent2D {
-                    width: window_width,
-                    height: window_height,
-                },
+                ::std::u32::MAX => {
+                    vk::Extent2D {
+                        width: window_width,
+                        height: window_height,
+                    }
+                }
                 _ => surface_capabilities.current_extent,
             };
             let swapchain_loader = Swapchain::new(&instance, &device);

@@ -1,7 +1,6 @@
 use crate::{
     buffer::{Buffer, BufferHandle},
     descriptor::{DescriptorHandle, DescriptorInfo, DescriptorType, Pool},
-    framegraph::{Read, Registry, Resolve, Write},
     image::ImageHandle,
     pipeline::{ComputePipeline, GraphicsPipeline, GraphicsPipelineState},
     renderpass::{Framebuffer, Renderpass, VertexInput, VertexInputData},
@@ -9,7 +8,7 @@ use crate::{
 use bitflags::bitflags;
 use smallvec::SmallVec;
 use std::{
-    hash::{Hasher},
+    hash::Hasher,
     marker::PhantomData,
     ops::{Deref, Range},
 };
@@ -66,9 +65,16 @@ impl<T> From<Buffer<T>> for ShaderResource {
 }
 
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+pub enum Access {
+    Read,
+    Write,
+}
+
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub struct ShaderView {
     pub binding: u32,
     pub ty: DescriptorType,
+    pub access: Access,
 }
 const MAX_SHADER_ARGS: usize = 4;
 
@@ -94,8 +100,13 @@ impl DescriptorBuilder {
         shader_resource: S,
         binding: u32,
         ty: DescriptorType,
+        access: Access,
     ) -> Self {
-        let view = ShaderView { binding, ty };
+        let view = ShaderView {
+            binding,
+            ty,
+            access,
+        };
         self.descriptor.views.push(view);
         self.descriptor.resources.push(shader_resource.into());
         self

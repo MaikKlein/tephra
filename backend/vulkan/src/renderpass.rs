@@ -76,19 +76,19 @@ impl RenderpassApi for Context {
         let color_attachments: Vec<_> = builder
             .color_attachments
             .iter()
-            .map(|attachment| vk::AttachmentReference {
-                attachment: attachment.index,
-                layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+            .map(|attachment| {
+                vk::AttachmentReference {
+                    attachment: attachment.index,
+                    layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+                }
             })
             .collect();
-        let depth_attachment =
-            builder
-                .depth_attachment
-                .as_ref()
-                .map(|attachment| vk::AttachmentReference {
-                    attachment: attachment.index,
-                    layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-                });
+        let depth_attachment = builder.depth_attachment.as_ref().map(|attachment| {
+            vk::AttachmentReference {
+                attachment: attachment.index,
+                layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+            }
+        });
         let mut dst_access_mask = vk::AccessFlags::empty();
         if builder.color_attachments.len() > 0 {
             dst_access_mask |= vk::AccessFlags::COLOR_ATTACHMENT_WRITE;

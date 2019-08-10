@@ -10,7 +10,4 @@ thread-local-object = "0.1.0"
 parking_lot = "0.6.3"
 winit = "0.17"
 vk-sync = {git = "https://github.com/MaikKlein/vk-sync-rs"}
-
-[dependencies.slotmap]
-version = "0.3.0"
-features = ["unstable"]
+generational-arena = "0.2"

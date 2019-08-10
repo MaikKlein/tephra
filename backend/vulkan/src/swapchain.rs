@@ -59,13 +59,15 @@ impl SwapchainApi for SwapchainData {
                     vk::Fence::null(),
                 )
                 .map(|e| e.0)
-                .map_err(|err| match err {
-                    vk::Result::ERROR_OUT_OF_DATE_KHR => SwapchainError::OutOfDate,
-                    vk::Result::SUBOPTIMAL_KHR => SwapchainError::Suboptimal,
-                    err => {
-                        println!("{:?}", err);
-                        println!("{:?}", vk::Result::ERROR_OUT_OF_DATE_KHR);
-                        SwapchainError::Unknown
+                .map_err(|err| {
+                    match err {
+                        vk::Result::ERROR_OUT_OF_DATE_KHR => SwapchainError::OutOfDate,
+                        vk::Result::SUBOPTIMAL_KHR => SwapchainError::Suboptimal,
+                        err => {
+                            println!("{:?}", err);
+                            println!("{:?}", vk::Result::ERROR_OUT_OF_DATE_KHR);
+                            SwapchainError::Unknown
+                        }
                     }
                 })
         }
@@ -151,12 +153,16 @@ fn create_swapchain(ctx: &Context, old_swapchain: Option<vk::SwapchainKHR>) -> S
             .unwrap();
         let surface_format = surface_formats
             .iter()
-            .map(|sfmt| match sfmt.format {
-                vk::Format::UNDEFINED => vk::SurfaceFormatKHR {
-                    format: vk::Format::B8G8R8_UNORM,
-                    color_space: sfmt.color_space,
-                },
-                _ => sfmt.clone(),
+            .map(|sfmt| {
+                match sfmt.format {
+                    vk::Format::UNDEFINED => {
+                        vk::SurfaceFormatKHR {
+                            format: vk::Format::B8G8R8_UNORM,
+                            color_space: sfmt.color_space,
+                        }
+                    }
+                    _ => sfmt.clone(),
+                }
             })
             .nth(0)
             .expect("Unable to find suitable surface format.");

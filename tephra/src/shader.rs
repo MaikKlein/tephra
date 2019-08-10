@@ -1,18 +1,12 @@
 use crate::context::Context;
-use slotmap::new_key_type;
 use std::fs::File;
 use std::io::{self, Read};
 use std::path::Path;
 
-new_key_type! {
-    pub struct ShaderModule;
-}
+crate::new_typed_handle!(ShaderModule);
 
 pub trait ShaderApi {
-    unsafe fn create_shader(
-        &self,
-        bytes: &[u8],
-    ) -> Result<ShaderModule, ShaderError>;
+    unsafe fn create_shader(&self, bytes: &[u8]) -> Result<ShaderModule, ShaderError>;
 }
 
 pub enum ShaderType {
@@ -39,10 +33,7 @@ impl GetShaderType for Fragment {
     }
 }
 impl ShaderModule {
-    pub unsafe fn load<P: AsRef<Path>>(
-        ctx: &Context,
-        p: P,
-    ) -> Result<ShaderModule, ShaderError> {
+    pub unsafe fn load<P: AsRef<Path>>(ctx: &Context, p: P) -> Result<ShaderModule, ShaderError> {
         let file = File::open(p.as_ref()).map_err(ShaderError::IoError)?;
         let bytes: Vec<_> = file.bytes().filter_map(Result::ok).collect();
         ctx.create_shader(&bytes)

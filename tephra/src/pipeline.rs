@@ -5,12 +5,8 @@ use crate::{
     shader::ShaderModule,
 };
 
-use slotmap::new_key_type;
-
-new_key_type!(
-    pub struct GraphicsPipeline;
-    pub struct ComputePipeline;
-);
+crate::new_typed_handle!(GraphicsPipeline);
+crate::new_typed_handle!(ComputePipeline);
 
 pub trait PipelineApi {
     unsafe fn create_graphics_pipeline(&self, state: &GraphicsPipelineState) -> GraphicsPipeline;

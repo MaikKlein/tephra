@@ -3,14 +3,11 @@ use crate::{
     commandbuffer::{Descriptor, ShaderView, ShaderViews},
     context::Context,
 };
-use slotmap::new_key_type;
 
 use std::collections::HashMap;
 
+crate::new_typed_handle!(DescriptorHandle);
 
-new_key_type!(
-    pub struct DescriptorHandle;
-);
 pub trait CreateDescriptor {}
 
 pub trait CreatePool {
@@ -170,4 +167,3 @@ pub struct Binding<T> {
     pub binding: u32,
     pub data: T,
 }
-

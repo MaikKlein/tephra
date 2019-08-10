@@ -123,17 +123,19 @@ impl DescriptorApi for Context {
         let buffer_infos: Vec<vk::DescriptorBufferInfo> = data
             .resources
             .iter()
-            .map(|resource| match *resource {
-                ShaderResource::Buffer(buffer) => {
-                    let generic_buffer = buffer;
-                    let vkbuffer = self.buffers.get(generic_buffer);
-                    vk::DescriptorBufferInfo {
-                        buffer: vkbuffer.buffer,
-                        offset: 0,
-                        range: vkbuffer.size,
+            .map(|resource| {
+                match *resource {
+                    ShaderResource::Buffer(buffer) => {
+                        let generic_buffer = buffer;
+                        let vkbuffer = self.buffers.get(generic_buffer);
+                        vk::DescriptorBufferInfo {
+                            buffer: vkbuffer.buffer,
+                            offset: 0,
+                            range: vkbuffer.size,
+                        }
                     }
+                    _ => unimplemented!(),
                 }
-                _ => unimplemented!(),
             })
             .collect();
 

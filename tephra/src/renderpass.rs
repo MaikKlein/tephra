@@ -1,20 +1,13 @@
 use crate::context::Context;
 use crate::image::{Format, Image};
 use derive_builder::Builder;
-use slotmap::{new_key_type};
 use smallvec::SmallVec;
 use std::mem::size_of;
-new_key_type!(
-    pub struct Renderpass;
-    pub struct Framebuffer;
-);
+crate::new_typed_handle!(Renderpass);
+crate::new_typed_handle!(Framebuffer);
 
 pub trait FramebufferApi {
-    unsafe fn create_framebuffer(
-        &self,
-        renderpass: Renderpass,
-        images: &[Image],
-    ) -> Framebuffer;
+    unsafe fn create_framebuffer(&self, renderpass: Renderpass, images: &[Image]) -> Framebuffer;
 }
 
 impl Renderpass {
@@ -49,34 +42,22 @@ pub struct RenderpassBuilder {
     state: RenderpassState,
 }
 impl RenderpassBuilder {
-    pub fn color_attachment(
-        mut self,
-        attachment: Attachment,
-    ) -> Self {
+    pub fn color_attachment(mut self, attachment: Attachment) -> Self {
         self.state.color_attachments.push(attachment);
         self
     }
-    pub fn with_depth_attachment(
-        mut self,
-        attachment: Attachment,
-    ) -> Self {
+    pub fn with_depth_attachment(mut self, attachment: Attachment) -> Self {
         self.state.depth_attachment = Some(attachment);
         self
     }
 
-    pub unsafe fn create(
-        self,
-        ctx: &Context,
-    ) -> Renderpass {
+    pub unsafe fn create(self, ctx: &Context) -> Renderpass {
         ctx.create_renderpass(&self.state)
     }
 }
 
 pub trait RenderpassApi {
-    unsafe fn create_renderpass(
-        &self,
-        builder: &RenderpassState,
-    ) -> Renderpass;
+    unsafe fn create_renderpass(&self, builder: &RenderpassState) -> Renderpass;
 }
 
 #[derive(Debug, Copy, Clone)]

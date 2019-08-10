@@ -7,13 +7,10 @@ pub use tephra::winit;
 
 use tephra::{
     buffer::{Buffer, BufferUsage, Property},
-    commandbuffer::{
-        CommandList, Compute, Descriptor, Graphics, ShaderArguments, ShaderResource, ShaderView,
-    },
+    commandbuffer::{self, Access, CommandList, Compute, Descriptor, Graphics, ShaderArguments},
     context::Context,
     descriptor::{DescriptorType, Pool},
-    framegraph::{Blackboard, Framegraph, ReadResource, Recording, Resource, WriteResource},
-    image::{Format, Image, ImageDesc, ImageLayout, Resolution},
+    image::{Format, Image, ImageDesc, ImageLayout},
     pipeline::{ComputePipeline, GraphicsPipeline, ShaderStage},
     renderpass::{Attachment, Framebuffer, Renderpass},
     shader::ShaderModule,
@@ -166,7 +163,12 @@ impl Triangle {
 
     pub fn record_commands(&self, cmds: &mut CommandList) {
         let descriptor = Descriptor::builder()
-            .with(self.storage_buffer, 0, DescriptorType::Storage)
+            .with(
+                self.storage_buffer,
+                0,
+                DescriptorType::Storage,
+                Access::Write,
+            )
             .build();
         let args = ShaderArguments::builder()
             .with_shader_arg(0, descriptor)
@@ -175,7 +177,12 @@ impl Triangle {
             .dispatch(self.compute_pipeline, args, 1, 1, 1)
             .submit();
         let shader_arguments = Descriptor::builder()
-            .with(self.storage_buffer, 0, DescriptorType::Storage)
+            .with(
+                self.storage_buffer,
+                0,
+                DescriptorType::Storage,
+                Access::Read,
+            )
             .build();
         let space = ShaderArguments::builder()
             .with_shader_arg(0, shader_arguments)

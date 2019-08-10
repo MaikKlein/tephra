@@ -1,10 +1,8 @@
 use crate::context::Context;
-use slotmap::new_key_type;
 use std::marker::PhantomData;
 use std::mem::size_of;
-new_key_type!(
-    pub struct BufferHandle;
-);
+
+crate::new_typed_handle!(BufferHandle);
 
 pub trait BufferApi {
     fn allocate(
@@ -64,7 +62,7 @@ impl BufferProperty for DeviceLocal {
         Property::DeviceLocal
     }
 }
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone)]
 pub struct Buffer<T> {
     pub _m: PhantomData<T>,
     pub buffer: BufferHandle,

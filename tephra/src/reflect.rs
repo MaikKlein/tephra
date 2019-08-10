@@ -10,10 +10,7 @@ macro_rules! extract {
     };
 }
 
-fn find_result_id<'a>(
-    module: &'a Module,
-    id: u32,
-) -> Option<&'a Instruction> {
+fn find_result_id<'a>(module: &'a Module, id: u32) -> Option<&'a Instruction> {
     module.global_inst_iter().find(|inst| {
         match inst.result_id {
             Some(result_id) => result_id == id,
@@ -55,10 +52,7 @@ pub enum Type {
     Array(Box<Type>),
 }
 impl Type {
-    pub fn from_instruction(
-        module: &Module,
-        ty_inst: &Instruction,
-    ) -> Type {
+    pub fn from_instruction(module: &Module, ty_inst: &Instruction) -> Type {
         match ty_inst.class.opcode {
             spirv::Op::TypeFloat => {
                 let size = *extract!(&ty_inst.operands[0], Operand::LiteralInt32);
@@ -96,7 +90,8 @@ impl Type {
                         let id = *extract!(operand, Operand::IdRef);
                         let inst = find_result_id(module, id).expect("Unable to find type");
                         Type::from_instruction(module, inst)
-                    }).collect();
+                    })
+                    .collect();
                 Type::Struct(types)
             }
             r => unimplemented!("{:?}", r),
@@ -109,10 +104,7 @@ pub struct Variable {
     pub ty: Type,
 }
 impl Variable {
-    pub fn from_instruction(
-        module: &Module,
-        inst: &Instruction,
-    ) -> Option<Self> {
+    pub fn from_instruction(module: &Module, inst: &Instruction) -> Option<Self> {
         if inst.class.opcode != spirv::Op::Variable {
             return None;
         }
@@ -134,10 +126,7 @@ pub struct EntryPoint {
 }
 
 impl EntryPoint {
-    pub fn from_instruction(
-        module: &Module,
-        inst: &Instruction,
-    ) -> Option<Self> {
+    pub fn from_instruction(module: &Module, inst: &Instruction) -> Option<Self> {
         if inst.class.opcode != spirv::Op::EntryPoint {
             return None;
         }

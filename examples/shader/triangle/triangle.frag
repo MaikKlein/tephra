@@ -10,5 +10,5 @@ layout(binding = 0 , set = 0) buffer readonly Color {
 };
 
 void main() {
-    uFragColor = color;
+    uFragColor = o_color;
 }

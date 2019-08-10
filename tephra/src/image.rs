@@ -1,11 +1,13 @@
 use crate::buffer::Buffer;
 use crate::context::Context;
 use crate::downcast::Downcast;
+use crate::new_typed_handle;
 use derive_builder::Builder;
-use slotmap::new_key_type;
-new_key_type!(
-    pub struct ImageHandle;
-);
+
+new_typed_handle! {
+    ImageHandle
+}
+
 //use renderpass::{Pass, Renderpass};
 #[derive(Debug, Copy, Clone)]
 pub enum ImageLayout {
