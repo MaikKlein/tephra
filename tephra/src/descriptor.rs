@@ -4,10 +4,10 @@ use crate::{
     context::Context,
 };
 use slotmap::new_key_type;
-use std::any::TypeId;
+
 use std::collections::HashMap;
-use std::marker::PhantomData;
-use std::ops::Drop;
+
+
 new_key_type!(
     pub struct DescriptorHandle;
 );
@@ -75,7 +75,7 @@ impl LinearPoolAllocator {
     }
 
     pub fn reset(&mut self) {
-        for pool in &mut self.pools {
+        for _pool in &mut self.pools {
             self.current_allocations = 0;
         }
     }

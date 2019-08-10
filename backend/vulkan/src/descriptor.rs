@@ -1,12 +1,12 @@
 use super::Context;
 use ash::version::DeviceV1_0;
 use ash::vk;
-use tephra::commandbuffer::{Descriptor, ShaderArguments, ShaderResource, ShaderView};
+use tephra::commandbuffer::{Descriptor, ShaderResource, ShaderView};
 use tephra::descriptor::{
     Binding, CreatePool, DescriptorApi, DescriptorHandle, DescriptorResource, DescriptorSizes,
     DescriptorType, NativePool, PoolApi,
 };
-use tephra::framegraph::{Compiled, Framegraph};
+
 pub struct Pool {
     pub ctx: Context,
     pub pool: vk::DescriptorPool,

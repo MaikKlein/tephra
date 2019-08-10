@@ -9,7 +9,7 @@ use crate::{
 pub mod deferred {
     use super::TaskBuilder;
     use crate::{
-        framegraph::{ReadResource, Resource, WriteResource},
+        framegraph::{WriteResource},
         image::{Image, ImageDescBuilder},
     };
 

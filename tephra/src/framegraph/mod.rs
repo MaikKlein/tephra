@@ -274,7 +274,7 @@ define_fn! {
 pub struct Framegraph<T = Recording> {
     pool: Pool,
     pub ctx: Context,
-    execute_fns: HashMap<Handle, Box<ExecuteFn>>,
+    execute_fns: HashMap<Handle, Box<dyn ExecuteFn>>,
     state: T,
     graph: Graph<Pass, Access>,
     pub registry: Registry,
@@ -452,7 +452,7 @@ impl Framegraph<Compiled> {
 }
 
 pub struct PassRunner {
-    execute_fn: Option<Box<ExecuteFn>>,
+    execute_fn: Option<Box<dyn ExecuteFn>>,
 }
 // impl PassRunner {
 //     pub fn execute(mut self, f: ExecuteFn) {

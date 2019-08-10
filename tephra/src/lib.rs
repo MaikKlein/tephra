@@ -6,6 +6,7 @@ extern crate slotmap;
 extern crate smallvec;
 extern crate spirv_headers;
 extern crate thread_local_object;
+extern crate bitflags;
 #[macro_use]
 pub extern crate ash;
 pub extern crate failure;

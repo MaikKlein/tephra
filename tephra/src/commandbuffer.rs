@@ -9,7 +9,7 @@ use crate::{
 use bitflags::bitflags;
 use smallvec::SmallVec;
 use std::{
-    hash::{Hash, Hasher},
+    hash::{Hasher},
     marker::PhantomData,
     ops::{Deref, Range},
 };

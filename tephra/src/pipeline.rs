@@ -4,7 +4,7 @@ use crate::{
     renderpass::{Renderpass, VertexInput, VertexInputData},
     shader::ShaderModule,
 };
-use derive_builder::Builder;
+
 use slotmap::new_key_type;
 
 new_key_type!(

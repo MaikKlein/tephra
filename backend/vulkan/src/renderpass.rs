@@ -41,7 +41,7 @@ pub struct RenderpassData {
 impl RenderpassApi for Context {
     unsafe fn create_renderpass(&self, builder: &RenderpassState) -> Renderpass {
         fn build_attachment(
-            ctx: &Context,
+            _ctx: &Context,
             attachment: &Attachment,
             layout: vk::ImageLayout,
         ) -> vk::AttachmentDescription {

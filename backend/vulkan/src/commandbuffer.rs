@@ -12,11 +12,11 @@ pub struct ResourceSyncMap {
     map: HashMap<(), ()>,
 }
 impl ResourceSyncMap {
-    pub fn get_access(&self, handle: impl Into<ResourceType>) -> Option<&Vec<AccessType>> {
+    pub fn get_access(&self, _handle: impl Into<ResourceType>) -> Option<&Vec<AccessType>> {
         unimplemented!()
     }
 
-    pub fn register(handle: impl Into<ResourceType>, access: AccessType) {}
+    pub fn register(_handle: impl Into<ResourceType>, _access: AccessType) {}
 }
 
 pub trait RegisterResource {
@@ -24,7 +24,7 @@ pub trait RegisterResource {
 }
 
 impl RegisterResource for commandbuffer::DrawCommand {
-    fn register(&self, map: &mut ResourceSyncMap) {}
+    fn register(&self, _map: &mut ResourceSyncMap) {}
 }
 
 struct PipelineBarrier {

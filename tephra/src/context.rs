@@ -35,7 +35,7 @@ pub struct Context {
 }
 
 impl Deref for Context {
-    type Target = ContextApi;
+    type Target = dyn ContextApi;
     fn deref(&self) -> &Self::Target {
         self.context.as_ref()
     }

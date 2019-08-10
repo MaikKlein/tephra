@@ -32,7 +32,7 @@ pub struct Swapchain {
 }
 
 impl Deref for Swapchain {
-    type Target = SwapchainApi;
+    type Target = dyn SwapchainApi;
     fn deref(&self) -> &Self::Target {
         self.data.as_ref()
     }
