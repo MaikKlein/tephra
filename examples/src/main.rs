@@ -1,4 +1,3 @@
-extern crate ash;
 extern crate tephra;
 extern crate tephra_vulkan;
 #[macro_use]
@@ -7,7 +6,7 @@ pub use tephra::winit;
 
 use tephra::{
     buffer::{Buffer, BufferUsage, Property},
-    commandbuffer::{Access, CommandList, Compute, Descriptor, Graphics, ShaderArguments},
+    commandbuffer::{Access, CommandList, Compute, Descriptor, DescriptorSet, Graphics},
     context::Context,
     descriptor::{DescriptorType, Pool},
     image::{Format, Image, ImageDesc, ImageLayout},
@@ -170,7 +169,7 @@ impl Triangle {
                 Access::Write,
             )
             .build();
-        let args = ShaderArguments::builder()
+        let args = DescriptorSet::builder()
             .with_shader_arg(0, descriptor)
             .build();
         cmds.record::<Compute>()
@@ -184,7 +183,7 @@ impl Triangle {
                 Access::Read,
             )
             .build();
-        let space = ShaderArguments::builder()
+        let space = DescriptorSet::builder()
             .with_shader_arg(0, shader_arguments)
             .build();
         cmds.record::<Graphics>()

@@ -26,30 +26,30 @@ bitflags! {
     }
 }
 #[derive(Default)]
-pub struct ShaderArguments(SmallVec<[(u32, Descriptor); MAX_SHADER_ARGS]>);
-impl ShaderArguments {
-    pub fn builder() -> ShaderArumentsBuilder {
-        ShaderArumentsBuilder {
-            space: ShaderArguments::default(),
+pub struct DescriptorSet(SmallVec<[(u32, Descriptor); MAX_SHADER_ARGS]>);
+impl DescriptorSet {
+    pub fn builder() -> DescriptorSetBuilder {
+        DescriptorSetBuilder {
+            space: DescriptorSet::default(),
         }
     }
 }
 
-pub struct ShaderArumentsBuilder {
-    space: ShaderArguments,
+pub struct DescriptorSetBuilder {
+    space: DescriptorSet,
 }
-impl Deref for ShaderArguments {
+impl Deref for DescriptorSet {
     type Target = [(u32, Descriptor)];
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
-impl ShaderArumentsBuilder {
+impl DescriptorSetBuilder {
     pub fn with_shader_arg(mut self, set: u32, shader_args: Descriptor) -> Self {
         self.space.0.push((set, shader_args));
         self
     }
-    pub fn build(self) -> ShaderArguments {
+    pub fn build(self) -> DescriptorSet {
         self.space
     }
 }
@@ -137,13 +137,13 @@ pub struct DrawCommand {
     pub framebuffer: Framebuffer,
     pub vertex: BufferHandle,
     pub index: Buffer<u32>,
-    pub shader_arguments: ShaderArguments,
+    pub shader_arguments: DescriptorSet,
     pub range: Range<u32>,
 }
 
 pub struct DispatchCommand {
     pub pipeline: ComputePipeline,
-    pub shader_arguments: ShaderArguments,
+    pub shader_arguments: DescriptorSet,
     pub x: u32,
     pub y: u32,
     pub z: u32,
@@ -218,7 +218,7 @@ impl RecordCommandList<'_, Graphics> {
         graphics_pipeline: GraphicsPipeline,
         renderpass: Renderpass,
         framebuffer: Framebuffer,
-        shader_arguments: ShaderArguments,
+        shader_arguments: DescriptorSet,
         vertex_buffer: Buffer<Vertex>,
         index_buffer: Buffer<u32>,
         range: Range<u32>,
@@ -243,7 +243,7 @@ impl RecordCommandList<'_, Compute> {
     pub fn dispatch(
         mut self,
         pipeline: ComputePipeline,
-        shader_arguments: ShaderArguments,
+        shader_arguments: DescriptorSet,
         x: u32,
         y: u32,
         z: u32,
