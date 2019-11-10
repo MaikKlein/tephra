@@ -235,7 +235,7 @@ impl RecordCommandList<'_, Graphics> {
             index: index_buffer,
             range,
         };
-        self.commands.push(Command::Draw(cmd));
+        self.commands.push(Command::Draw(Box::new(cmd)));
         self
     }
 }
@@ -255,15 +255,15 @@ impl RecordCommandList<'_, Compute> {
             y,
             z,
         };
-        self.commands.push(Command::Dispatch(cmd));
+        self.commands.push(Command::Dispatch(Box::new(cmd)));
         self
     }
 }
 
 pub enum Command {
-    CopyImage(CopyImage),
-    Draw(DrawCommand),
-    Dispatch(DispatchCommand),
+    CopyImage(Box<CopyImage>),
+    Draw(Box<DrawCommand>),
+    Dispatch(Box<DispatchCommand>),
 }
 pub trait SubmitApi {
     unsafe fn submit_commands(&self, pool: &mut Pool, commands: &CommandList);

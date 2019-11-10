@@ -178,7 +178,7 @@ impl Queue {
             let submit_fence = context
                 .device
                 .create_fence(&fence_create_info, None)
-                .expect("Create fence failed.");
+                .expect("Create fence failed 2.");
             let queue = self.inner.lock();
             let submit_info = vk::SubmitInfo {
                 s_type: vk::StructureType::SUBMIT_INFO,
@@ -200,6 +200,7 @@ impl Queue {
                 .device
                 .wait_for_fences(&[submit_fence], true, u64::max_value())
                 .expect("Unable to wait");
+            context.device.destroy_fence(submit_fence, None);
         }
     }
 }
@@ -903,7 +904,7 @@ pub fn record_submit_commandbuffer<D: DeviceV1_0, F: FnOnce(&D, vk::CommandBuffe
         };
         let submit_fence = device
             .create_fence(&fence_create_info, None)
-            .expect("Create fence failed.");
+            .expect("Create fence failed 1.");
         let submit_info = vk::SubmitInfo {
             s_type: vk::StructureType::SUBMIT_INFO,
             p_next: ptr::null(),
@@ -940,7 +941,7 @@ unsafe extern "system" fn debug_utils_callback(
                 CStr::from_ptr(obj.p_object_name).to_str().unwrap()
             };
             println!(
-                "Object: [{}] {} 0x{:x}",
+                "Object: [{:?}] {} 0x{:x}",
                 obj.object_type, obj_name, obj.object_handle
             );
         }
